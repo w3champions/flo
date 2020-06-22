@@ -1,0 +1,14 @@
+[package]
+name = "dhost-w3gs"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dhost-util = { path = "../dhost-util" }
+byteorder = "1"
+bitflags = "1"
+thiserror = "1"
+lazy_static = "1"

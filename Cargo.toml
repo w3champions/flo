@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "./crates/dhost-codegen",
+  "./crates/dhost-util",
+  "./crates/dhost-w3gs",
+  "./crates/dhost-lan"
+]

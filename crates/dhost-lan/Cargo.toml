@@ -1,0 +1,24 @@
+[package]
+name = "dhost-lan"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dhost-util = { path = "../dhost-util" }
+dhost-w3gs = { path = "../dhost-w3gs" }
+
+futures = "0.3"
+socket2 = "0.3.12"
+tokio = { version = "0.2", features = ["full"] }
+trust-dns-proto = { path = "../../../trust-dns/crates/proto", features = ["mdns"] }
+hostname = "^0.3"
+pretty-hex = "0.1.1"
+bytes = "0.5"
+prost = "0.6"
+base64 = "0.12.2"
+
+[build-dependencies]
+prost-build = { version = "0.6" }

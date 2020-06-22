@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package wc3;
+
+message GameInfoEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message GameInfo {
+  string name = 1;
+  int32 message_id = 2;
+  repeated GameInfoEntry entries = 3;
+}
