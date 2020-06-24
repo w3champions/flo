@@ -1,4 +1,5 @@
 use dhost_util::binary::*;
+use dhost_util::{BinDecode, BinEncode};
 use dhost_w3gs::{constants::GameFlags, packets::GameSettings};
 use std::time::SystemTime;
 
@@ -11,52 +12,16 @@ pub struct GameInfo {
   pub create_time: SystemTime,
 }
 
-#[derive(Debug)]
+#[derive(Debug, BinEncode, BinDecode)]
 struct GameData {
   name: CString,
+  #[bin(eq = 0)]
+  _unknown_byte: u8,
   settings: GameSettings,
   slots_total: u32,
+  #[bin(bitflags = "u32")]
   flags: GameFlags,
   port: u16,
-}
-
-impl BinEncode for GameData {
-  fn encode<T: BufMut>(&self, buf: &mut T) {
-    buf.put_slice(self.name.as_bytes_with_nul());
-    buf.put_u8(0);
-    self.settings.encode(buf);
-    buf.put_u32_le(self.slots_total);
-    buf.put_u32_le(self.flags.bits());
-    buf.put_u16_le(self.port);
-  }
-}
-
-impl BinDecode for GameData {
-  fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
-    let name = buf.decode_cstring()?;
-    buf.decode_zero_byte()?;
-
-    let settings = GameSettings::decode(buf)?;
-    let size = size_of::<u32>() /* slots_total */
-      + size_of::<u32>()  /* flags */
-      + size_of::<u16>()  /* port */;
-    if buf.remaining() < size {
-      return Err(BinDecodeError::Incomplete);
-    }
-
-    let slots_total = buf.get_u32_le();
-    let flags = buf.get_u32_le();
-    let flags = GameFlags::from_bits(flags)
-      .ok_or_else(|| BinDecodeError::failure(format!("unknown game flags value: 0x{:x}", flags)))?;
-    let port = buf.get_u16_le();
-    Ok(Self {
-      name,
-      settings,
-      slots_total,
-      flags,
-      port,
-    })
-  }
 }
 
 #[test]

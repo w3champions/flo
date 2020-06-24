@@ -53,17 +53,23 @@ pub struct GameSettings {
   pub map_sha1: [u8; 20],
 }
 
+impl GameSettings {
+  fn get_encode_size(&self) -> usize {
+    size_of::<u32>() /* Flags */
+    + 1 /* 0x0 */
+    + size_of::<u16>() /* Map width */
+    + size_of::<u16>() /* Map height */
+    + size_of::<u32>() /* Map xoro */
+    + self.map_path.as_bytes().len() + 1 /* Map path */
+    + self.host_name.as_bytes().len() + 1 /* Host name */
+    + 1 /* 0x0 */
+    + 20 /* Map Sha1 hash */
+  }
+}
+
 impl BinEncode for GameSettings {
   fn encode<T: BufMut>(&self, buf: &mut T) {
-    let len = size_of::<u32>() /* Flags */
-      + 1 /* 0x0 */
-      + size_of::<u16>() /* Map width */
-      + size_of::<u16>() /* Map height */
-      + size_of::<u32>() /* Map xoro */
-      + self.map_path.as_bytes().len() + 1 /* Map path */
-      + self.host_name.as_bytes().len() + 1 /* Host name */
-      + 1 /* 0x0 */
-      + 20 /* Map Sha1 hash */;
+    let len = self.get_encode_size();
     let mut stat_string_buf = Vec::<u8>::with_capacity(len);
     stat_string_buf.put_u32_le(self.game_setting_flags.bits());
     stat_string_buf.put_u8(0);
