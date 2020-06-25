@@ -101,10 +101,10 @@ impl BinDecode for GameSettings {
       + 20 /* Map Sha1 hash */;
 
     if buf.remaining() < dhost_util::stat_string::encoded_len(min_len) {
-      return Err(BinDecodeError::Incomplete);
+      return Err(BinDecodeError::incomplete());
     }
 
-    let cstr = buf.decode_cstring()?;
+    let cstr = CString::decode(buf)?;
     let data = dhost_util::stat_string::decode(cstr.as_bytes());
 
     let mut buf = &data[..];
@@ -117,16 +117,16 @@ impl BinDecode for GameSettings {
       ))
     })?;
 
-    buf.decode_zero_byte()?;
+    buf.get_tag(b"\0")?;
 
     let map_width = buf.get_u16_le();
     let map_height = buf.get_u16_le();
     let map_xoro = buf.get_u32_le();
-    let map_path = buf.decode_cstring()?;
-    let host_name = buf.decode_cstring()?;
+    let map_path = CString::decode(&mut buf)?;
+    let host_name = CString::decode(&mut buf)?;
 
     if buf.remaining() != 1 + 20 {
-      return Err(BinDecodeError::Incomplete);
+      return Err(BinDecodeError::incomplete());
     }
 
     let zero = buf.get_u8();

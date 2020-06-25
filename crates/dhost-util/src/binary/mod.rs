@@ -3,6 +3,9 @@ pub use bytes::{Buf, BufMut, BytesMut};
 pub use std::ffi::CString;
 pub use std::mem::size_of;
 
+mod ext;
+pub use self::ext::*;
+
 pub trait BinEncode {
   fn encode<T: BufMut>(&self, buf: &mut T);
 }
@@ -23,26 +26,6 @@ pub trait BinDecodeExt {
   fn decode_zero_byte(&mut self) -> Result<(), BinDecodeError>;
 }
 
-impl<T> BinDecodeExt for T
-where
-  T: Buf,
-{
-  fn decode_cstring(&mut self) -> Result<CString, BinDecodeError> {
-    CString::decode(self)
-  }
-
-  fn decode_zero_byte(&mut self) -> Result<(), BinDecodeError> {
-    if !self.has_remaining() {
-      return Err(BinDecodeError::Incomplete);
-    }
-
-    if self.get_u8() != 0 {
-      return Err(BinDecodeError::failure("zero byte expected"));
-    }
-
-    Ok(())
-  }
-}
 macro_rules! impl_fixed {
   ($ty:ty, $put:ident, $get:ident) => {
     impl BinEncode for $ty {
@@ -64,6 +47,8 @@ impl_fixed!(u8, put_u8, get_u8);
 impl_fixed!(u16, put_u16_le, get_u16_le);
 impl_fixed!(i32, put_i32_le, get_i32_le);
 impl_fixed!(u32, put_u32_le, get_u32_le);
+impl_fixed!(f32, put_f32_le, get_f32_le);
+impl_fixed!(f64, put_f64_le, get_f64_le);
 
 impl BinEncode for CString {
   fn encode<T: BufMut>(&self, buf: &mut T) {
@@ -76,7 +61,7 @@ impl BinDecode for CString {
   fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
     fn get_cstring_slice(slice: &[u8]) -> Result<Option<&[u8]>, BinDecodeError> {
       if slice.is_empty() {
-        return Err(BinDecodeError::Incomplete);
+        return Err(BinDecodeError::incomplete());
       }
       let null_byte_pos = slice.iter().position(|b| *b == 0);
       match null_byte_pos {
@@ -101,7 +86,7 @@ impl BinDecode for CString {
         buf.advance(len);
         loop {
           if !buf.has_remaining() {
-            return Err(BinDecodeError::Incomplete);
+            return Err(BinDecodeError::incomplete());
           }
 
           let slice = buf.bytes();
@@ -121,6 +106,22 @@ impl BinDecode for CString {
   }
 }
 
+impl<T: BinEncode> BinEncode for Option<T> {
+  fn encode<TBuf: BufMut>(&self, buf: &mut TBuf) {
+    if let Some(ref v) = *self {
+      v.encode(buf);
+    }
+  }
+}
+
+impl<'a, T: BinEncode> BinEncode for &'a [T] {
+  fn encode<TBuf: BufMut>(&self, buf: &mut TBuf) {
+    for v in self.iter() {
+      v.encode(buf);
+    }
+  }
+}
+
 #[test]
 fn test_ext_decode_cstring() {
   use bytes::buf::BufExt;
@@ -128,7 +129,7 @@ fn test_ext_decode_cstring() {
   let cstr = "1234567890".as_bytes();
   // continuous buffer
   let mut buf = "1234567890\0z".as_bytes();
-  assert_eq!(buf.decode_cstring().unwrap().as_bytes(), cstr);
+  assert_eq!(CString::decode(&mut buf).unwrap().as_bytes(), cstr);
   assert_eq!(buf.remaining(), 1);
 
   // non-continuous buffer
@@ -139,7 +140,7 @@ fn test_ext_decode_cstring() {
     .chain(&b"90"[..])
     .chain(&b"\0z"[..]);
 
-  assert_eq!(buf.decode_cstring().unwrap().as_bytes(), cstr);
+  assert_eq!(CString::decode(&mut buf).unwrap().as_bytes(), cstr);
   assert_eq!(buf.remaining(), 1);
 }
 
@@ -265,7 +266,7 @@ fn test_derive_decode_variable_size_muti() {
 }
 
 #[test]
-#[should_panic(expected = "Unexpected value for field `_1`, expected `1`, got `2`")]
+#[should_panic(expected = "unexpected value for field `_1`, expected `1`, got `2`")]
 fn test_derive_decode_eq() {
   use dhost_codegen::BinDecode;
   #[derive(Debug, BinDecode, PartialEq)]
@@ -304,6 +305,73 @@ fn test_derive_decode_slice() {
       _1: [1, 2, 3, 4, 5],
       _2: 2,
       _3: [CString::new("1").unwrap(), CString::new("2").unwrap()],
+    }
+  );
+}
+
+#[test]
+fn test_derive_enum_decode() {
+  use dhost_codegen::BinDecode;
+  #[derive(Debug, BinDecode, PartialEq)]
+  #[bin(mod_path = "crate::binary")]
+  #[bin(enum_repr(u8))]
+  enum V {
+    #[bin(value = 1)]
+    A,
+    #[bin(value = 2)]
+    B,
+  }
+
+  let mut buf = BytesMut::new();
+  buf.put_slice(&[1, 2, 3]);
+
+  assert_eq!(V::decode(&mut buf).unwrap(), V::A);
+  assert_eq!(V::decode(&mut buf).unwrap(), V::B);
+  assert_eq!(
+    V::decode(&mut buf).err().unwrap().to_string(),
+    "unknown value for enum type `V`: 3"
+  );
+}
+
+#[test]
+fn test_derive_decode_option() {
+  use dhost_codegen::BinDecode;
+  #[derive(Debug, BinDecode, PartialEq)]
+  #[bin(mod_path = "crate::binary")]
+  struct T {
+    _1: [u8; 5],
+    _2: u32,
+    #[bin(condition = "_2 > 0")]
+    _3: Option<[CString; 2]>,
+  }
+
+  let mut buf = BytesMut::new();
+  buf.put_slice(&[1, 2, 3, 4, 5]);
+  buf.put_u32_le(2);
+  buf.put_slice(b"1\0");
+  buf.put_slice(b"2\0");
+
+  assert_eq!(
+    T::decode(&mut buf).unwrap(),
+    T {
+      _1: [1, 2, 3, 4, 5],
+      _2: 2,
+      _3: Some([CString::new("1").unwrap(), CString::new("2").unwrap()]),
+    }
+  );
+
+  let mut buf = BytesMut::new();
+  buf.put_slice(&[1, 2, 3, 4, 5]);
+  buf.put_u32_le(0);
+  buf.put_slice(b"1\0");
+  buf.put_slice(b"2\0");
+
+  assert_eq!(
+    T::decode(&mut buf).unwrap(),
+    T {
+      _1: [1, 2, 3, 4, 5],
+      _2: 0,
+      _3: None,
     }
   );
 }
@@ -368,6 +436,29 @@ fn test_derive_encode_slice() {
   buf.put_u32_le(2);
   buf.put_slice(b"1\0");
   buf.put_slice(b"2\0");
+
+  assert_eq!(bytes, buf);
+}
+
+#[test]
+fn test_derive_enum_encode() {
+  use dhost_codegen::BinEncode;
+  #[derive(Debug, BinEncode, PartialEq)]
+  #[bin(mod_path = "crate::binary")]
+  #[bin(enum_repr(u8))]
+  enum V {
+    #[bin(value = 1)]
+    A,
+    #[bin(value = 2)]
+    B,
+  }
+
+  let mut bytes: Vec<u8> = vec![];
+  V::A.encode(&mut bytes);
+  V::B.encode(&mut bytes);
+
+  let mut buf = BytesMut::new();
+  buf.put_slice(&[1, 2]);
 
   assert_eq!(bytes, buf);
 }

@@ -1,0 +1,131 @@
+use crate::constants::MapFlags;
+use crate::error::Result;
+use crate::trigger_string::TriggerStringRef;
+use dhost_util::binary::*;
+use dhost_util::BinDecode;
+
+#[derive(Debug, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
+#[bin(enum_repr(u32))]
+pub enum FileFormatVersion {
+  #[bin(value = 18)]
+  ROC,
+  #[bin(value = 25)]
+  TFT,
+  #[bin(value = 28)]
+  TFT131,
+  #[bin(value = 31)]
+  Reforged,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct MapInfo {
+  pub version: FileFormatVersion,
+  pub save_count: u32,
+  pub editor_version: u32,
+  #[bin(condition = "version >= FileFormatVersion::TFT131")]
+  pub game_version: Option<GameVersion>,
+  pub name: TriggerStringRef,
+  pub author: TriggerStringRef,
+  pub description: TriggerStringRef,
+  pub suggested_players: TriggerStringRef,
+  pub camera_bounds: CameraBounds,
+  pub width: u32,
+  pub height: u32,
+  // #[bin(bitflags = "u32")]
+  // pub flags: MapFlags,
+  pub flags: u32,
+  pub tile_set: u8,
+  pub ls_background: u32,
+  #[bin(condition = "version >= FileFormatVersion::TFT")]
+  pub ls_path: Option<TriggerStringRef>,
+  pub ls_text: TriggerStringRef,
+  pub ls_title: TriggerStringRef,
+  pub ls_sub_title: TriggerStringRef,
+  pub data_set: u32,
+  #[bin(condition = "version >= FileFormatVersion::TFT")]
+  pub ps_path: Option<TriggerStringRef>,
+  pub ps_text: TriggerStringRef,
+  pub ps_title: TriggerStringRef,
+  pub ps_sub_title: TriggerStringRef,
+  #[bin(condition = "version >= FileFormatVersion::TFT")]
+  pub env: Option<GameEnv>,
+  #[bin(condition = "version >= FileFormatVersion::TFT131")]
+  pub code_format: u32,
+  #[bin(condition = "version >= FileFormatVersion::Reforged")]
+  pub _unknown_reforged_1: Option<u32>,
+  #[bin(condition = "version >= FileFormatVersion::Reforged")]
+  pub _unknown_reforged_2: Option<u32>,
+  pub num_players: u32,
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct GameVersion {
+  pub major: u32,
+  pub minor: u32,
+  pub patch: u32,
+  pub commit: u32,
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct CameraBounds {
+  bounds: [f32; 8],
+  complements: [u32; 4],
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct GameEnv {
+  fog: u32,
+  fog_start: f32,
+  fog_end: f32,
+  fog_density: f32,
+  fog_color: u32,
+  weather_id: u32,
+  sound_env: TriggerStringRef,
+  light_env: u8,
+  water_color: u32,
+}
+
+#[test]
+fn test_parse_w3i_reforged() {
+  let mut map = crate::W3Map::open("samples/(2)ConcealedHill.w3x").unwrap();
+  let bytes = map
+    .archive
+    .open_file("war3map.w3i")
+    .unwrap()
+    .read_all()
+    .unwrap();
+  let mut buf = bytes.as_slice();
+  let info = MapInfo::decode(&mut buf).unwrap();
+  assert_eq!(info.version, FileFormatVersion::Reforged);
+  println!("{:#?}", info)
+}
+
+#[test]
+fn test_parse_w3i_roc() {
+  let mut map = crate::W3Map::open("samples/test_roc.w3m").unwrap();
+  let bytes = map
+    .archive
+    .open_file("war3map.w3i")
+    .unwrap()
+    .read_all()
+    .unwrap();
+  let mut buf = bytes.as_slice();
+  let info = MapInfo::decode(&mut buf).unwrap();
+  assert_eq!(info.version, FileFormatVersion::ROC);
+  println!("{:#?}", info)
+}
+
+#[test]
+fn test_parse_w3i_tft() {
+  let mut map = crate::W3Map::open("samples/test_tft.w3x").unwrap();
+  let bytes = map
+    .archive
+    .open_file("war3map.w3i")
+    .unwrap()
+    .read_all()
+    .unwrap();
+  let mut buf = bytes.as_slice();
+  let info = MapInfo::decode(&mut buf).unwrap();
+  assert_eq!(info.version, FileFormatVersion::TFT);
+  println!("{:#?}", info)
+}

@@ -3,5 +3,10 @@ members = [
   "./crates/dhost-codegen",
   "./crates/dhost-util",
   "./crates/dhost-w3gs",
+  "./crates/dhost-w3map",
   "./crates/dhost-lan"
 ]
+
+[patch.crates-io]
+stormlib = { path = "../stormlib-rs/crates/stormlib" }
+stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }

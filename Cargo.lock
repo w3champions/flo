@@ -98,6 +98,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "cmake"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e56268c17a6248366d66d4a47a3381369d068cce8409bb1716ed77ea32163bb"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -179,6 +188,16 @@ dependencies = [
  "byteorder",
  "dhost-util",
  "lazy_static",
+ "thiserror",
+]
+
+[[package]]
+name = "dhost-w3map"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "dhost-util",
+ "stormlib",
  "thiserror",
 ]
 
@@ -868,6 +887,26 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "stormlib"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "libc",
+ "stormlib-sys",
+ "thiserror",
+]
+
+[[package]]
+name = "stormlib-sys"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "cmake",
+ "libc",
  "winapi 0.3.8",
 ]
 
