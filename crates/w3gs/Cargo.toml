@@ -1,0 +1,16 @@
+[package]
+name = "flo-w3gs"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-util = { path = "../util" }
+byteorder = "1"
+bitflags = "1"
+thiserror = "1"
+lazy_static = "1"
+prost = "0.6"
+
+[build-dependencies]
+prost-build = { version = "0.6" }

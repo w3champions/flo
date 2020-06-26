@@ -1,12 +1,15 @@
 [workspace]
 members = [
-  "./crates/dhost-codegen",
-  "./crates/dhost-util",
-  "./crates/dhost-w3gs",
-  "./crates/dhost-w3map",
-  "./crates/dhost-lan"
+  "./crates/codegen",
+  "./crates/util",
+  "./crates/w3gs",
+  "./crates/w3map",
+  "./crates/blp",
+  "./crates/lobby",
+  "./crates/lan"
 ]
 
 [patch.crates-io]
 stormlib = { path = "../stormlib-rs/crates/stormlib" }
 stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
+trust-dns-proto = { git = "https://github.com/bluejekyll/trust-dns.git" }

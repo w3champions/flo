@@ -1,0 +1,22 @@
+[package]
+name = "flo-lan"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-util = { path = "../util" }
+flo-w3gs = { path = "../w3gs" }
+
+futures = "0.3"
+socket2 = "0.3.12"
+tokio = { version = "0.2", features = ["full"] }
+trust-dns-proto = { version = "0.20", features = ["mdns"] }
+hostname = "^0.3"
+pretty-hex = "0.1.1"
+bytes = "0.5"
+prost = "0.6"
+base64 = "0.12.2"
+
+[build-dependencies]
+prost-build = { version = "0.6" }

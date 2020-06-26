@@ -1,0 +1,13 @@
+[package]
+name = "flo-w3map"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-util = { path = "../util" }
+flo-blp = { path = "../blp" }
+
+stormlib = "0.1"
+thiserror = "1"
+bitflags = "1"

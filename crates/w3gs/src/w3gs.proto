@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package w3gs;
+
+message PlayerProfileMessage {
+  uint32 player_id = 1;
+  string battle_tag = 2;
+  string clan = 3;
+  string portrait = 4;
+  PlayerProfileRealm realm = 5;
+  string unknown_1 = 6;
+}
+
+enum PlayerProfileRealm {
+  OFFLINE = 0;
+  AMERICAS = 10;
+  EUROPE = 20;
+  ASIA = 30;
+}
+
+message PlayerSkinsMessage {
+  uint32 player_id = 1;
+  repeated PlayerSkin skins = 2;
+}
+
+message PlayerSkin {
+  uint64 unit = 1;
+  uint64 skin = 2;
+  string collection = 3;
+}
+
+message PlayerUnknown5Message {
+  uint32 player_id = 1;
+  uint32 unknown_1 = 2;
+}

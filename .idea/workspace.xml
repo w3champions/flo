@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="GROUP_NODE:origin" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/lobby/Cargo.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/lobby/src/lib.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/lobby/src/player.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/util/src/binary/net.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/build.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/error.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/join.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/map.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/packet.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/player.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/slot.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/w3gs/src/w3gs.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dhost.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/flo.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/codegen/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/codegen/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/codegen/src/derive_binary.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/codegen/src/derive_binary.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/image/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/blp/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/image/src/blp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/blp/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/image/src/lib.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lan/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/dump_gameinfo.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lan/src/bin/dump_gameinfo.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/packets/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lan/src/packets/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/src/binary/ext.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/src/binary/ext.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/src/binary/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/src/binary/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3gs/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3gs/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3gs/src/constants.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3gs/src/constants.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3gs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3gs/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3gs/src/packets.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3gs/src/game.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/src/info.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/info.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/src/minimap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/minimap.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3map/src/trigger_string.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/trigger_string.rs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Rust File" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Rebase.Settings">
+    <option name="ONTO" value="refs/heads/main" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="xg8ordzo" />
+  </component>
+  <component name="ProjectId" id="1dsH6nCncpG410fMlPN4tACkZSN" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
+    <property name="project.structure.last.edited" value="Modules" />
+    <property name="project.structure.proportion" value="0.15" />
+    <property name="project.structure.side.proportion" value="0.2" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
+  </component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/deps/wc3-samples/map" />
+    </key>
+  </component>
+  <component name="RunAnythingCache">
+    <option name="myCommands">
+      <command value="cargo check" />
+    </option>
+  </component>
+  <component name="RunManager" selected="Cargo Command.check">
+    <configuration name="Test blp" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="test --package dhost-image --lib blp" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test blp::test_blp_to_jpg" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="test --package dhost-image --lib blp::test_blp_to_jpg -- --exact" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test minimap::test_extract_minimap" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="test --package dhost-w3map --lib minimap::test_extract_minimap -- --exact" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="check" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="check" />
+      <option name="allFeatures" value="false" />
+      <option name="nocapture" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="flo" />
+      <option name="VM_PARAMETERS" />
+      <option name="PROGRAM_PARAMETERS" />
+      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+      <option name="ALTERNATIVE_JRE_PATH" />
+      <option name="PASS_PARENT_ENVS" value="true" />
+      <option name="MAIN_CLASS_NAME" />
+      <option name="WORKING_DIRECTORY" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="flo" />
+      <option name="filePath" />
+      <option name="vmParameters" />
+      <option name="alternativeJrePath" />
+      <option name="programParameters" />
+      <option name="passParentEnvs" value="true" />
+      <option name="workingDirectory" />
+      <option name="isAlternativeJrePathEnabled" value="false" />
+      <option name="VM_PARAMETERS" />
+      <option name="PROGRAM_PARAMETERS" />
+      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+      <option name="ALTERNATIVE_JRE_PATH" />
+      <option name="PASS_PARENT_ENVS" value="true" />
+      <option name="MAIN_CLASS_NAME" />
+      <option name="WORKING_DIRECTORY" />
+      <option name="filePath" />
+      <option name="vmParameters" />
+      <option name="alternativeJrePath" />
+      <option name="programParameters" />
+      <option name="passParentEnvs" value="true" />
+      <option name="workingDirectory" />
+      <option name="isAlternativeJrePathEnabled" value="false" />
+      <option name="VM_PARAMETERS" />
+      <option name="PROGRAM_PARAMETERS" />
+      <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+      <option name="ALTERNATIVE_JRE_PATH" />
+      <option name="PASS_PARENT_ENVS" value="true" />
+      <option name="MAIN_CLASS_NAME" />
+      <option name="WORKING_DIRECTORY" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Cargo Command.check" />
+        <item itemvalue="Cargo Command.Test blp" />
+        <item itemvalue="Cargo Command.Test blp::test_blp_to_jpg" />
+        <item itemvalue="Cargo Command.Test minimap::test_extract_minimap" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="runRustfmtOnSave" value="true" />
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+    <option name="version" value="2" />
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="" />
+      <created>1593206707106</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1593206707106</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="1">
+          <value>
+            <State>
+              <option name="SHOW_ONLY_AFFECTED_CHANGES" value="true" />
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="HEAD" />
+                      </list>
+                    </value>
+                  </entry>
+                  <entry key="structure">
+                    <value>
+                      <list>
+                        <option value="dir:C:/Data/Projects/flo/crates/blp/src" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="578" y="172" key="#Project_Structure" timestamp="1593389631987">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="578" y="172" key="#Project_Structure/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389631987" />
+    <state width="2136" height="330" key="GridCell.Tab.0.bottom" timestamp="1593389993703">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="1845" height="290" key="GridCell.Tab.0.bottom/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510860" />
+    <state width="2136" height="330" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389993703" />
+    <state width="2136" height="330" key="GridCell.Tab.0.center" timestamp="1593389993703">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="1845" height="290" key="GridCell.Tab.0.center/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
+    <state width="2136" height="330" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389993703" />
+    <state width="2136" height="330" key="GridCell.Tab.0.left" timestamp="1593389993703">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="1845" height="290" key="GridCell.Tab.0.left/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510858" />
+    <state width="2136" height="330" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389993703" />
+    <state width="2136" height="330" key="GridCell.Tab.0.right" timestamp="1593389993703">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="1845" height="290" key="GridCell.Tab.0.right/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
+    <state width="2136" height="330" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389993703" />
+    <state x="515" y="189" key="SettingsEditor" timestamp="1593389964946">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="477" y="190" key="SettingsEditor/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593207743406" />
+    <state x="515" y="189" key="SettingsEditor/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389964946" />
+    <state x="105" y="138" width="1994" height="994" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog" timestamp="1593389965498">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="105" y="138" width="1994" height="994" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389965498" />
+    <state x="100" y="100" width="1994" height="994" key="com.intellij.history.integration.ui.views.FileHistoryDialog" timestamp="1593389965498">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="100" y="100" width="1994" height="994" key="com.intellij.history.integration.ui.views.FileHistoryDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389965498" />
+    <state x="676" y="184" width="598" height="735" key="find.popup" timestamp="1593209314658">
+      <screen x="34" y="23" width="1886" height="1057" />
+    </state>
+    <state x="676" y="184" width="598" height="735" key="find.popup/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593209314658" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1593389976030">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593389976030" />
+  </component>
+</project>

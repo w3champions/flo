@@ -1,0 +1,10 @@
+[package]
+name = "flo-blp"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-util = { path = "../util" }
+
+image = "0.23.6"
