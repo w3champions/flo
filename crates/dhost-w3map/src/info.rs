@@ -31,8 +31,6 @@ pub struct MapInfo {
   pub camera_bounds: CameraBounds,
   pub width: u32,
   pub height: u32,
-  // #[bin(bitflags = "u32")]
-  // pub flags: MapFlags,
   pub flags: u32,
   pub tile_set: u8,
   pub ls_background: u32,
@@ -56,6 +54,15 @@ pub struct MapInfo {
   #[bin(condition = "version >= FileFormatVersion::Reforged")]
   pub _unknown_reforged_2: Option<u32>,
   pub num_players: u32,
+  #[bin(condition = "version < FileFormatVersion::Reforged")]
+  #[bin(repeat = "num_players")]
+  pub players_classic: Option<Vec<ClassicPlayer>>,
+  #[bin(condition = "version >= FileFormatVersion::Reforged")]
+  #[bin(repeat = "num_players")]
+  pub players_reforged: Option<Vec<ReforgedPlayer>>,
+  pub num_forces: u32,
+  #[bin(repeat = "num_forces")]
+  pub forces: Vec<Force>,
 }
 
 #[derive(Debug, Clone, BinDecode)]
@@ -68,21 +75,56 @@ pub struct GameVersion {
 
 #[derive(Debug, Clone, BinDecode)]
 pub struct CameraBounds {
-  bounds: [f32; 8],
-  complements: [u32; 4],
+  pub bounds: [f32; 8],
+  pub complements: [u32; 4],
 }
 
 #[derive(Debug, Clone, BinDecode)]
 pub struct GameEnv {
-  fog: u32,
-  fog_start: f32,
-  fog_end: f32,
-  fog_density: f32,
-  fog_color: u32,
-  weather_id: u32,
-  sound_env: TriggerStringRef,
-  light_env: u8,
-  water_color: u32,
+  pub fog: u32,
+  pub fog_start: f32,
+  pub fog_end: f32,
+  pub fog_density: f32,
+  pub fog_color: u32,
+  pub weather_id: u32,
+  pub sound_env: TriggerStringRef,
+  pub light_env: u8,
+  pub water_color: u32,
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct ClassicPlayer {
+  pub id: u32,
+  pub type_: u32,
+  pub race: u32,
+  pub flags: u32,
+  pub name: TriggerStringRef,
+  pub start_pos_x: f32,
+  pub start_pos_y: f32,
+  pub ally_prio_low: u32,
+  pub ally_prio_high: u32,
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct ReforgedPlayer {
+  pub id: u32,
+  pub type_: u32,
+  pub race: u32,
+  pub flags: u32,
+  pub name: TriggerStringRef,
+  pub start_pos_x: f32,
+  pub start_pos_y: f32,
+  pub ally_prio_low: u32,
+  pub ally_prio_high: u32,
+  pub _unknown_1: u32,
+  pub _unknown_2: u32,
+}
+
+#[derive(Debug, Clone, BinDecode)]
+pub struct Force {
+  pub flags: u32,
+  pub player_set: u32,
+  pub name: TriggerStringRef,
 }
 
 #[test]
@@ -102,7 +144,7 @@ fn test_parse_w3i_reforged() {
 
 #[test]
 fn test_parse_w3i_roc() {
-  let mut map = crate::W3Map::open("samples/test_roc.w3m").unwrap();
+  let mut map = crate::W3Map::open("../../deps/wc3-samples/map/test_roc.w3m").unwrap();
   let bytes = map
     .archive
     .open_file("war3map.w3i")

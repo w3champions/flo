@@ -1,0 +1,3 @@
+[submodule "deps/wc3-samples"]
+	path = deps/wc3-samples
+	url = https://github.com/wc3tools/wc3-samples.git

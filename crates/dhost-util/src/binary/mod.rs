@@ -19,13 +19,6 @@ where
   fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError>;
 }
 
-pub trait BinDecodeExt {
-  /// Decodes a null terminated string
-  fn decode_cstring(&mut self) -> Result<CString, BinDecodeError>;
-  /// Decodes and a 0 byte
-  fn decode_zero_byte(&mut self) -> Result<(), BinDecodeError>;
-}
-
 macro_rules! impl_fixed {
   ($ty:ty, $put:ident, $get:ident) => {
     impl BinEncode for $ty {

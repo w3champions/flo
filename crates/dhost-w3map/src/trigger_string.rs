@@ -107,7 +107,10 @@ impl BinDecode for TriggerStringRef {
 
   fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
     match buf.peek_u8() {
-      Some(0) => return Ok(TriggerStringRef(None)),
+      Some(0) => {
+        buf.advance(1);
+        return Ok(TriggerStringRef(None));
+      }
       None => return Err(BinDecodeError::incomplete()),
       _ => {}
     }

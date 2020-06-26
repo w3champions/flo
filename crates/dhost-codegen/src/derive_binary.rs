@@ -16,7 +16,7 @@ pub struct DecodeInputReceiver {
   #[darling(default)]
   mod_path: Option<syn::Path>,
   #[darling(default)]
-  enum_repr: Option<EnumRepr>,
+  enum_repr: Option<MetaType>,
 }
 
 impl DecodeInputReceiver {
@@ -24,9 +24,7 @@ impl DecodeInputReceiver {
     &self,
     mod_path: &syn::Path,
     FieldReceiver {
-      ref ty,
-      ref bitflags,
-      ..
+      ref ty, ref repeat, ..
     }: &FieldReceiver,
   ) -> TokenStream {
     if get_option_type_arg(ty).is_some() {
@@ -40,10 +38,8 @@ impl DecodeInputReceiver {
         (<#elem as #mod_path::BinDecode>::MIN_SIZE * (#len))
       },
       _ => {
-        if let Some(repr) = bitflags {
-          quote! {
-            <#repr as #mod_path::BinDecode>::MIN_SIZE
-          }
+        if repeat.is_some() {
+          quote! {0}
         } else {
           quote! {
             <#ty as #mod_path::BinDecode>::MIN_SIZE
@@ -57,9 +53,7 @@ impl DecodeInputReceiver {
     &self,
     mod_path: &syn::Path,
     FieldReceiver {
-      ref ty,
-      ref bitflags,
-      ..
+      ref ty, ref repeat, ..
     }: &FieldReceiver,
   ) -> TokenStream {
     if get_option_type_arg(ty).is_some() {
@@ -71,8 +65,8 @@ impl DecodeInputReceiver {
         <#elem as #mod_path::BinDecode>::FIXED_SIZE
       },
       _ => {
-        if bitflags.is_some() {
-          quote! { true }
+        if repeat.is_some() {
+          quote! { false }
         } else {
           quote! {
             <#ty as #mod_path::BinDecode>::FIXED_SIZE
@@ -88,11 +82,7 @@ impl DecodeInputReceiver {
     field: &FieldReceiver,
     ty: &syn::Type,
   ) -> TokenStream {
-    let FieldReceiver {
-      ref ident,
-      bitflags: ref bitflags_repr,
-      ..
-    } = field;
+    let FieldReceiver { ref repeat, .. } = field;
 
     match ty {
       syn::Type::Array(syn::TypeArray {
@@ -134,19 +124,10 @@ impl DecodeInputReceiver {
         }
       }
       _ => {
-        if let Some(bitflags_repr) = bitflags_repr.as_ref() {
-          let ident_str = ident.as_ref().unwrap().to_string();
+        if let Some(ref repeat) = repeat.as_ref() {
+          let len = &repeat.expr;
           quote! {
-            {
-              let bits = <#bitflags_repr as #mod_path::BinDecode>::decode(buf)?;
-              #ty::from_bits(bits)
-                .ok_or_else(|| #mod_path::BinDecodeError::failure(
-                  format!("unexpected flag value for field `{}`: 0x{:x}",
-                    #ident_str,
-                    bits
-                  )
-                ))?
-            }
+            #mod_path::BinBufExt::get_repeated(buf, (#len) as usize)?
           }
         } else {
           quote! {
@@ -165,7 +146,7 @@ impl DecodeInputReceiver {
       ..
     } = field;
     if let Some(opt_ty) = get_option_type_arg(ty) {
-      let expr = if let Some(FieldCondition { ref expr }) = condition {
+      let expr = if let Some(MetaExpr { ref expr }) = condition {
         quote! { #expr }
       } else {
         return quote::quote_spanned! {
@@ -215,7 +196,7 @@ impl DecodeInputReceiver {
         let last_ty_fixed_size = self.gen_fixed_size(&mod_path, &fields.fields[i - 1]);
         // check remaining after decoding every non-fixed sized field
         quote! {
-          if !#last_ty_fixed_size {
+          if #items > 0 && !#last_ty_fixed_size {
             if buf.remaining() < #items {
               return Err(#mod_path::BinDecodeError::incomplete());
             }
@@ -347,16 +328,13 @@ pub struct EncodeInputReceiver {
   #[darling(default)]
   mod_path: Option<syn::Path>,
   #[darling(default)]
-  enum_repr: Option<EnumRepr>,
+  enum_repr: Option<MetaType>,
 }
 
 impl EncodeInputReceiver {
   fn gen_encode(&self, mod_path: &syn::Path, field: &FieldReceiver) -> TokenStream {
     let FieldReceiver {
-      ref ident,
-      ref ty,
-      bitflags: ref bitflags_repr,
-      ..
+      ref ident, ref ty, ..
     } = field;
     match *ty {
       syn::Type::Array(syn::TypeArray {
@@ -395,14 +373,8 @@ impl EncodeInputReceiver {
         }
       }
       _ => {
-        if let Some(bitflags_repr) = bitflags_repr.as_ref() {
-          quote! {
-            <#bitflags_repr as #mod_path::BinEncode>::encode(&self.#ident.bits(), buf);
-          }
-        } else {
-          quote! {
-            <#ty as #mod_path::BinEncode>::encode(&self.#ident, buf);
-          }
+        quote! {
+          <#ty as #mod_path::BinEncode>::encode(&self.#ident, buf);
         }
       }
     }
@@ -488,9 +460,9 @@ struct FieldReceiver {
   #[darling(default)]
   eq: Option<Eq>,
   #[darling(default)]
-  bitflags: Option<syn::Path>,
+  condition: Option<MetaExpr>,
   #[darling(default)]
-  condition: Option<FieldCondition>,
+  repeat: Option<MetaExpr>,
 }
 
 #[derive(Debug, FromVariant)]
@@ -515,17 +487,17 @@ impl FromMeta for Eq {
 }
 
 #[derive(Debug)]
-struct EnumRepr {
+struct MetaType {
   ty: syn::Path,
 }
 
-impl FromMeta for EnumRepr {
+impl FromMeta for MetaType {
   fn from_meta(item: &syn::Meta) -> Result<Self, Error> {
     if let syn::Meta::List(syn::MetaList { ref nested, .. }) = *item {
       if nested.len() == 1 {
         if let Some(syn::NestedMeta::Meta(syn::Meta::Path(ref path))) = nested.first() {
           if path.get_ident().is_some() {
-            return Ok(EnumRepr { ty: path.clone() });
+            return Ok(MetaType { ty: path.clone() });
           }
         }
       }
@@ -535,15 +507,15 @@ impl FromMeta for EnumRepr {
 }
 
 #[derive(Debug)]
-struct FieldCondition {
+struct MetaExpr {
   expr: syn::Expr,
 }
 
-impl FromMeta for FieldCondition {
+impl FromMeta for MetaExpr {
   fn from_string(value: &str) -> Result<Self, Error> {
     let expr =
       syn::parse_str(value).map_err(|e| Error::custom(format!("invalid syntax: {}", e)))?;
-    Ok(FieldCondition { expr })
+    Ok(MetaExpr { expr })
   }
 }
 

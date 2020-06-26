@@ -41,6 +41,10 @@ pub trait BinBufExt {
         .map_err(|e| BinDecodeError::failure(format!("can not parse from str: {}", e)))
     })
   }
+
+  fn get_repeated<T, I: From<Vec<T>>>(&mut self, len: usize) -> Result<I, BinDecodeError>
+  where
+    T: BinDecode;
 }
 
 impl<T> BinBufExt for T
@@ -115,6 +119,19 @@ where
       }
     }
     Ok(len)
+  }
+
+  fn get_repeated<TItem, I: From<Vec<TItem>>>(&mut self, len: usize) -> Result<I, BinDecodeError>
+  where
+    TItem: BinDecode,
+  {
+    self.check_size(TItem::MIN_SIZE * len)?;
+
+    let mut items = Vec::with_capacity(len);
+    for _ in 0..len {
+      items.push(TItem::decode(self)?)
+    }
+    Ok(From::from(items))
   }
 }
 

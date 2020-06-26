@@ -1,10 +1,10 @@
 use std::path::Path;
 use stormlib::{Archive, OpenArchiveFlags};
 
+pub mod constants;
 pub mod error;
 pub mod info;
 pub mod trigger_string;
-pub mod constants;
 
 use self::error::Result;
 

@@ -1,12 +1,12 @@
 use dhost_util::binary::*;
 use dhost_util::{BinDecode, BinEncode};
-use dhost_w3gs::{constants::GameFlags, packets::GameSettings};
+use dhost_w3gs::packets::GameSettings;
 use std::time::SystemTime;
 
 #[derive(Debug)]
 pub struct GameInfo {
   pub name: CString,
-  pub flags: GameFlags,
+  pub flags: u32,
   pub settings: GameSettings,
   pub secret: u32,
   pub create_time: SystemTime,
@@ -19,8 +19,7 @@ struct GameData {
   _unknown_byte: u8,
   settings: GameSettings,
   slots_total: u32,
-  #[bin(bitflags = "u32")]
-  flags: GameFlags,
+  flags: u32,
   port: u16,
 }
 
