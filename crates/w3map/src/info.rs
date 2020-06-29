@@ -130,7 +130,7 @@ pub struct Force {
 
 #[test]
 fn test_parse_w3i_reforged() {
-  let mut map = crate::open_archive("../../deps/wc3-samples/map/(2)ConcealedHill.w3x").unwrap();
+  let mut map = crate::open_archive(flo_util::sample_path!("map", "(2)ConcealedHill.w3x")).unwrap();
   let bytes = map.open_file("war3map.w3i").unwrap().read_all().unwrap();
   let mut buf = bytes.as_slice();
   let info = MapInfo::decode(&mut buf).unwrap();
@@ -142,7 +142,7 @@ fn test_parse_w3i_reforged() {
 
 #[test]
 fn test_parse_w3i_roc() {
-  let mut map = crate::open_archive("../../deps/wc3-samples/map/test_roc.w3m").unwrap();
+  let mut map = crate::open_archive(flo_util::sample_path!("map", "test_roc.w3m")).unwrap();
   let bytes = map.open_file("war3map.w3i").unwrap().read_all().unwrap();
   let mut buf = bytes.as_slice();
   let info = MapInfo::decode(&mut buf).unwrap();
@@ -154,7 +154,7 @@ fn test_parse_w3i_roc() {
 
 #[test]
 fn test_parse_w3i_tft() {
-  let mut map = crate::open_archive("../../deps/wc3-samples/map/test_tft.w3x").unwrap();
+  let mut map = crate::open_archive(flo_util::sample_path!("map", "test_tft.w3x")).unwrap();
   let bytes = map.open_file("war3map.w3i").unwrap().read_all().unwrap();
   let mut buf = bytes.as_slice();
   let info = MapInfo::decode(&mut buf).unwrap();

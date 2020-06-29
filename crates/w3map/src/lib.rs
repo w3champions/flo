@@ -53,7 +53,9 @@ impl W3Map {
 pub(crate) fn open_archive<P: AsRef<Path>>(path: P) -> Result<Archive> {
   Archive::open(
     path,
-    OpenArchiveFlags::MPQ_OPEN_NO_LISTFILE | OpenArchiveFlags::MPQ_OPEN_NO_ATTRIBUTES,
+    OpenArchiveFlags::MPQ_OPEN_NO_LISTFILE
+      | OpenArchiveFlags::MPQ_OPEN_NO_ATTRIBUTES
+      | OpenArchiveFlags::STREAM_FLAG_READ_ONLY,
   )
   .map_err(Into::into)
 }
@@ -61,6 +63,6 @@ pub(crate) fn open_archive<P: AsRef<Path>>(path: P) -> Result<Archive> {
 #[test]
 fn test_open_map() {
   for map in &["(2)ConcealedHill.w3x", "test_roc.w3m", "test_tft.w3x"] {
-    dbg!(W3Map::open(format!("../../deps/wc3-samples/map/{}", map)).unwrap());
+    dbg!(W3Map::open(flo_util::sample_path!("map", map)).unwrap());
   }
 }

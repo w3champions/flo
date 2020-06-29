@@ -55,11 +55,18 @@ impl DecodeInputReceiver {
     &self,
     mod_path: &syn::Path,
     FieldReceiver {
-      ref ty, ref repeat, ..
+      ref ty,
+      ref repeat,
+      ref bitflags,
+      ..
     }: &FieldReceiver,
   ) -> TokenStream {
     if get_option_type_arg(ty).is_some() {
       return quote! { false };
+    }
+
+    if bitflags.is_some() {
+      return quote! { true };
     }
 
     match *ty {
@@ -84,7 +91,11 @@ impl DecodeInputReceiver {
     field: &FieldReceiver,
     ty: &syn::Type,
   ) -> TokenStream {
-    let FieldReceiver { ref repeat, .. } = field;
+    let FieldReceiver {
+      ref repeat,
+      bitflags,
+      ..
+    } = field;
 
     match ty {
       syn::Type::Array(syn::TypeArray {
@@ -132,8 +143,28 @@ impl DecodeInputReceiver {
             #mod_path::BinBufExt::get_repeated(buf, (#len) as usize)?
           }
         } else {
-          quote! {
-            <#ty as #mod_path::BinDecode>::decode(buf)?
+          if let Some(bitflags) = bitflags.as_ref() {
+            let repr_type = &bitflags.ty;
+            quote! {
+              {
+                buf.check_size(<#repr_type as #mod_path::BinDecode>::MIN_SIZE)?;
+                let bits = <#repr_type as #mod_path::BinDecode>::decode(buf)?;
+                if let Some(flags) = #ty::from_bits(bits) {
+                  flags
+                } else {
+                  return Err(#mod_path::BinDecodeError::failure(
+                    format!("representation contains bits that do not correspond to the flag type `{}`: {:b}",
+                      stringify!(#ty),
+                      !#ty::all().bits() & bits,
+                    )
+                  ));
+                }
+              }
+            }
+          } else {
+            quote! {
+              <#ty as #mod_path::BinDecode>::decode(buf)?
+            }
           }
         }
       }
@@ -181,6 +212,9 @@ impl DecodeInputReceiver {
       ref mod_path,
       ..
     } = *self;
+    let mod_path: syn::Path = mod_path.clone().unwrap_or(syn::parse_quote! {
+      flo_util::binary
+    });
     let repr_ty = &data
       .as_ref()
       .take_struct()
@@ -220,7 +254,14 @@ impl DecodeInputReceiver {
 
     let min_size_plus_list: Punctuated<TokenStream, syn::Token![+]> = fields
       .iter()
-      .map(|f| self.gen_min_size(&mod_path, &f.ty, f.repeat.as_ref()))
+      .map(|f| {
+        let ty = if let Some(MetaType { ref ty }) = f.bitflags {
+          ty
+        } else {
+          &f.ty
+        };
+        self.gen_min_size(&mod_path, ty, f.repeat.as_ref())
+      })
       .collect();
 
     let mut decode_field_items = Vec::with_capacity(fields.len());
@@ -301,6 +342,7 @@ impl DecodeInputReceiver {
       ref data,
       ref mod_path,
       ref enum_repr,
+      ..
     } = *self;
 
     let mod_path: syn::Path = mod_path.clone().unwrap_or(syn::parse_quote! {
@@ -431,6 +473,7 @@ impl EncodeInputReceiver {
       ref ident,
       ref ty,
       ref condition,
+      bitflags,
       ..
     } = field;
     if let Some(opt_ty) = get_option_type_arg(ty) {
@@ -451,6 +494,15 @@ impl EncodeInputReceiver {
         }
       };
     } else {
+      if let Some(MetaType { ty }) = bitflags {
+        return self.gen_encode_as_ty(
+          mod_path,
+          quote! {
+            &self.#ident.bits()
+          },
+          ty,
+        );
+      }
       self.gen_encode_as_ty(
         mod_path,
         quote! {
@@ -562,6 +614,8 @@ struct FieldReceiver {
   condition: Option<MetaExpr>,
   #[darling(default)]
   repeat: Option<MetaExpr>,
+  #[darling(default)]
+  bitflags: Option<MetaType>,
 }
 
 #[derive(Debug, FromVariant)]
@@ -588,7 +642,7 @@ impl FromMeta for Eq {
 
 #[derive(Debug)]
 struct MetaType {
-  ty: syn::Path,
+  ty: syn::Type,
 }
 
 impl FromMeta for MetaType {
@@ -596,9 +650,12 @@ impl FromMeta for MetaType {
     if let syn::Meta::List(syn::MetaList { ref nested, .. }) = *item {
       if nested.len() == 1 {
         if let Some(syn::NestedMeta::Meta(syn::Meta::Path(ref path))) = nested.first() {
-          if path.get_ident().is_some() {
-            return Ok(MetaType { ty: path.clone() });
-          }
+          return Ok(MetaType {
+            ty: syn::Type::Path(syn::TypePath {
+              qself: None,
+              path: syn::Path::clone(path),
+            }),
+          });
         }
       }
     }

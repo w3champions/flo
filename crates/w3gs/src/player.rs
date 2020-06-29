@@ -7,7 +7,7 @@ pub use crate::proto::{
   PlayerProfileMessage, PlayerProfileRealm, PlayerSkin, PlayerSkinsMessage, PlayerUnknown5Message,
 };
 
-#[derive(Debug, BinDecode, BinEncode)]
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct PlayerInfo {
   pub join_counter: u32,
   pub player_id: u8,
@@ -37,7 +37,18 @@ impl PacketProtoBufMessage for PlayerUnknown5Message {
 
 #[test]
 fn test_player_info() {
-  crate::packet::test_payload_type::<PlayerInfo>("player_info.bin")
+  crate::packet::test_payload_type(
+    "player_info.bin",
+    &PlayerInfo {
+      join_counter: 1,
+      player_id: 1,
+      player_name: CString::new("fluxxu#1815").unwrap(),
+      _num_unknown_1: 2,
+      _unknown_1: vec![0, 0],
+      external_addr: SockAddr::new_null(),
+      internal_addr: SockAddr::new_null(),
+    },
+  )
 }
 
 #[test]
@@ -59,21 +70,6 @@ fn test_player_profile() {
 fn test_player_profile_2() {
   crate::packet::test_protobuf_payload_type(
     "protobuf_0x59_0x03_2.bin",
-    &PlayerProfileMessage {
-      player_id: 2,
-      battle_tag: "PLAYER".to_owned(),
-      clan: "".to_owned(),
-      portrait: "p042".to_owned(),
-      realm: PlayerProfileRealm::Offline.into(),
-      unknown_1: "".to_owned(),
-    },
-  );
-}
-
-#[test]
-fn test_player_profile_3() {
-  crate::packet::test_protobuf_payload_type(
-    "protobuf_0x59_0x03_3.bin",
     &PlayerProfileMessage {
       player_id: 2,
       battle_tag: "PLAYER".to_owned(),

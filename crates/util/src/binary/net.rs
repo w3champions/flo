@@ -2,7 +2,7 @@ use super::*;
 use crate::{BinDecode, BinEncode};
 pub use std::net::{Ipv4Addr, SocketAddrV4};
 
-#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+#[derive(BinDecode, BinEncode, PartialEq)]
 #[bin(mod_path = "super")]
 pub struct SockAddr {
   pub family: u16,
@@ -15,6 +15,47 @@ pub struct SockAddr {
 
   #[bin(condition = "family != 2")]
   _unknown: Option<[u8; 14]>,
+}
+
+impl std::fmt::Debug for SockAddr {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self.family {
+      0 => f
+        .debug_struct("SockAddr")
+        .field("family", &self.family)
+        .finish(),
+      2 => f
+        .debug_struct("SockAddr")
+        .field("family", &self.family)
+        .field("addr_v4", &self.addr_v4)
+        .finish(),
+      _ => f
+        .debug_struct("SockAddr")
+        .field("family", &self.family)
+        .field("_unknown", &self._unknown)
+        .finish(),
+    }
+  }
+}
+
+impl SockAddr {
+  pub fn new_ipv4(ip_octets: [u8; 4], port: u16) -> Self {
+    SockAddr {
+      family: 2,
+      addr_v4: Some(SocketAddrV4::new(Ipv4Addr::from(ip_octets), port)),
+      _addr_v4_reserved: Some([0; 8]),
+      _unknown: None,
+    }
+  }
+
+  pub fn new_null() -> Self {
+    SockAddr {
+      family: 0,
+      addr_v4: None,
+      _addr_v4_reserved: None,
+      _unknown: Some([0; 14]),
+    }
+  }
 }
 
 impl BinEncode for Ipv4Addr {

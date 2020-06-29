@@ -46,7 +46,7 @@ pub enum MinimapIconType {
 #[test]
 fn test_parse_minimap_icons() {
   use flo_util::binary::BinDecode;
-  let mut map = crate::open_archive("../../deps/wc3-samples/map/(2)ConcealedHill.w3x").unwrap();
+  let mut map = crate::open_archive(flo_util::sample_path!("map", "(2)ConcealedHill.w3x")).unwrap();
 
   let bytes = map.open_file("war3map.mmp").unwrap().read_all().unwrap();
 

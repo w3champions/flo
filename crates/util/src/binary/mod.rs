@@ -4,9 +4,11 @@ pub use std::ffi::CString;
 pub use std::mem::size_of;
 
 mod ext;
+mod flags;
 mod net;
 
 pub use self::ext::*;
+pub use self::flags::Flags;
 pub use self::net::*;
 
 pub trait BinEncode {

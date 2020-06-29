@@ -130,7 +130,7 @@ bitflags! {
   }
 }
 
-#[derive(Debug, Clone, Copy, BinEncode, BinDecode)]
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
 #[bin(enum_repr(u8))]
 pub enum SlotStatus {
   #[bin(value = 0)]
@@ -143,7 +143,7 @@ pub enum SlotStatus {
 }
 
 bitflags! {
-  pub struct RacePref: u32 {
+  pub struct RacePref: u8 {
       const HUMAN = 0x01;
       const ORC = 0x02;
       const NIGHTELF = 0x04;
@@ -154,7 +154,7 @@ bitflags! {
   }
 }
 
-#[derive(Debug, Clone, Copy, BinEncode, BinDecode)]
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
 #[bin(enum_repr(u8))]
 pub enum AI {
   #[bin(value = 0)]

@@ -115,7 +115,10 @@ impl ProtoBufPayload {
 }
 
 #[cfg(test)]
-pub(crate) fn test_payload_type<T: PacketPayload + std::fmt::Debug>(filename: &str) {
+pub(crate) fn test_payload_type<T: PacketPayload + std::cmp::PartialEq + std::fmt::Debug>(
+  filename: &str,
+  expecting: &T,
+) {
   let mut bytes = BytesMut::from(flo_util::sample_bytes!("packet", filename).as_slice());
   let header = Packet::decode_header(&mut bytes).unwrap();
   dbg!(&header);
@@ -128,6 +131,8 @@ pub(crate) fn test_payload_type<T: PacketPayload + std::fmt::Debug>(filename: &s
   let payload: T = packet.decode_payload().unwrap();
   dbg!(&payload);
 
+  assert_eq!(&payload, expecting);
+
   assert_eq!(payload.encode_to_bytes(), packet.payload);
 }
 
@@ -136,7 +141,7 @@ pub(crate) fn test_protobuf_payload_type<
   T: PacketProtoBufMessage + std::cmp::PartialEq + std::fmt::Debug,
 >(
   filename: &str,
-  expected: &T,
+  expecting: &T,
 ) {
   let mut bytes = BytesMut::from(flo_util::sample_bytes!("packet", filename).as_slice());
   let header = Packet::decode_header(&mut bytes).unwrap();
@@ -152,7 +157,7 @@ pub(crate) fn test_protobuf_payload_type<
 
   let message: T = payload.decode_message().unwrap();
 
-  assert_eq!(&message, expected);
+  assert_eq!(&message, expecting);
 
   let new = ProtoBufPayload::new(message);
   assert_eq!(new.encode_to_bytes(), packet.payload);
