@@ -29,11 +29,7 @@ impl Packet {
   }
 
   pub fn decode(header: Header, buf: &mut BytesMut) -> Result<Self> {
-    let payload_len = header
-      .len
-      .checked_sub(4)
-      .ok_or_else(|| BinDecodeError::failure(format!("invalid packet length: {}", header.len)))?
-      as usize;
+    let payload_len = header.get_payload_len()?;
     buf.check_size(payload_len)?;
     Ok(Packet {
       header,
@@ -66,6 +62,16 @@ impl Packet {
     let payload: ProtoBufPayload = self.decode_payload()?;
     payload.decode_message()
   }
+
+  pub fn get_encode_len(&self) -> usize {
+    4 + self.payload.len()
+  }
+
+  pub fn encode(&self, buf: &mut BytesMut) {
+    buf.reserve(self.get_encode_len());
+    self.header.encode(buf);
+    buf.put_slice(&self.payload);
+  }
 }
 
 #[derive(Debug, BinDecode, BinEncode)]
@@ -74,6 +80,16 @@ pub struct Header {
   _sig: u8,
   pub type_id: PacketTypeId,
   pub len: u16,
+}
+
+impl Header {
+  pub fn get_payload_len(&self) -> Result<usize> {
+    let payload_len = self
+      .len
+      .checked_sub(4)
+      .ok_or_else(|| Error::InvalidPacketLength(self.len))? as usize;
+    Ok(payload_len)
+  }
 }
 
 #[derive(Debug, BinDecode, BinEncode)]

@@ -4,9 +4,6 @@ use lazy_static::lazy_static;
 use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
-/// W3GS magic number used in the packet header.
-pub const PROTOCOL_SIG: u8 = 0xF7;
-
 // W3GS packet type identifier
 #[derive(Debug, Clone, Copy, PartialEq, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
@@ -166,34 +163,58 @@ pub enum AI {
   UnknownValue(u8),
 }
 
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
+#[bin(enum_repr(u8))]
 pub enum RejectReason {
-  JoinInvalid = 0x07,
-  JoinFull = 0x09,
-  JoinStarted = 0x0A,
-  JoinWrongKey = 0x1B,
+  #[bin(value = 0x07)]
+  JoinInvalid,
+  #[bin(value = 0x09)]
+  JoinFull,
+  #[bin(value = 0x0A)]
+  JoinStarted,
+  #[bin(value = 0x1B)]
+  JoinWrongKey,
+  UnknownValue(u8),
 }
 
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
+#[bin(enum_repr(u32))]
 pub enum LeaveReason {
-  LeaveDisconnect = 0x01,
-  LeaveLost = 0x07,
-  LeaveLostBuildings = 0x08,
-  LeaveWon = 0x09,
-  LeaveDraw = 0x0A,
-  LeaveObserver = 0x0B,
-  LeaveInvalidSaveGame = 0x0C, // (?)
-  LeaveLobby = 0x0D,
+  #[bin(value = 0x01)]
+  LeaveDisconnect,
+  #[bin(value = 0x07)]
+  LeaveLost,
+  #[bin(value = 0x08)]
+  LeaveLostBuildings,
+  #[bin(value = 0x09)]
+  LeaveWon,
+  #[bin(value = 0x0A)]
+  LeaveDraw,
+  #[bin(value = 0x0B)]
+  LeaveObserver,
+  #[bin(value = 0x0C)]
+  LeaveInvalidSaveGame, // (?)
+  #[bin(value = 0x0D)]
+  LeaveLobby,
+  UnknownValue(u32),
 }
 
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
+#[bin(enum_repr(u8))]
 pub enum MessageType {
-  Chat = 0x10,
-  TeamChange = 0x11,
-  ColorChange = 0x12,
-  RaceChange = 0x13,
-  HandicapChange = 0x14,
-  ChatExtra = 0x20,
+  #[bin(value = 0x10)]
+  Chat,
+  #[bin(value = 0x11)]
+  TeamChange,
+  #[bin(value = 0x12)]
+  ColorChange,
+  #[bin(value = 0x13)]
+  RaceChange,
+  #[bin(value = 0x14)]
+  HandicapChange,
+  #[bin(value = 0x20)]
+  ChatExtra,
+  UnknownValue(u8),
 }
 
 bitflags! {

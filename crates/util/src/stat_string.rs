@@ -37,7 +37,8 @@
 
 pub fn encode(src: &[u8]) -> Vec<u8> {
   let mut mask: u8 = 1;
-  let mut out = vec![];
+  let len = encoded_len(src.len());
+  let mut out = Vec::with_capacity(len);
 
   for (i, byte) in src.iter().cloned().enumerate() {
     if byte % 2 == 0 {
@@ -48,7 +49,8 @@ pub fn encode(src: &[u8]) -> Vec<u8> {
     }
 
     if i % 7 == 6 || i == src.len() - 1 {
-      out.insert(src.len() - 1 - (i % 7), mask);
+      let pos = out.len() - 1 - (i % 7);
+      out.insert(pos, mask);
       mask = 1;
     }
   }
@@ -87,6 +89,7 @@ pub fn encoded_len(data_len: usize) -> usize {
 fn test_stat_string() {
   let data = "\0".as_bytes();
   let encoded = encode(data);
+  dbg!(encoded_len(data.len()));
   assert_eq!(encoded, &[0b00000001, 1]);
 
   assert_eq!(encoded_len(1), 2);

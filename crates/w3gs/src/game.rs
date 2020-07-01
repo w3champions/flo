@@ -1,7 +1,8 @@
 use flo_util::binary::*;
-use std::ffi::CString;
+use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::GameSettingFlags;
+use crate::constants::{GameSettingFlags, PacketTypeId};
+use crate::packet::PacketPayload;
 
 /// GameSettings stores the settings of a created game.
 ///
@@ -42,7 +43,7 @@ use crate::constants::GameSettingFlags;
 /// incremented by 1. So all encoded bytes are odd. A control-byte stores
 /// the transformations for the next 7 bytes.
 ///
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GameSettings {
   pub game_setting_flags: GameSettingFlags,
   pub map_width: u16,
@@ -148,4 +149,54 @@ impl BinDecode for GameSettings {
       map_sha1,
     })
   }
+}
+
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct CountDownStart;
+
+impl PacketPayload for CountDownStart {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::CountDownStart;
+}
+
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct CountDownEnd;
+
+impl PacketPayload for CountDownEnd {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::CountDownEnd;
+}
+
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct GameLoadedSelf;
+
+impl PacketPayload for GameLoadedSelf {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::GameLoadedSelf;
+}
+
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct PlayerLoaded {
+  pub player_id: u8,
+}
+
+impl PacketPayload for PlayerLoaded {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::PlayerLoaded;
+}
+
+#[test]
+fn test_count_down_start() {
+  crate::packet::test_payload_type("count_down_start.bin", &CountDownStart)
+}
+
+#[test]
+fn test_count_down_end() {
+  crate::packet::test_payload_type("count_down_end.bin", &CountDownEnd)
+}
+
+#[test]
+fn test_game_loaded_self() {
+  crate::packet::test_payload_type("game_loaded_self.bin", &GameLoadedSelf)
+}
+
+#[test]
+fn test_player_loaded() {
+  crate::packet::test_payload_type("player_loaded.bin", &PlayerLoaded { player_id: 2 })
 }

@@ -10,7 +10,7 @@ use syn::spanned::Spanned;
 #[derive(Debug, FromDeriveInput)]
 #[darling(
   attributes(bin),
-  supports(struct_named, struct_newtype, enum_unit, enum_newtype)
+  supports(struct_named, struct_unit, struct_newtype, enum_unit, enum_newtype)
 )]
 pub struct DecodeInputReceiver {
   ident: syn::Ident,
@@ -394,6 +394,25 @@ impl ToTokens for DecodeInputReceiver {
       ast::Data::Struct(ref fields) => {
         if fields.is_newtype() {
           self.to_struct_newtype_tokens(tokens)
+        } else if fields.is_unit() {
+          let DecodeInputReceiver {
+            ref ident,
+            ref mod_path,
+            ..
+          } = *self;
+          let mod_path: syn::Path = mod_path.clone().unwrap_or(syn::parse_quote! {
+            flo_util::binary
+          });
+
+          tokens.extend(quote! {
+            impl #mod_path::BinDecode for #ident {
+              const MIN_SIZE: usize = 0;
+              const FIXED_SIZE: bool = true;
+              fn decode<T: #mod_path::Buf>(buf: &mut T) -> Result<Self, #mod_path::BinDecodeError> {
+                Ok(#ident)
+              }
+            }
+          })
         } else {
           self.to_struct_tokens(tokens)
         }
@@ -405,7 +424,7 @@ impl ToTokens for DecodeInputReceiver {
 #[derive(Debug, FromDeriveInput)]
 #[darling(
   attributes(bin),
-  supports(struct_named, struct_newtype, enum_unit, enum_newtype)
+  supports(struct_named, struct_unit, struct_newtype, enum_unit, enum_newtype)
 )]
 pub struct EncodeInputReceiver {
   ident: syn::Ident,
@@ -539,6 +558,12 @@ impl ToTokens for EncodeInputReceiver {
               fn encode<T: #mod_path::BufMut>(&self, buf: &mut T) {
                 <#repr_ty as #mod_path::BinEncode>::encode(&self.0, buf);
               }
+            }
+          })
+        } else if fields.is_unit() {
+          tokens.extend(quote! {
+            impl #imp #mod_path::BinEncode for #ident #ty #wher {
+              fn encode<T: #mod_path::BufMut>(&self, buf: &mut T) {}
             }
           })
         } else {

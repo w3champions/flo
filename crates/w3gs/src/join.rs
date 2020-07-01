@@ -41,14 +41,14 @@ fn test_req_join() {
     "req_join.bin",
     &ReqJoin {
       host_counter: 1,
-      entry_key: 45397916,
+      entry_key: 1464412694,
       _unknown_1: 0,
-      listen_port: 16001,
+      listen_port: 16000,
       join_counter: 1,
-      player_name: CString::new("PLAYER").unwrap(),
+      player_name: CString::new("1111").unwrap(),
       _num_unknown_2: 2,
       _unknown_2: vec![0, 0],
-      internal_addr: SockAddr::new_ipv4([62, 128, 192, 168], 1537),
+      internal_addr: SockAddr::new_ipv4([192, 168, 1, 6], 32830),
     },
   )
 }
@@ -92,7 +92,7 @@ fn test_slot_info_join() {
         num_players: 2,
       },
       player_id: 2,
-      external_addr: SockAddr::new_ipv4([211, 28, 192, 168], 1537),
+      external_addr: SockAddr::new_ipv4([192, 168, 1, 6], 7379),
     },
   )
 }

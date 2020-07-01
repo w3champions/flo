@@ -12,4 +12,5 @@ members = [
 [patch.crates-io]
 stormlib = { path = "../stormlib-rs/crates/stormlib" }
 stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
-trust-dns-proto = { git = "https://github.com/bluejekyll/trust-dns.git" }
+trust-dns-proto = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
+trust-dns-client = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }

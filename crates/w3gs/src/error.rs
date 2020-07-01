@@ -4,6 +4,13 @@ use crate::constants::PacketTypeId;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("invalid packet length: {0}")]
+  InvalidPacketLength(u16),
+  #[error("invalid state: no header")]
+  InvalidStateNoHeader,
+
+  #[error("io: {0}")]
+  Io(#[from] std::io::Error),
   #[error("unexpected bytes after payload: {0}")]
   ExtraPayloadBytes(usize),
   #[error("packet type id mismatch: expected `{expected:?}`, found `{found:?}`")]

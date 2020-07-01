@@ -93,7 +93,7 @@ fn test_player_skins() {
 }
 
 #[test]
-fn test_player_skins2() {
+fn test_player_skins_2() {
   crate::packet::test_protobuf_payload_type(
     "protobuf_0x59_0x04_2.bin",
     &PlayerSkinsMessage {
@@ -101,4 +101,15 @@ fn test_player_skins2() {
       skins: vec![],
     },
   );
+}
+
+#[test]
+fn test_player_unknown_02() {
+  use crate::packet::{Packet, ProtoBufPayload};
+  let mut buf =
+    BytesMut::from(flo_util::sample_bytes!("packet", "protobuf_0x59_0x02.bin").as_slice());
+  let h = Packet::decode_header(&mut buf).unwrap();
+  let p = Packet::decode(h, &mut buf).unwrap();
+  let p: ProtoBufPayload = p.decode_payload().unwrap();
+  dbg!(&p);
 }
