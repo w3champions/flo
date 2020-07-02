@@ -1,9 +1,9 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::PacketTypeId;
-use crate::packet::PacketPayload;
-use crate::slot::SlotInfo;
+use crate::protocol::constants::PacketTypeId;
+use crate::protocol::packet::PacketPayload;
+use crate::protocol::slot::SlotInfo;
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct ReqJoin {
@@ -55,7 +55,7 @@ fn test_req_join() {
 
 #[test]
 fn test_slot_info_join() {
-  use crate::constants::{RacePref, SlotStatus, AI};
+  use crate::protocol::constants::{RacePref, SlotStatus, AI};
   use crate::slot::SlotData;
   crate::packet::test_payload_type(
     "slot_info_join.bin",

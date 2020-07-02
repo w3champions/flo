@@ -1,8 +1,8 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::{PacketTypeId, RacePref, SlotStatus, AI};
-use crate::packet::PacketPayload;
+use crate::protocol::constants::{PacketTypeId, RacePref, SlotStatus, AI};
+use crate::protocol::packet::PacketPayload;
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct SlotInfo {

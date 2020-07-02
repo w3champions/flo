@@ -5,10 +5,10 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+flo-log = { path = "../log" }
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 
-futures = "0.3"
 tokio = { version = "0.2", features = ["full"] }
 trust-dns-client = { version = "0.20", features = ["mdns"] }
 hostname = "^0.3"
@@ -18,6 +18,14 @@ prost = "0.6"
 base64 = "0.12.2"
 thiserror = "1"
 lazy_static = "1"
+ipconfig = "0.2.2"
+parking_lot = "0.11.0"
+tracing = "0.1"
+tracing-futures = "0.2.4"
+futures = "0.3.5"
 
 [build-dependencies]
 prost-build = { version = "0.6" }
+
+[dev-dependencies]
+tracing-subscriber = "0.2"

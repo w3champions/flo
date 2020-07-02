@@ -1,0 +1,421 @@
+use futures::future::ready;
+use parking_lot::RwLock;
+use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::stream::StreamExt;
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::delay_for;
+use trust_dns_client::multicast::MdnsQueryType;
+use trust_dns_client::multicast::MdnsStream;
+use trust_dns_client::op::{Message, MessageType};
+use trust_dns_client::proto::multicast::MDNS_IPV4;
+use trust_dns_client::proto::rr::rdata::{NULL, SRV};
+use trust_dns_client::proto::xfer::{BufStreamHandle, SerialMessage};
+use trust_dns_client::rr::{Name, RData, Record, RecordType};
+
+use tracing::{debug, error, instrument, span, warn, Level};
+use tracing_futures::Instrument;
+
+use crate::constants;
+use crate::error::*;
+use crate::game_info::GameInfo;
+use futures::SinkExt;
+use trust_dns_client::serialize::binary::BinEncodable;
+
+type GameInfoRef = Arc<RwLock<GameInfo>>;
+type UpdateTx = mpsc::Sender<oneshot::Sender<()>>;
+
+#[derive(Debug)]
+pub struct MdnsPublisher {
+  update_tx: UpdateTx,
+  drop_tx: Option<oneshot::Sender<()>>,
+  game_info: GameInfoRef,
+}
+
+impl MdnsPublisher {
+  #[instrument(skip(game_info))]
+  pub async fn start(game_info: GameInfo) -> Result<Self> {
+    let game_info = Arc::new(RwLock::new(game_info));
+    let (mut update_tx, mut update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
+    let (drop_tx, drop_rx) = oneshot::channel();
+    let ip_info: IpInfo = get_ip_info()?;
+    let hostname = hostname::get().map_err(Error::GetHostName)?;
+    let hostname = if let Some(v) = hostname.to_str() {
+      v.to_string()
+    } else {
+      warn!("non utf-8 host name");
+      hostname.to_string_lossy().to_string()
+    };
+    let hostname = Name::from_labels(vec![hostname.as_bytes(), "local".as_bytes()])?;
+
+    let (connect, sender) = MdnsStream::new_ipv4(
+      MdnsQueryType::OneShotJoin,
+      Some(255),
+      Some(Ipv4Addr::UNSPECIFIED),
+    );
+
+    let mut stream = connect.await.map_err(Error::MdnsStreamBroken)?;
+
+    let task_game_info = game_info.clone();
+    let task = async move {
+      debug!("started");
+
+      let game_info = task_game_info;
+
+      if let Err(e) = broadcast(&sender, &hostname, &ip_info, game_info.clone()) {
+        error!("broadcast initial update error: {}", e);
+        return;
+      }
+
+      debug!("initial update broadcasted");
+
+      tokio::pin!(drop_rx);
+      loop {
+        tokio::select! {
+          _ = &mut drop_rx => {
+            debug!("signal received");
+            break;
+          },
+          update = update_rx.recv() => {
+            if let Some(ack) = update {
+              debug!("update");
+              if let Err(e) = broadcast(
+                &sender,
+                &hostname,
+                &ip_info,
+                game_info.clone()
+              ) {
+                error!("broadcast error: {}", e);
+              }
+              ack.send(()).ok();
+            } else {
+              debug!("update handle dropped");
+              break;
+            }
+          },
+          query = stream.try_next() => {
+            match query {
+              Ok(Some(query)) => {
+                if let Err(e) = reply(
+                  &sender,
+                  query,
+                  &hostname,
+                  &ip_info,
+                  game_info.clone(),
+                ) {
+                  error!("reply error: {}", e);
+                }
+              },
+              Ok(None) => {
+                debug!("mdns stream ended");
+                break;
+              }
+              Err(e) => {
+                error!("mdns stream broken: {}", e);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      debug!("shutting down");
+    }
+    .instrument(span!(Level::DEBUG, "mdns_task"));
+
+    tokio::spawn(task);
+
+    Ok(Self {
+      update_tx,
+      drop_tx: Some(drop_tx),
+      game_info,
+    })
+  }
+
+  pub async fn update<F>(&mut self, f: F) -> Result<()>
+  where
+    F: FnOnce(&mut GameInfo),
+  {
+    {
+      let mut lock = self.game_info.write();
+      f(&mut lock)
+    }
+    let (ack_tx, ack_rx) = oneshot::channel();
+    self
+      .update_tx
+      .send(ack_tx)
+      .await
+      .map_err(|e| Error::MdnsUpdateGameInfo("worker dead: send"))?;
+
+    tokio::select! {
+      r = delay_for(Duration::from_secs(1)) => Err(Error::MdnsUpdateGameInfo("timeout")),
+      r = ack_rx => r.map_err(|_| Error::MdnsUpdateGameInfo("worker dead: recv")),
+    }
+  }
+}
+
+impl std::ops::Drop for MdnsPublisher {
+  fn drop(&mut self) {
+    if let Some(tx) = self.drop_tx.take() {
+      debug!("dropping");
+      tx.send(()).ok();
+    }
+  }
+}
+
+#[derive(Clone)]
+pub struct GameInfoSender(Arc<mpsc::Sender<GameInfoRef>>);
+
+fn reply(
+  sender: &BufStreamHandle,
+  query: SerialMessage,
+  hostname: &Name,
+  ip_info: &IpInfo,
+  game_info: GameInfoRef,
+) -> Result<()> {
+  let mut game_info = game_info.write();
+  let port = game_info.data.port;
+  let sender_addr = query.addr();
+  let query = query.to_message()?;
+
+  let addr = if query.queries().iter().any(|q| q.mdns_unicast_response()) {
+    sender_addr
+  } else {
+    *MDNS_IPV4
+  };
+
+  let mut msg = Message::new();
+
+  msg
+    .set_message_type(MessageType::Response)
+    .set_authoritative(true);
+
+  let mut txt = false;
+  let mut ptr = false;
+  let mut srv = false;
+  let mut info = false;
+
+  for q in query.queries() {
+    if q.name().eq(&constants::W3_SERVICE_NAME)
+      && (q.query_type() == RecordType::PTR || q.query_type() == RecordType::ANY)
+    {
+      ptr = true;
+      txt = true;
+      srv = true;
+      info = true;
+    }
+
+    if q.name().eq(&constants::GAME_NAME) {
+      match q.query_type() {
+        RecordType::ANY => {
+          txt = true;
+          srv = true;
+          info = true;
+        }
+        RecordType::TXT => {
+          txt = true;
+        }
+        RecordType::SRV => {
+          srv = true;
+        }
+        RecordType::Unknown(66) => {
+          info = true;
+        }
+        _ => {}
+      }
+    }
+  }
+
+  if ptr || txt || srv || info {
+    if ptr {
+      add_ptr_record(&mut msg);
+    }
+
+    if txt {
+      msg.add_answer(get_txt_record());
+    }
+
+    if srv {
+      msg.add_answer(get_srv_record(hostname, port));
+
+      add_a_record(&mut msg, hostname, ip_info);
+      add_aaaa_record(&mut msg, hostname, ip_info);
+    }
+
+    if info {
+      msg.add_answer(get_gameinfo_record({
+        game_info.message_id = game_info.message_id + 1;
+        game_info.encode_to_bytes()?
+      }));
+    }
+
+    sender
+      .unbounded_send(SerialMessage::new(msg.to_bytes()?, addr))
+      .map_err(|e| Error::MdnsBroadcastError(e.to_string()))?;
+
+    debug!("reply sent to {}", addr);
+  }
+  Ok(())
+}
+
+fn broadcast(
+  sender: &BufStreamHandle,
+  hostname: &Name,
+  ip_info: &IpInfo,
+  game_info: GameInfoRef,
+) -> Result<()> {
+  let mut game_info = game_info.write();
+  let port = game_info.data.port;
+  let mut msg = Message::new();
+
+  msg
+    .set_message_type(MessageType::Response)
+    .set_authoritative(true);
+
+  msg.add_answer(get_txt_record());
+  add_ptr_record(&mut msg);
+  msg.add_answer(get_srv_record(hostname, port));
+  msg.add_answer(get_gameinfo_record({
+    game_info.message_id = game_info.message_id + 1;
+    game_info.encode_to_bytes()?
+  }));
+
+  add_a_record(&mut msg, hostname, ip_info);
+  add_aaaa_record(&mut msg, hostname, ip_info);
+
+  let bytes = msg.to_vec()?;
+
+  sender
+    .unbounded_send(SerialMessage::new(bytes.clone(), *MDNS_IPV4))
+    .map_err(|e| Error::MdnsBroadcastError(e.to_string()))?;
+
+  Ok(())
+}
+
+#[derive(Debug)]
+struct IpInfo {
+  ips_v4: Vec<Ipv4Addr>,
+  ips_v6: Vec<Ipv6Addr>,
+}
+
+fn get_ip_info() -> Result<IpInfo> {
+  let mut info = IpInfo {
+    ips_v4: vec![],
+    ips_v6: vec![],
+  };
+
+  for adapter in ipconfig::get_adapters()? {
+    if adapter.oper_status() == ipconfig::OperStatus::IfOperStatusUp
+      && adapter.if_type() != ipconfig::IfType::SoftwareLoopback
+    {
+      dbg!(&adapter.if_type());
+      for ip in adapter.ip_addresses() {
+        use std::net::IpAddr;
+        match ip {
+          IpAddr::V4(ref ip) => info.ips_v4.push(ip.clone()),
+          IpAddr::V6(ref ip) => info.ips_v6.push(ip.clone()),
+        }
+      }
+    }
+  }
+
+  Ok(info)
+}
+
+fn get_txt_record() -> Record {
+  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::TXT, 4500);
+  record.set_mdns_cache_flush(true);
+  record
+}
+
+fn add_ptr_record(m: &mut Message) {
+  let mut record = Record::with(constants::W3_SERVICE_NAME.clone(), RecordType::PTR, 0);
+  record
+    .set_rdata(RData::PTR(constants::GAME_NAME.clone()))
+    .set_ttl(4500);
+  m.add_answer(record);
+
+  let mut record = Record::with(constants::BLIZZARD_SERVICE_NAME.clone(), RecordType::PTR, 0);
+  record
+    .set_rdata(RData::PTR(constants::GAME_NAME.clone()))
+    .set_ttl(0);
+  m.add_answer(record);
+}
+
+fn get_gameinfo_record(game_info: Vec<u8>) -> Record {
+  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::Unknown(66), 4500);
+  record
+    .set_rdata(RData::NULL(NULL::with(game_info)))
+    .set_ttl(4500)
+    .set_mdns_cache_flush(true);
+  record
+}
+
+fn get_srv_record(hostname: &Name, port: u16) -> Record {
+  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::SRV, 120);
+  record
+    .set_rdata(RData::SRV(SRV::new(0, 0, port, hostname.clone())))
+    .set_mdns_cache_flush(true);
+  record
+}
+
+fn add_a_record(msg: &mut Message, hostname: &Name, ipinfo: &IpInfo) {
+  for ip in &ipinfo.ips_v4 {
+    let mut record = Record::with(hostname.clone(), RecordType::A, 120);
+    record
+      .set_rdata(RData::A(ip.clone()))
+      .set_mdns_cache_flush(true);
+    msg.add_additional(record);
+  }
+}
+
+fn add_aaaa_record(msg: &mut Message, hostname: &Name, ipinfo: &IpInfo) {
+  for ip in &ipinfo.ips_v6 {
+    let mut record = Record::with(hostname.clone(), RecordType::AAAA, 120);
+    record
+      .set_rdata(RData::AAAA(ip.clone()))
+      .set_mdns_cache_flush(true);
+    msg.add_additional(record);
+  }
+}
+
+#[tokio::test]
+async fn test_publisher() {
+  std::env::set_var("RUST_LOG", "flo_lan=debug");
+  tracing_subscriber::fmt::init();
+
+  use flo_w3gs::net::W3GSListener;
+
+  let mut listener = W3GSListener::bind().await.unwrap();
+  println!("W3GS listening on {}", listener.local_addr());
+  let port = listener.port();
+
+  tokio::spawn(async move {
+    loop {
+      let mut stream = listener.accept().await;
+      while let Some(packet) = stream.next().await.unwrap();
+    }
+  });
+
+  let mut game_info =
+    GameInfo::decode_bytes(&flo_util::sample_bytes!("lan", "mdns_gamedata.bin")).unwrap();
+  game_info.data.port = port;
+  game_info.create_time = std::time::SystemTime::now();
+  game_info.game_id = "2".to_owned();
+
+  let mut p = MdnsPublisher::start(game_info).await.unwrap();
+
+  loop {
+    delay_for(Duration::from_secs(3)).await;
+    p.update(|info| {
+      if info.players_num == 1 {
+        info.players_num = 2
+      } else {
+        info.players_num = 1
+      }
+    })
+    .await
+    .unwrap();
+  }
+}

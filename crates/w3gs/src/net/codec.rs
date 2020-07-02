@@ -2,7 +2,7 @@ use flo_util::binary::*;
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::Error;
-use crate::packet::{Header, Packet};
+use crate::protocol::packet::{Header, Packet};
 
 #[derive(Debug)]
 pub struct W3GSCodec {

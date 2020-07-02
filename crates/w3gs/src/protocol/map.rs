@@ -1,8 +1,8 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::PacketTypeId;
-use crate::packet::PacketPayload;
+use crate::protocol::constants::PacketTypeId;
+use crate::protocol::packet::PacketPayload;
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct MapCheck {

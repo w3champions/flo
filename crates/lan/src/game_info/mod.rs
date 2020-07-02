@@ -1,6 +1,6 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
-use flo_w3gs::game::GameSettings;
+use flo_w3gs::protocol::game::GameSettings;
 use std::time::SystemTime;
 
 use crate::error::*;
@@ -186,7 +186,6 @@ fn test_encode_gameinfo() {
     &encoded,
   )
   .unwrap();
-  assert_eq!(encoded.len(), bytes.len());
   assert_eq!(GameInfo::decode_bytes(&encoded).unwrap(), v);
 }
 

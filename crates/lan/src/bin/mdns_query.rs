@@ -1,8 +1,7 @@
-use futures::{StreamExt, TryFutureExt};
 use trust_dns_client::client::{AsyncClient, ClientHandle};
+use trust_dns_client::multicast::MdnsClientStream;
 use trust_dns_client::multicast::MdnsQueryType;
-use trust_dns_client::multicast::{MdnsClientStream, MdnsStream};
-use trust_dns_client::rr::{DNSClass, Name, RData, Record, RecordType};
+use trust_dns_client::rr::{DNSClass, Name, RecordType};
 
 #[tokio::main]
 async fn main() {

@@ -11,3 +11,5 @@ flo-blp = { path = "../blp" }
 stormlib = "0.1"
 thiserror = "1"
 bitflags = "1"
+image = "0.23.6"
+lazy_static = "1"

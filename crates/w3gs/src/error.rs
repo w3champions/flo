@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::constants::PacketTypeId;
+use crate::protocol::constants::PacketTypeId;
 
 #[derive(Error, Debug)]
 pub enum Error {

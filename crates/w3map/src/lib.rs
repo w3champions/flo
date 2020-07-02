@@ -48,6 +48,18 @@ impl W3Map {
       },
     })
   }
+
+  pub fn render_preview_png(&self) -> Vec<u8> {
+    let mut bg = self.image.clone();
+    for icon in self.minimap_icons.iter() {
+      icon.draw_into(&mut bg);
+    }
+    let mut bytes = vec![];
+    image::DynamicImage::ImageRgba8(bg)
+      .write_to(&mut bytes, image::ImageFormat::Png)
+      .ok();
+    bytes
+  }
 }
 
 pub(crate) fn open_archive<P: AsRef<Path>>(path: P) -> Result<Archive> {
@@ -62,7 +74,14 @@ pub(crate) fn open_archive<P: AsRef<Path>>(path: P) -> Result<Archive> {
 
 #[test]
 fn test_open_map() {
-  for map in &["(2)ConcealedHill.w3x", "test_roc.w3m", "test_tft.w3x"] {
-    dbg!(W3Map::open(flo_util::sample_path!("map", map)).unwrap());
+  for name in &[
+    "(2)ConcealedHill.w3x",
+    "(8)Sanctuary_LV.w3x",
+    "test_roc.w3m",
+    "test_tft.w3x",
+  ] {
+    let map = W3Map::open(flo_util::sample_path!("map", name)).unwrap();
+    let _data = map.render_preview_png();
+    // std::fs::write(format!("{}.png", name), data).unwrap()
   }
 }

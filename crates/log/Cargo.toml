@@ -1,0 +1,9 @@
+[package]
+name = "flo-log"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tracing = "0.1"
+tracing-futures = "0.2.4"

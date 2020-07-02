@@ -15,7 +15,7 @@ pub struct W3GSListener {
 
 impl W3GSListener {
   pub async fn bind() -> Result<Self, Error> {
-    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(192, 168, 1, 6), 0)).await?;
+    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).await?;
     let local_addr = listener.local_addr()?;
     Ok(W3GSListener {
       listener,
@@ -26,10 +26,10 @@ impl W3GSListener {
   pub async fn accept(&mut self) -> W3GSStream {
     loop {
       match self.listener.accept().await {
-        Ok((mut stream, addr)) => {
+        Ok((stream, addr)) => {
           println!("W3GSListenner::accept: {}", addr);
-          stream.set_nodelay(true);
-          stream.set_keepalive(None);
+          stream.set_nodelay(true).ok();
+          stream.set_keepalive(None).ok();
           return W3GSStream {
             addr,
             inner: Framed::new(stream, W3GSCodec::new()),

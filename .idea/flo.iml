@@ -10,6 +10,14 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/w3gs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/blp/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/lobby/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/image/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/platform/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/w3client/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/deps/casclib/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/deps/casclib/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/deps/casclib/casclib-sys/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/deps/casclib/casclib-sys/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/log/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

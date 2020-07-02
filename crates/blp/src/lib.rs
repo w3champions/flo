@@ -8,7 +8,7 @@
 
 use flo_util::binary::*;
 use flo_util::BinDecode;
-use image::{DynamicImage, GenericImageView, ImageFormat};
+use image::{ImageBuffer, ImageFormat, Rgb, Rgba};
 
 const COMPRESSION_JPEG: u32 = 0;
 const SOI_HEADER: &[u8] = &[
@@ -17,7 +17,7 @@ const SOI_HEADER: &[u8] = &[
 ];
 
 pub struct BLPImage {
-  image: DynamicImage,
+  image: ImageBuffer<Rgba<u8>, Vec<u8>>,
 }
 
 impl std::fmt::Debug for BLPImage {
@@ -31,9 +31,11 @@ impl std::fmt::Debug for BLPImage {
   }
 }
 
-impl BLPImage {
-  pub fn to_bytes(&self) -> Vec<u8> {
-    self.image.to_bytes()
+impl std::ops::Deref for BLPImage {
+  type Target = ImageBuffer<Rgba<u8>, Vec<u8>>;
+
+  fn deref(&self) -> &ImageBuffer<Rgba<u8>, Vec<u8>> {
+    &self.image
   }
 }
 
@@ -47,6 +49,9 @@ impl BinDecode for BLPImage {
       0 | 8 => {}
       v => return Err(BinDecodeError::failure(format!("invalid alpha bit: {}", v))),
     }
+
+    dbg!(&header);
+
     if header.compression != COMPRESSION_JPEG {
       return Err(BinDecodeError::failure(format!(
         "unsupported compression type: {}",
@@ -89,6 +94,19 @@ impl BinDecode for BLPImage {
         }
       })
       .map_err(|e| BinDecodeError::failure(format!("decode jpeg: {:?}", e)))?;
+
+    let image = if let Some(rbg_image) = image.as_rgb8() {
+      let (w, h) = rbg_image.dimensions();
+      let mut raw = Vec::with_capacity((w * h * 4) as usize);
+      for Rgb([r, g, b]) in rbg_image.pixels() {
+        raw.extend(&[*b, *g, *r, 255])
+      }
+      ImageBuffer::from_raw(w, h, raw).unwrap()
+    } else {
+      return Err(BinDecodeError::failure(
+        "decode jpeg: pixel format is not rgb",
+      ));
+    };
 
     Ok(Self { image })
   }

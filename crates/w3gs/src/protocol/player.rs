@@ -1,9 +1,9 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::{PacketTypeId, ProtoBufMessageTypeId};
-use crate::packet::{PacketPayload, PacketProtoBufMessage};
-pub use crate::proto::{
+use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
+use crate::protocol::packet::{PacketPayload, PacketProtoBufMessage};
+pub use crate::protocol::protobuf::{
   PlayerProfileMessage, PlayerProfileRealm, PlayerSkin, PlayerSkinsMessage, PlayerUnknown5Message,
 };
 
@@ -105,7 +105,7 @@ fn test_player_skins_2() {
 
 #[test]
 fn test_player_unknown_02() {
-  use crate::packet::{Packet, ProtoBufPayload};
+  use crate::protocol::packet::{Packet, ProtoBufPayload};
   let mut buf =
     BytesMut::from(flo_util::sample_bytes!("packet", "protobuf_0x59_0x02.bin").as_slice());
   let h = Packet::decode_header(&mut buf).unwrap();

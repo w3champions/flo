@@ -1,5 +1,6 @@
 pub mod mdns;
 
+mod constants;
 pub mod error;
 mod game_info;
 

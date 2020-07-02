@@ -4,8 +4,8 @@ use flo_util::binary::*;
 use flo_util::binary::{BinDecode, BinEncode};
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use crate::error::{Error, Result};
+use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
 
 pub trait PacketPayload: BinDecode + BinEncode {
   const PACKET_TYPE_ID: PacketTypeId;

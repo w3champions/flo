@@ -1,12 +1,15 @@
 [workspace]
 members = [
   "./crates/codegen",
+  "./crates/platform",
   "./crates/util",
   "./crates/w3gs",
   "./crates/w3map",
   "./crates/blp",
   "./crates/lobby",
-  "./crates/lan"
+  "./crates/lan",
+  "./crates/w3client",
+  "./crates/log"
 ]
 
 [patch.crates-io]
@@ -14,3 +17,5 @@ stormlib = { path = "../stormlib-rs/crates/stormlib" }
 stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
 trust-dns-proto = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
 trust-dns-client = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
+casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
+casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }

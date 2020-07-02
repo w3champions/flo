@@ -1,8 +1,8 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::constants::{GameSettingFlags, PacketTypeId};
-use crate::packet::PacketPayload;
+use crate::protocol::constants::{GameSettingFlags, PacketTypeId};
+use crate::protocol::packet::PacketPayload;
 
 /// GameSettings stores the settings of a created game.
 ///
