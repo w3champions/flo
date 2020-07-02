@@ -1,4 +1,3 @@
-use futures::future::ready;
 use parking_lot::RwLock;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
@@ -20,6 +19,7 @@ use tracing_futures::Instrument;
 use crate::constants;
 use crate::error::*;
 use crate::game_info::GameInfo;
+use flo_util::binary::CString;
 use futures::SinkExt;
 use trust_dns_client::serialize::binary::BinEncodable;
 
@@ -36,8 +36,29 @@ pub struct MdnsPublisher {
 impl MdnsPublisher {
   #[instrument(skip(game_info))]
   pub async fn start(game_info: GameInfo) -> Result<Self> {
+    let mut name = game_info.name.to_string_lossy();
+    let label = if name.bytes().len() > 31 {
+      let name = name
+        .char_indices()
+        .filter_map(|(i, c)| {
+          if i < 31 || (i == 31 && c.len_utf8() == 1) {
+            Some(c)
+          } else {
+            None
+          }
+        })
+        .collect::<String>();
+      std::borrow::Cow::Owned(name)
+    } else {
+      name
+    };
+    let name = Name::from_labels(
+      Some(label.as_bytes())
+        .into_iter()
+        .chain(constants::BLIZZARD_SERVICE_NAME.iter()),
+    )?;
     let game_info = Arc::new(RwLock::new(game_info));
-    let (mut update_tx, mut update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
+    let (update_tx, mut update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
     let (drop_tx, drop_rx) = oneshot::channel();
     let ip_info: IpInfo = get_ip_info()?;
     let hostname = hostname::get().map_err(Error::GetHostName)?;
@@ -63,7 +84,7 @@ impl MdnsPublisher {
 
       let game_info = task_game_info;
 
-      if let Err(e) = broadcast(&sender, &hostname, &ip_info, game_info.clone()) {
+      if let Err(e) = broadcast(&sender, &name, &hostname, &ip_info, game_info.clone()) {
         error!("broadcast initial update error: {}", e);
         return;
       }
@@ -82,6 +103,7 @@ impl MdnsPublisher {
               debug!("update");
               if let Err(e) = broadcast(
                 &sender,
+                &name,
                 &hostname,
                 &ip_info,
                 game_info.clone()
@@ -100,6 +122,7 @@ impl MdnsPublisher {
                 if let Err(e) = reply(
                   &sender,
                   query,
+                  &name,
                   &hostname,
                   &ip_info,
                   game_info.clone(),
@@ -170,6 +193,7 @@ pub struct GameInfoSender(Arc<mpsc::Sender<GameInfoRef>>);
 fn reply(
   sender: &BufStreamHandle,
   query: SerialMessage,
+  name: &Name,
   hostname: &Name,
   ip_info: &IpInfo,
   game_info: GameInfoRef,
@@ -206,7 +230,7 @@ fn reply(
       info = true;
     }
 
-    if q.name().eq(&constants::GAME_NAME) {
+    if q.name().eq(name) {
       match q.query_type() {
         RecordType::ANY => {
           txt = true;
@@ -229,22 +253,22 @@ fn reply(
 
   if ptr || txt || srv || info {
     if ptr {
-      add_ptr_record(&mut msg);
+      add_ptr_record(&mut msg, name);
     }
 
     if txt {
-      msg.add_answer(get_txt_record());
+      msg.add_answer(get_txt_record(name));
     }
 
     if srv {
-      msg.add_answer(get_srv_record(hostname, port));
+      msg.add_answer(get_srv_record(name, hostname, port));
 
       add_a_record(&mut msg, hostname, ip_info);
       add_aaaa_record(&mut msg, hostname, ip_info);
     }
 
     if info {
-      msg.add_answer(get_gameinfo_record({
+      msg.add_answer(get_gameinfo_record(name, {
         game_info.message_id = game_info.message_id + 1;
         game_info.encode_to_bytes()?
       }));
@@ -261,6 +285,7 @@ fn reply(
 
 fn broadcast(
   sender: &BufStreamHandle,
+  name: &Name,
   hostname: &Name,
   ip_info: &IpInfo,
   game_info: GameInfoRef,
@@ -273,10 +298,10 @@ fn broadcast(
     .set_message_type(MessageType::Response)
     .set_authoritative(true);
 
-  msg.add_answer(get_txt_record());
-  add_ptr_record(&mut msg);
-  msg.add_answer(get_srv_record(hostname, port));
-  msg.add_answer(get_gameinfo_record({
+  msg.add_answer(get_txt_record(name));
+  add_ptr_record(&mut msg, name);
+  msg.add_answer(get_srv_record(name, hostname, port));
+  msg.add_answer(get_gameinfo_record(name, {
     game_info.message_id = game_info.message_id + 1;
     game_info.encode_to_bytes()?
   }));
@@ -323,28 +348,24 @@ fn get_ip_info() -> Result<IpInfo> {
   Ok(info)
 }
 
-fn get_txt_record() -> Record {
-  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::TXT, 4500);
+fn get_txt_record(name: &Name) -> Record {
+  let mut record = Record::with(name.clone(), RecordType::TXT, 4500);
   record.set_mdns_cache_flush(true);
   record
 }
 
-fn add_ptr_record(m: &mut Message) {
+fn add_ptr_record(m: &mut Message, name: &Name) {
   let mut record = Record::with(constants::W3_SERVICE_NAME.clone(), RecordType::PTR, 0);
-  record
-    .set_rdata(RData::PTR(constants::GAME_NAME.clone()))
-    .set_ttl(4500);
+  record.set_rdata(RData::PTR(name.clone())).set_ttl(4500);
   m.add_answer(record);
 
   let mut record = Record::with(constants::BLIZZARD_SERVICE_NAME.clone(), RecordType::PTR, 0);
-  record
-    .set_rdata(RData::PTR(constants::GAME_NAME.clone()))
-    .set_ttl(0);
+  record.set_rdata(RData::PTR(name.clone())).set_ttl(0);
   m.add_answer(record);
 }
 
-fn get_gameinfo_record(game_info: Vec<u8>) -> Record {
-  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::Unknown(66), 4500);
+fn get_gameinfo_record(name: &Name, game_info: Vec<u8>) -> Record {
+  let mut record = Record::with(name.clone(), RecordType::Unknown(66), 4500);
   record
     .set_rdata(RData::NULL(NULL::with(game_info)))
     .set_ttl(4500)
@@ -352,8 +373,8 @@ fn get_gameinfo_record(game_info: Vec<u8>) -> Record {
   record
 }
 
-fn get_srv_record(hostname: &Name, port: u16) -> Record {
-  let mut record = Record::with(constants::GAME_NAME.clone(), RecordType::SRV, 120);
+fn get_srv_record(name: &Name, hostname: &Name, port: u16) -> Record {
+  let mut record = Record::with(name.clone(), RecordType::SRV, 120);
   record
     .set_rdata(RData::SRV(SRV::new(0, 0, port, hostname.clone())))
     .set_mdns_cache_flush(true);
@@ -391,15 +412,10 @@ async fn test_publisher() {
   println!("W3GS listening on {}", listener.local_addr());
   let port = listener.port();
 
-  tokio::spawn(async move {
-    loop {
-      let mut stream = listener.accept().await;
-      while let Some(packet) = stream.next().await.unwrap();
-    }
-  });
-
   let mut game_info =
     GameInfo::decode_bytes(&flo_util::sample_bytes!("lan", "mdns_gamedata.bin")).unwrap();
+  game_info.name = CString::new("测 试").unwrap();
+  game_info.data.name = CString::new("测 试").unwrap();
   game_info.data.port = port;
   game_info.create_time = std::time::SystemTime::now();
   game_info.game_id = "2".to_owned();
