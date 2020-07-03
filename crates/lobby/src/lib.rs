@@ -1,1 +1,1 @@
-mod player;
+pub struct Lobby {}

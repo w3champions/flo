@@ -9,7 +9,9 @@ members = [
   "./crates/lobby",
   "./crates/lan",
   "./crates/w3client",
-  "./crates/log"
+  "./crates/log",
+  "./crates/config",
+  "./crates/w3storage"
 ]
 
 [patch.crates-io]

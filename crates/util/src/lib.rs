@@ -31,7 +31,7 @@ macro_rules! sample_path {
     $(
       path.push($rpath);
     )*
-    dbg!(path)
+    path
   }};
 }
 

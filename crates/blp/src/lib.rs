@@ -50,8 +50,6 @@ impl BinDecode for BLPImage {
       v => return Err(BinDecodeError::failure(format!("invalid alpha bit: {}", v))),
     }
 
-    dbg!(&header);
-
     if header.compression != COMPRESSION_JPEG {
       return Err(BinDecodeError::failure(format!(
         "unsupported compression type: {}",

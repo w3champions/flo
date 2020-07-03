@@ -131,7 +131,6 @@ fn test_parse_minimap_icons() {
 #[test]
 fn test_prepare_icon() {
   use image::ImageFormat;
-  use image::Pixel;
   let cross =
     image::load_from_memory_with_format(include_bytes!("./icons/neutral.png"), ImageFormat::Png)
       .unwrap();

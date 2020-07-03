@@ -1,15 +1,16 @@
+use std::time::SystemTime;
+
+use flo_util::binary::BinEncode;
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 use flo_w3gs::protocol::game::GameSettings;
-use std::time::SystemTime;
 
 use crate::error::*;
 use crate::proto;
-use flo_util::binary::BinEncode;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameInfo {
-  pub message_id: i32,
+  pub(crate) message_id: i32,
   pub game_id: String,
   pub create_time: SystemTime,
   pub secret: u32,
@@ -20,6 +21,19 @@ pub struct GameInfo {
 }
 
 impl GameInfo {
+  // pub fn new(name: &str) -> Self {
+  //   GameInfo {
+  //     message_id: 0,
+  //     game_id: "".t,
+  //     create_time: SystemTime,
+  //     secret: u32,
+  //     name: CString,
+  //     players_num: u8,
+  //     players_max: u8,
+  //     data: GameData,
+  //   }
+  // }
+
   pub fn encode_to_bytes(&self) -> Result<Vec<u8>> {
     use prost::Message;
 
@@ -175,8 +189,6 @@ fn test_decode_gameinfo_check() {
 
 #[test]
 fn test_encode_gameinfo() {
-  use super::proto;
-  use prost::Message;
   let bytes = include_bytes!("../../../../deps/wc3-samples/lan/gameinfo_melee.bin") as &[u8];
   let v = GameInfo::decode_bytes(&bytes).unwrap();
   println!("{:#?}", v);

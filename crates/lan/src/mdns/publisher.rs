@@ -19,8 +19,6 @@ use tracing_futures::Instrument;
 use crate::constants;
 use crate::error::*;
 use crate::game_info::GameInfo;
-use flo_util::binary::CString;
-use futures::SinkExt;
 use trust_dns_client::serialize::binary::BinEncodable;
 
 type GameInfoRef = Arc<RwLock<GameInfo>>;
@@ -36,7 +34,7 @@ pub struct MdnsPublisher {
 impl MdnsPublisher {
   #[instrument(skip(game_info))]
   pub async fn start(game_info: GameInfo) -> Result<Self> {
-    let mut name = game_info.name.to_string_lossy();
+    let name = game_info.name.to_string_lossy();
     let label = if name.bytes().len() > 31 {
       let name = name
         .char_indices()
@@ -169,10 +167,10 @@ impl MdnsPublisher {
       .update_tx
       .send(ack_tx)
       .await
-      .map_err(|e| Error::MdnsUpdateGameInfo("worker dead: send"))?;
+      .map_err(|_| Error::MdnsUpdateGameInfo("worker dead: send"))?;
 
     tokio::select! {
-      r = delay_for(Duration::from_secs(1)) => Err(Error::MdnsUpdateGameInfo("timeout")),
+      _ = delay_for(Duration::from_secs(1)) => Err(Error::MdnsUpdateGameInfo("timeout")),
       r = ack_rx => r.map_err(|_| Error::MdnsUpdateGameInfo("worker dead: recv")),
     }
   }
@@ -277,8 +275,6 @@ fn reply(
     sender
       .unbounded_send(SerialMessage::new(msg.to_bytes()?, addr))
       .map_err(|e| Error::MdnsBroadcastError(e.to_string()))?;
-
-    debug!("reply sent to {}", addr);
   }
   Ok(())
 }
@@ -398,40 +394,5 @@ fn add_aaaa_record(msg: &mut Message, hostname: &Name, ipinfo: &IpInfo) {
       .set_rdata(RData::AAAA(ip.clone()))
       .set_mdns_cache_flush(true);
     msg.add_additional(record);
-  }
-}
-
-#[tokio::test]
-async fn test_publisher() {
-  std::env::set_var("RUST_LOG", "flo_lan=debug");
-  tracing_subscriber::fmt::init();
-
-  use flo_w3gs::net::W3GSListener;
-
-  let mut listener = W3GSListener::bind().await.unwrap();
-  println!("W3GS listening on {}", listener.local_addr());
-  let port = listener.port();
-
-  let mut game_info =
-    GameInfo::decode_bytes(&flo_util::sample_bytes!("lan", "mdns_gamedata.bin")).unwrap();
-  game_info.name = CString::new("测 试").unwrap();
-  game_info.data.name = CString::new("测 试").unwrap();
-  game_info.data.port = port;
-  game_info.create_time = std::time::SystemTime::now();
-  game_info.game_id = "2".to_owned();
-
-  let mut p = MdnsPublisher::start(game_info).await.unwrap();
-
-  loop {
-    delay_for(Duration::from_secs(3)).await;
-    p.update(|info| {
-      if info.players_num == 1 {
-        info.players_num = 2
-      } else {
-        info.players_num = 1
-      }
-    })
-    .await
-    .unwrap();
   }
 }

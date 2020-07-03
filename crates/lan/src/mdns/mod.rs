@@ -1,1 +1,1 @@
-mod publisher;
+pub mod publisher;

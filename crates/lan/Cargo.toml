@@ -8,6 +8,7 @@ edition = "2018"
 flo-log = { path = "../log" }
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
+flo-w3map = { path = "../w3map" }
 
 tokio = { version = "0.2", features = ["full"] }
 trust-dns-client = { version = "0.20", features = ["mdns"] }
@@ -26,6 +27,3 @@ futures = "0.3.5"
 
 [build-dependencies]
 prost-build = { version = "0.6" }
-
-[dev-dependencies]
-tracing-subscriber = "0.2"

@@ -35,7 +35,6 @@ impl BinDecode for TriggerStringMap {
     }
 
     buf.get_tag(UTF8_BOM)?;
-
     let mut map = BTreeMap::new();
 
     while buf.has_remaining() {
@@ -123,6 +122,9 @@ impl BinDecode for TriggerStringRef {
           return Ok(TriggerStringRef(Some(id)));
         }
       }
+    } else if !bytes.is_empty() {
+      // all '0'
+      return Ok(TriggerStringRef(Some(0)));
     }
 
     Err(BinDecodeError::failure(format!(
