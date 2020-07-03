@@ -1,4 +1,6 @@
 use futures::ready;
+use futures::sink::SinkExt;
+use futures::stream::TryStreamExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::Stream;
 use tokio_util::codec::Framed;
@@ -43,21 +45,40 @@ impl W3GSListener {
 
 #[derive(Debug)]
 pub struct W3GSStream {
-  addr: SocketAddr,
+  local_addr: SocketAddr,
+  peer_addr: SocketAddr,
   transport: Framed<TcpStream, W3GSCodec>,
 }
 
 impl W3GSStream {
-  pub fn addr(&self) -> SocketAddr {
-    self.addr
+  pub fn local_addr(&self) -> SocketAddr {
+    self.local_addr
   }
-}
+  pub fn peer_addr(&self) -> SocketAddr {
+    self.peer_addr
+  }
 
-impl Stream for W3GSStream {
-  type Item = Result<Packet>;
+  pub async fn send(&mut self, packet: Packet) -> Result<()> {
+    self.transport.send(packet).await?;
+    Ok(())
+  }
 
-  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    Pin::new(&mut self.transport).poll_next(cx)
+  pub async fn send_all<I>(&mut self, iter: I) -> Result<()>
+  where
+    I: IntoIterator<Item = Packet>,
+  {
+    let mut stream = tokio::stream::iter(iter.into_iter().map(Ok));
+    self.transport.send_all(&mut stream).await?;
+    Ok(())
+  }
+
+  pub async fn recv(&mut self) -> Result<Packet> {
+    let packet = self
+      .transport
+      .try_next()
+      .await?
+      .ok_or_else(|| Error::StreamClosed)?;
+    Ok(packet)
   }
 }
 
@@ -77,7 +98,8 @@ impl Incoming<'_> {
     socket.set_keepalive(None).ok();
 
     let stream = W3GSStream {
-      addr,
+      local_addr: socket.local_addr()?,
+      peer_addr: socket.peer_addr()?,
       transport: Framed::new(socket, W3GSCodec::new()),
     };
 

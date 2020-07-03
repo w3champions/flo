@@ -58,6 +58,12 @@ impl SockAddr {
   }
 }
 
+impl From<SocketAddrV4> for SockAddr {
+  fn from(value: SocketAddrV4) -> Self {
+    Self::new_ipv4(value.ip().octets(), value.port())
+  }
+}
+
 impl BinEncode for Ipv4Addr {
   fn encode<T: BufMut>(&self, buf: &mut T) {
     buf.put_slice(&self.octets())

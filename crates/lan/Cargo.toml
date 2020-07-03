@@ -9,6 +9,7 @@ flo-log = { path = "../log" }
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 flo-w3map = { path = "../w3map" }
+flo-w3storage = { path = "../w3storage" }
 
 tokio = { version = "0.2", features = ["full"] }
 trust-dns-client = { version = "0.20", features = ["mdns"] }

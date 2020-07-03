@@ -29,6 +29,7 @@ impl ClientPlatformInfo {
   }
 
   pub fn from_env() -> Result<Self> {
+    dotenv::dotenv().ok();
     let config = ClientConfig::from_env()?;
     Self::with_config(&config)
   }

@@ -7,6 +7,8 @@ edition = "2018"
 [dependencies]
 flo-config = { path = "../config" }
 
+dotenv = "0.15.0"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["shlobj", "knownfolders", "winerror", "combaseapi", "winreg"] }
 widestring = "0.4.2"

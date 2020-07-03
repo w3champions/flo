@@ -178,8 +178,6 @@ pub struct OverridePath {
 
 #[test]
 fn test_storage() {
-  dotenv::dotenv().unwrap();
-
   let p = ClientPlatformInfo::from_env().unwrap();
   let mut s = W3Storage::new(&p).unwrap();
   let crate_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());

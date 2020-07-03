@@ -2,6 +2,7 @@ use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
 use crate::protocol::constants::PacketTypeId;
+use crate::protocol::game::GameSettings;
 use crate::protocol::packet::PacketPayload;
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
@@ -13,6 +14,19 @@ pub struct MapCheck {
   pub file_crc: u32,
   pub map_xoro: u32,
   pub sha1: [u8; 20],
+}
+
+impl MapCheck {
+  pub fn new(file_size: u32, file_crc: u32, game_settings: &GameSettings) -> Self {
+    Self {
+      _unknown_1: 0x01,
+      file_path: game_settings.map_path.clone(),
+      file_size,
+      file_crc,
+      map_xoro: game_settings.map_xoro,
+      sha1: game_settings.map_sha1,
+    }
+  }
 }
 
 impl PacketPayload for MapCheck {
@@ -33,7 +47,7 @@ impl PacketPayload for MapSize {
 
 #[test]
 fn test_map_check() {
-  crate::packet::test_payload_type(
+  crate::packet::test_simple_payload_type(
     "map_check.bin",
     &MapCheck {
       _unknown_1: 1,
@@ -50,7 +64,7 @@ fn test_map_check() {
 
 #[test]
 fn test_map_size() {
-  crate::packet::test_payload_type(
+  crate::packet::test_simple_payload_type(
     "map_size.bin",
     &MapSize {
       _unknown_1: 1,

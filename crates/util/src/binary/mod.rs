@@ -144,6 +144,13 @@ impl<T: BinEncode> BinEncode for Vec<T> {
   }
 }
 
+impl BinEncode for Bytes {
+  #[inline]
+  fn encode<T: BufMut>(&self, buf: &mut T) {
+    buf.put(self.clone())
+  }
+}
+
 #[test]
 fn test_ext_decode_cstring() {
   use bytes::buf::BufExt;

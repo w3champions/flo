@@ -1,7 +1,7 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::protocol::constants::PacketTypeId;
+use crate::protocol::constants::{PacketTypeId, RejectJoinReason, SlotLayout};
 use crate::protocol::packet::PacketPayload;
 use crate::protocol::slot::SlotInfo;
 
@@ -35,9 +35,28 @@ impl PacketPayload for SlotInfoJoin {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::SlotInfoJoin;
 }
 
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct RejectJoin {
+  pub reason: RejectJoinReason,
+}
+
+impl RejectJoin {
+  pub const FULL: Self = RejectJoin {
+    reason: RejectJoinReason::JoinFull,
+  };
+
+  pub const STARTED: Self = RejectJoin {
+    reason: RejectJoinReason::JoinStarted,
+  };
+}
+
+impl PacketPayload for RejectJoin {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::RejectJoin;
+}
+
 #[test]
 fn test_req_join() {
-  crate::packet::test_payload_type(
+  crate::packet::test_simple_payload_type(
     "req_join.bin",
     &ReqJoin {
       host_counter: 1,
@@ -57,7 +76,7 @@ fn test_req_join() {
 fn test_slot_info_join() {
   use crate::protocol::constants::{RacePref, SlotStatus, AI};
   use crate::slot::SlotData;
-  crate::packet::test_payload_type(
+  crate::packet::test_simple_payload_type(
     "slot_info_join.bin",
     &SlotInfoJoin {
       slot_info: SlotInfo {
@@ -88,7 +107,7 @@ fn test_slot_info_join() {
           },
         ],
         random_seed: 22699111,
-        slot_layout: 0,
+        slot_layout: SlotLayout::Melee,
         num_players: 2,
       },
       player_id: 2,

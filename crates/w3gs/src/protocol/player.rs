@@ -1,7 +1,9 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
+use crate::error::Result;
 use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
+use crate::protocol::join::ReqJoin;
 use crate::protocol::packet::{PacketPayload, PacketProtoBufMessage};
 pub use crate::protocol::protobuf::{
   PlayerProfileMessage, PlayerProfileRealm, PlayerSkin, PlayerSkinsMessage, PlayerUnknown5Message,
@@ -12,19 +14,72 @@ pub struct PlayerInfo {
   pub join_counter: u32,
   pub player_id: u8,
   pub player_name: CString,
-  _num_unknown_1: u8,
+  pub _num_unknown_1: u8,
   #[bin(repeat = "_num_unknown_1")]
-  _unknown_1: Vec<u8>,
+  pub _unknown_1: Vec<u8>,
   pub external_addr: SockAddr,
   pub internal_addr: SockAddr,
+}
+
+impl PlayerInfo {
+  pub fn new(player_id: u8, player_name: CString) -> Self {
+    PlayerInfo {
+      join_counter: 1,
+      player_id,
+      player_name,
+      _num_unknown_1: 2,
+      _unknown_1: vec![0, 0],
+      external_addr: SockAddr::new_null(),
+      internal_addr: SockAddr::new_null(),
+    }
+  }
+
+  pub fn from_req_join(player_id: u8, req: ReqJoin) -> Self {
+    Self::new(player_id, req.player_name)
+  }
 }
 
 impl PacketPayload for PlayerInfo {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::PlayerInfo;
 }
 
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct PlayerLoaded {
+  pub player_id: u8,
+}
+
+impl PlayerLoaded {
+  pub fn new(player_id: u8) -> Self {
+    Self { player_id }
+  }
+}
+
+impl PacketPayload for PlayerLoaded {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::PlayerLoaded;
+}
+
+impl PlayerProfileMessage {
+  pub fn new(player_id: u8, battle_tag: &str) -> Self {
+    Self {
+      player_id: player_id as u32,
+      battle_tag: battle_tag.to_string(),
+      portrait: "p042".to_owned(),
+      ..Default::default()
+    }
+  }
+}
+
 impl PacketProtoBufMessage for PlayerProfileMessage {
   const MESSAGE_TYPE_ID: ProtoBufMessageTypeId = ProtoBufMessageTypeId::PlayerProfile;
+}
+
+impl PlayerSkinsMessage {
+  pub fn new(player_id: u8) -> Self {
+    Self {
+      player_id: player_id as u32,
+      ..Default::default()
+    }
+  }
 }
 
 impl PacketProtoBufMessage for PlayerSkinsMessage {
@@ -37,7 +92,7 @@ impl PacketProtoBufMessage for PlayerUnknown5Message {
 
 #[test]
 fn test_player_info() {
-  crate::packet::test_payload_type(
+  crate::packet::test_simple_payload_type(
     "player_info.bin",
     &PlayerInfo {
       join_counter: 1,
@@ -110,6 +165,6 @@ fn test_player_unknown_02() {
     BytesMut::from(flo_util::sample_bytes!("packet", "protobuf_0x59_0x02.bin").as_slice());
   let h = Packet::decode_header(&mut buf).unwrap();
   let p = Packet::decode(h, &mut buf).unwrap();
-  let p: ProtoBufPayload = p.decode_payload().unwrap();
+  let p: ProtoBufPayload = p.decode_simple_payload().unwrap();
   dbg!(&p);
 }

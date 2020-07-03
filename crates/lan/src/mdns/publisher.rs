@@ -330,7 +330,6 @@ fn get_ip_info() -> Result<IpInfo> {
     if adapter.oper_status() == ipconfig::OperStatus::IfOperStatusUp
       && adapter.if_type() != ipconfig::IfType::SoftwareLoopback
     {
-      dbg!(&adapter.if_type());
       for ip in adapter.ip_addresses() {
         use std::net::IpAddr;
         match ip {

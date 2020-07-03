@@ -4,11 +4,20 @@ use crate::protocol::constants::PacketTypeId;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("stream closed unexpectedly")]
+  StreamClosed,
+  #[error("IPv6 is not supported")]
+  Ipv6NotSupported,
+  #[error("payload size overflow")]
+  PayloadSizeOverflow,
   #[error("invalid packet length: {0}")]
   InvalidPacketLength(u16),
+  #[error("invalid payload length: {0}")]
+  InvalidPayloadLength(usize),
   #[error("invalid state: no header")]
   InvalidStateNoHeader,
-
+  #[error("an interior nul byte was found")]
+  InvalidStringNulByte(#[from] std::ffi::NulError),
   #[error("io: {0}")]
   Io(#[from] std::io::Error),
   #[error("unexpected bytes after payload: {0}")]
@@ -18,6 +27,8 @@ pub enum Error {
     expected: PacketTypeId,
     found: PacketTypeId,
   },
+  #[error("invalid checksum")]
+  InvalidChecksum,
   #[error("bin decode: {0}")]
   BinDecode(#[from] flo_util::binary::BinDecodeError),
   #[error("protobuf decode: {0}")]

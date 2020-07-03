@@ -450,6 +450,7 @@ dependencies = [
  "flo-util",
  "flo-w3gs",
  "flo-w3map",
+ "flo-w3storage",
  "futures",
  "hostname",
  "ipconfig",
@@ -471,6 +472,8 @@ version = "0.1.0"
 dependencies = [
  "flo-util",
  "flo-w3gs",
+ "flo-w3map",
+ "flo-w3storage",
 ]
 
 [[package]]
@@ -486,6 +489,7 @@ dependencies = [
 name = "flo-platform"
 version = "0.1.0"
 dependencies = [
+ "dotenv",
  "flo-config",
  "thiserror",
  "widestring",
@@ -518,11 +522,13 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "byteorder",
+ "crc32fast",
  "flo-util",
  "futures",
  "lazy_static",
  "prost",
  "prost-build",
+ "rand",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -534,11 +540,13 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "ceres-mpq",
+ "crc32fast",
  "flo-blp",
  "flo-util",
  "flo-w3storage",
  "image",
  "lazy_static",
+ "sha1",
  "stormlib",
  "thiserror",
 ]
@@ -1551,6 +1559,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "sha1"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2579985fda508104f7587689507983eadd6a6e84dd35d6d115361f530916fa0d"
 
 [[package]]
 name = "sharded-slab"

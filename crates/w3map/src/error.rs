@@ -21,6 +21,8 @@ pub enum Error {
   ReadMinimapIcons(BinDecodeError),
   #[error("read map trigger strings: {0}")]
   ReadTriggerStrings(BinDecodeError),
+  #[error("io: {0}")]
+  Io(#[from] std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

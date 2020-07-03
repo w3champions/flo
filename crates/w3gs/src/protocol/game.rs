@@ -183,20 +183,20 @@ impl PacketPayload for PlayerLoaded {
 
 #[test]
 fn test_count_down_start() {
-  crate::packet::test_payload_type("count_down_start.bin", &CountDownStart)
+  crate::packet::test_simple_payload_type("count_down_start.bin", &CountDownStart)
 }
 
 #[test]
 fn test_count_down_end() {
-  crate::packet::test_payload_type("count_down_end.bin", &CountDownEnd)
+  crate::packet::test_simple_payload_type("count_down_end.bin", &CountDownEnd)
 }
 
 #[test]
 fn test_game_loaded_self() {
-  crate::packet::test_payload_type("game_loaded_self.bin", &GameLoadedSelf)
+  crate::packet::test_simple_payload_type("game_loaded_self.bin", &GameLoadedSelf)
 }
 
 #[test]
 fn test_player_loaded() {
-  crate::packet::test_payload_type("player_loaded.bin", &PlayerLoaded { player_id: 2 })
+  crate::packet::test_simple_payload_type("player_loaded.bin", &PlayerLoaded { player_id: 2 })
 }

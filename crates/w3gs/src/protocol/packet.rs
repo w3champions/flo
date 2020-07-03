@@ -7,8 +7,30 @@ use flo_util::{BinDecode, BinEncode};
 use crate::error::{Error, Result};
 use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
 
-pub trait PacketPayload: BinDecode + BinEncode {
+pub trait PacketPayload: Sized {
   const PACKET_TYPE_ID: PacketTypeId;
+}
+
+/// Specialized version of `BinEncode`
+/// `BinEncode` generic over `BufMut` but we need `BytesMut`
+/// to reduce allocations/copies
+pub trait PacketPayloadEncode {
+  fn encode(&self, buf: &mut BytesMut);
+  fn encode_len(&self) -> Option<usize> {
+    None
+  }
+  fn encode_to_bytes(&self) -> Bytes {
+    let mut buf = BytesMut::new();
+    self.encode(&mut buf);
+    buf.freeze()
+  }
+}
+
+/// Specialized version of `BinDecode`
+/// `BinDecode` generic over `Buf` but we need `Bytes`
+/// to reduce allocations/copies
+pub trait PacketPayloadDecode: Sized {
+  fn decode(buf: &mut Bytes) -> Result<Self>;
 }
 
 pub trait PacketProtoBufMessage: Message + Default {
@@ -21,9 +43,38 @@ pub struct Packet {
   pub payload: Bytes,
 }
 
-// no generic buffer type because we mostly decode packets from tokio's buffer
-// which is BytesMut.
 impl Packet {
+  pub fn with_payload<T>(payload: T) -> Result<Packet>
+  where
+    T: PacketPayload + PacketPayloadEncode + std::fmt::Debug,
+  {
+    let mut buf = if let Some(len) = payload.encode_len() {
+      BytesMut::with_capacity(len)
+    } else {
+      BytesMut::new()
+    };
+
+    // dbg!(&payload);
+
+    payload.encode(&mut buf);
+
+    if buf.len() > (std::u16::MAX - 4) as usize {
+      return Err(Error::PayloadSizeOverflow);
+    }
+
+    Ok(Packet {
+      header: Header::new(T::PACKET_TYPE_ID, (buf.len() as u16) + 4),
+      payload: buf.freeze(),
+    })
+  }
+
+  pub fn with_simple_payload<T>(payload: T) -> Result<Packet>
+  where
+    T: PacketPayload + BinEncode + std::fmt::Debug,
+  {
+    Self::with_payload(SimplePayload(payload))
+  }
+
   pub fn decode_header(buf: &mut BytesMut) -> Result<Header> {
     Header::decode(buf).map_err(Into::into)
   }
@@ -39,7 +90,7 @@ impl Packet {
 
   pub fn decode_payload<T>(&self) -> Result<T>
   where
-    T: PacketPayload,
+    T: PacketPayload + PacketPayloadDecode,
   {
     if self.header.type_id != T::PACKET_TYPE_ID {
       return Err(Error::PacketTypeIdMismatch {
@@ -47,7 +98,7 @@ impl Packet {
         found: self.header.type_id,
       });
     }
-    let mut buf = self.payload.as_ref();
+    let mut buf = self.payload.clone();
     let payload = T::decode(&mut buf)?;
     if buf.has_remaining() {
       return Err(Error::ExtraPayloadBytes(buf.remaining()));
@@ -55,11 +106,20 @@ impl Packet {
     Ok(payload)
   }
 
+  pub fn decode_simple_payload<T>(&self) -> Result<T>
+  where
+    T: PacketPayload + BinDecode,
+  {
+    self
+      .decode_payload::<SimplePayload<T>>()
+      .map(SimplePayload::into_inner)
+  }
+
   pub fn decode_protobuf<T>(&self) -> Result<T>
   where
     T: PacketProtoBufMessage,
   {
-    let payload: ProtoBufPayload = self.decode_payload()?;
+    let payload: ProtoBufPayload = self.decode_simple_payload()?;
     payload.decode_message()
   }
 
@@ -72,6 +132,18 @@ impl Packet {
     self.header.encode(buf);
     buf.put_slice(&self.payload);
   }
+
+  pub fn type_id(&self) -> PacketTypeId {
+    self.header.type_id
+  }
+
+  pub fn len(&self) -> u16 {
+    self.header.len
+  }
+
+  pub fn payload_len(&self) -> usize {
+    self.payload.len()
+  }
 }
 
 #[derive(Debug, BinDecode, BinEncode)]
@@ -83,6 +155,14 @@ pub struct Header {
 }
 
 impl Header {
+  fn new(type_id: PacketTypeId, len: u16) -> Self {
+    Header {
+      _sig: 0xF7,
+      type_id,
+      len,
+    }
+  }
+
   pub fn get_payload_len(&self) -> Result<usize> {
     let payload_len = self
       .len
@@ -128,23 +208,104 @@ impl ProtoBufPayload {
     let message = T::decode(self.data.as_slice())?;
     Ok(message)
   }
+
+  pub fn message_type_id(&self) -> ProtoBufMessageTypeId {
+    self.type_id
+  }
+}
+
+/// Adapter to bridge `Bin(En|De)code` with `PacketPayload(En|De)code`
+#[derive(Debug, PartialEq)]
+pub struct SimplePayload<T>(T);
+
+impl<T> SimplePayload<T> {
+  pub fn into_inner(self) -> T {
+    self.0
+  }
+}
+
+impl<T> PacketPayload for SimplePayload<T>
+where
+  T: PacketPayload,
+{
+  const PACKET_TYPE_ID: PacketTypeId = T::PACKET_TYPE_ID;
+}
+
+impl<T> PacketPayloadEncode for SimplePayload<T>
+where
+  T: BinEncode,
+{
+  fn encode(&self, buf: &mut BytesMut) {
+    BinEncode::encode(&self.0, buf)
+  }
+}
+
+impl<T> PacketPayloadDecode for SimplePayload<T>
+where
+  T: BinDecode,
+{
+  fn decode(buf: &mut Bytes) -> Result<Self> {
+    Ok(SimplePayload(BinDecode::decode(buf)?))
+  }
 }
 
 #[cfg(test)]
-pub(crate) fn test_payload_type<T: PacketPayload + std::cmp::PartialEq + std::fmt::Debug>(
-  filename: &str,
-  expecting: &T,
-) {
+pub(crate) fn test_payload_type<T>(filename: &str, expecting: &T)
+where
+  T: PacketPayload
+    + PacketPayloadEncode
+    + PacketPayloadDecode
+    + std::cmp::PartialEq
+    + std::fmt::Debug,
+{
   let mut bytes = BytesMut::from(flo_util::sample_bytes!("packet", filename).as_slice());
   let header = Packet::decode_header(&mut bytes).unwrap();
   dbg!(&header);
 
   let packet = Packet::decode(header, &mut bytes).unwrap();
-  flo_util::dump_hex(&packet.payload);
+  assert!(!bytes.has_remaining());
+
+  let payload: T = packet
+    .decode_payload()
+    .map_err(|e| {
+      if let Error::ExtraPayloadBytes(len) = e {
+        let extra = &packet.payload[(packet.payload.len() - len)..];
+        println!("{:?}", extra);
+        flo_util::dump_hex(extra);
+      }
+      e
+    })
+    .unwrap();
+
+  assert_eq!(&payload, expecting);
+
+  assert_eq!(payload.encode_to_bytes(), packet.payload);
+}
+
+#[cfg(test)]
+pub(crate) fn test_simple_payload_type<T>(filename: &str, expecting: &T)
+where
+  T: PacketPayload + BinEncode + BinDecode + std::cmp::PartialEq + std::fmt::Debug,
+{
+  let mut bytes = BytesMut::from(flo_util::sample_bytes!("packet", filename).as_slice());
+  let header = Packet::decode_header(&mut bytes).unwrap();
+  dbg!(&header);
+
+  let packet = Packet::decode(header, &mut bytes).unwrap();
 
   assert!(!bytes.has_remaining());
 
-  let payload: T = packet.decode_payload().unwrap();
+  let payload: T = packet
+    .decode_simple_payload()
+    .map_err(|e| {
+      if let Error::ExtraPayloadBytes(len) = e {
+        let extra = &packet.payload[(packet.payload.len() - len)..];
+        println!("{:?}", extra);
+        flo_util::dump_hex(extra);
+      }
+      e
+    })
+    .unwrap();
   dbg!(&payload);
 
   assert_eq!(&payload, expecting);
@@ -168,7 +329,7 @@ pub(crate) fn test_protobuf_payload_type<
 
   assert!(!bytes.has_remaining());
 
-  let payload: ProtoBufPayload = packet.decode_payload().unwrap();
+  let payload: ProtoBufPayload = packet.decode_simple_payload().unwrap();
   dbg!(&payload);
 
   let message: T = payload.decode_message().unwrap();

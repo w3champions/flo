@@ -5,7 +5,7 @@ use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
 // W3GS packet type identifier
-#[derive(Debug, Clone, Copy, PartialEq, BinEncode, BinDecode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
 pub enum PacketTypeId {
   #[bin(value = 0x01)]
@@ -97,7 +97,7 @@ pub enum PacketTypeId {
   UnknownValue(u8),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, BinEncode, BinDecode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
 pub enum ProtoBufMessageTypeId {
   #[bin(value = 0x02)]
@@ -117,14 +117,18 @@ lazy_static! {
   pub static ref PRODUCT_TFT: DwordString = DwordString::new("W3XP");
 }
 
-bitflags! {
-  #[derive(Default)]
-  pub struct SlotLayout: u32 {
-      const MELEE = 0x00;
-      const CUSTOM_FORCES = 0x01;
-      const FIXED_PLAYER_SETTINGS = 0x02;
-      const LADDER = 0xCC;
-  }
+#[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
+#[bin(enum_repr(u8))]
+pub enum SlotLayout {
+  #[bin(value = 0x00)]
+  Melee,
+  #[bin(value = 0x01)]
+  CustomForces,
+  #[bin(value = 0x02)]
+  FixedPlayerSettings,
+  #[bin(value = 0xCC)]
+  Ladder,
+  UnknownValue(u8),
 }
 
 #[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
@@ -164,8 +168,8 @@ pub enum AI {
 }
 
 #[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
-#[bin(enum_repr(u8))]
-pub enum RejectReason {
+#[bin(enum_repr(u32))]
+pub enum RejectJoinReason {
   #[bin(value = 0x07)]
   JoinInvalid,
   #[bin(value = 0x09)]
@@ -174,7 +178,7 @@ pub enum RejectReason {
   JoinStarted,
   #[bin(value = 0x1B)]
   JoinWrongKey,
-  UnknownValue(u8),
+  UnknownValue(u32),
 }
 
 #[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
