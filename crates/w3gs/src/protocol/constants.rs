@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 use lazy_static::lazy_static;
 
-use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
 // W3GS packet type identifier
@@ -111,12 +110,6 @@ pub enum ProtoBufMessageTypeId {
   UnknownValue(u8),
 }
 
-lazy_static! {
-  pub static ref PRODUCT_DEMO: DwordString = DwordString::new("W3DM");
-  pub static ref PRODUCT_ROC: DwordString = DwordString::new("WAR3");
-  pub static ref PRODUCT_TFT: DwordString = DwordString::new("W3XP");
-}
-
 #[derive(Debug, Clone, Copy, BinEncode, BinDecode, PartialEq)]
 #[bin(enum_repr(u8))]
 pub enum SlotLayout {
@@ -217,7 +210,7 @@ pub enum MessageType {
   #[bin(value = 0x14)]
   HandicapChange,
   #[bin(value = 0x20)]
-  ChatExtra,
+  Scoped,
   UnknownValue(u8),
 }
 

@@ -172,7 +172,7 @@ impl Header {
   }
 }
 
-#[derive(Debug, BinDecode, BinEncode)]
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct ProtoBufPayload {
   pub type_id: ProtoBufMessageTypeId,
   pub len: u32,

@@ -1,5 +1,7 @@
 pub mod action;
+pub mod chat;
 pub mod constants;
+pub mod desync;
 pub mod game;
 pub mod join;
 pub mod leave;

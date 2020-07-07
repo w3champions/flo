@@ -521,7 +521,6 @@ name = "flo-w3gs"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "byteorder",
  "crc32fast",
  "flo-util",
  "futures",
@@ -548,6 +547,19 @@ dependencies = [
  "lazy_static",
  "sha1",
  "stormlib",
+ "thiserror",
+]
+
+[[package]]
+name = "flo-w3replay"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "crc32fast",
+ "flate2",
+ "flo-util",
+ "flo-w3gs",
  "thiserror",
 ]
 

@@ -20,22 +20,21 @@ use flo_w3storage::W3Storage;
 
 #[tokio::main]
 async fn main() {
-  flo_log::init_env("debug");
+  flo_log::init_env("poc_host=debug");
 
   use flo_w3gs::net::W3GSListener;
 
   let mut listener = W3GSListener::bind().await.unwrap();
-  tracing::info!("W3GS listening on {}", listener.local_addr());
+  tracing::info!("listening on {}", listener.local_addr());
   let port = listener.port();
 
   let mut game_info =
     GameInfo::decode_bytes(&flo_util::sample_bytes!("lan", "mdns_gamedata.bin")).unwrap();
-  game_info.name = CString::new("FAKE GAME").unwrap();
-  game_info.data.name = CString::new("FAKE GAME").unwrap();
+  game_info.name = CString::new("DEMO").unwrap();
+  game_info.data.name = CString::new("DEMO").unwrap();
   game_info.data.port = port;
   game_info.create_time = std::time::SystemTime::now();
   game_info.game_id = "1".to_owned();
-  // game_info.data.settings.map_xoro = 0xFFFFFFFF;
 
   let map_path = game_info.data.settings.map_path.to_str().unwrap();
   tracing::debug!("map: {}", map_path);
@@ -43,6 +42,8 @@ async fn main() {
   let storage = W3Storage::from_env().unwrap();
   let (map, checksum) = W3Map::open_storage_with_checksum(&storage, map_path).unwrap();
   let map = Arc::new(map);
+
+  // game_info.data.settings.map_xoro = checksum.xoro;
 
   let _p = MdnsPublisher::start(game_info.clone()).await.unwrap();
   while let Some(stream) = listener.incoming().try_next().await.unwrap() {
@@ -332,9 +333,9 @@ async fn run_lobby(
   }
 
   use flo_w3gs::error::Error;
-  use std::sync::{Arc, Mutex};
+  use std::sync::Mutex;
   use tokio::sync::mpsc;
-  let (mut tx, mut rx) = mpsc::channel(100);
+  let (tx, mut rx) = mpsc::channel(100);
   let action_q: Arc<Mutex<Vec<Bytes>>> = Arc::new(Mutex::new(vec![]));
 
   tokio::spawn(
@@ -346,7 +347,7 @@ async fn run_lobby(
         use tokio::time::{delay_until, Instant};
         let mut t = Instant::now();
         loop {
-          delay_until(t + Duration::from_millis(50)).await;
+          delay_until(t + Duration::from_millis(100)).await;
           let now = Instant::now();
           let d = now - t;
           t = now;
@@ -362,30 +363,49 @@ async fn run_lobby(
 
           if let Some(mut items) = items {
             if items.len() > 1 {
-              tracing::warn!("drop {} actions", items.len());
+              tracing::info!("batch actions: {}", items.len());
+
+              let last = items.pop().unwrap();
+              let batched = items
+                .into_iter()
+                .map(|item| PlayerAction {
+                  player_id: 2,
+                  data: item,
+                })
+                .collect();
+
+              let batch = IncomingAction2 {
+                time_increment_ms: 0,
+                actions: batched,
+              };
+              for batch in batch.split_chunks() {
+                sender
+                  .send(Packet::with_payload(batch).unwrap())
+                  .await
+                  .unwrap();
+              }
+
+              let p = IncomingAction {
+                time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
+                action: Some(PlayerAction {
+                  player_id: 2,
+                  data: last,
+                }),
+              };
+              sender.send(Packet::with_payload(p).unwrap()).await.unwrap();
             } else {
               let p = IncomingAction {
                 time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
                 action: items.pop().map(|data| PlayerAction { player_id: 2, data }),
               };
-              sender.send(Packet::with_payload(p).unwrap()).await;
+              sender.send(Packet::with_payload(p).unwrap()).await.unwrap();
             }
-          // for item in items {
-          //   let p = IncomingAction {
-          //     time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
-          //     action: Some(PlayerAction {
-          //       player_id: 2,
-          //       data: item,
-          //     }),
-          //   };
-          //   sender.send(Packet::with_payload(p).unwrap()).await;
-          // }
           } else {
             let p = IncomingAction {
               time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
               action: None,
             };
-            sender.send(Packet::with_payload(p).unwrap()).await;
+            sender.send(Packet::with_payload(p).unwrap()).await.unwrap();
           }
         }
       }
@@ -394,6 +414,7 @@ async fn run_lobby(
   );
 
   loop {
+    use flo_w3gs::chat::*;
     use flo_w3gs::game::GameLoadedSelf;
     use flo_w3gs::protocol::constants::PacketTypeId;
     use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
@@ -443,6 +464,15 @@ async fn run_lobby(
           }
           PacketTypeId::OutgoingKeepAlive => {
             // tracing::debug!("action ack");
+          }
+          PacketTypeId::ChatToHost => {
+            let mut req: ChatToHost = p.decode_simple_payload()?;
+            tracing::debug!("ChatToHost: {:?}", req);
+            req.to_players[0] = 2;
+            req.from_player = 1;
+            transport
+              .send(Packet::with_simple_payload(ChatFromHost::new(req))?)
+              .await?;
           }
           _ => {
             tracing::debug!("recv: {:?}", p);

@@ -20,6 +20,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/log/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/config/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/w3storage/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/w3replay/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

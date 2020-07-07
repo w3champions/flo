@@ -175,6 +175,7 @@ impl IncomingAction2 {
   /// Splits self to a iterator which yields items with
   /// action data length < `Self::MAX_ACTION_DATA_LEN`
   /// `time_increment_ms` will only be set on the last item
+  /// FIXME: refactor, add real time increments value
   pub fn split_chunks(self) -> IncomingAction2ChunksIter {
     if self
       .actions
@@ -300,8 +301,8 @@ pub struct PlayerAction {
 }
 
 impl PlayerAction {
-  fn byte_len(&self) -> usize {
-    size_of::<u8>() + self.data.len()
+  pub fn byte_len(&self) -> usize {
+    size_of::<u8>(/* player_id */) + size_of::<u16>(/* data_len */) + self.data.len()
   }
 
   fn encode(&self, buf: &mut BytesMut) {

@@ -3,8 +3,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-  #[error("storage file not found")]
-  StorageFileNotFound,
+  #[error("storage file not found: {0}")]
+  StorageFileNotFound(String),
   #[error("storage: {0}")]
   Storage(#[from] flo_w3storage::error::Error),
   #[error("stormlib: {0}")]

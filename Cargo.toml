@@ -11,7 +11,8 @@ members = [
   "./crates/w3client",
   "./crates/log",
   "./crates/config",
-  "./crates/w3storage"
+  "./crates/w3storage",
+  "./crates/w3replay"
 ]
 
 [patch.crates-io]

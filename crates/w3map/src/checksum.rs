@@ -1,9 +1,9 @@
 use std::io::{BufReader, Read};
 
-use crate::error::Result;
-use crate::Archive;
+use flo_w3storage::W3Storage;
 
-use flo_w3storage::{Data, File, W3Storage};
+use crate::error::{Error, Result};
+use crate::Archive;
 
 const CHUNK_SIZE: usize = 200 * 1024;
 
@@ -15,7 +15,8 @@ pub struct MapChecksum {
 }
 
 impl MapChecksum {
-  pub(crate) fn compute(_storage: &W3Storage, archive: &mut Archive) -> Result<Self> {
+  //TODO figure out the new xoro checksum algorithm
+  pub(crate) fn compute(storage: &W3Storage, archive: &mut Archive) -> Result<Self> {
     let mut sha1 = sha1::Sha1::new();
     let mut crc32 = crc32fast::Hasher::new();
 
@@ -39,10 +40,98 @@ impl MapChecksum {
         crc32.update(archive.bytes);
       }
     }
+
+    let mut xoro = XoroHasher::new();
+
+    for path in &["scripts\\common.j", "scripts\\blizzard.j"] {
+      if let Some(bytes) = archive.read_file_all_opt(path)? {
+        xoro.0 = xoro.0 ^ XoroHasher::all(&bytes);
+      } else {
+        let bytes = storage
+          .resolve_file(path)?
+          .ok_or_else(|| Error::StorageFileNotFound(path.to_string()))?
+          .read_all()?;
+        xoro.0 = xoro.0 ^ XoroHasher::all(bytes.as_ref());
+        crc2.update(bytes.as_ref());
+      }
+    }
+
+    xoro.0 = XoroHasher::rol3(xoro.0);
+
+    xoro.update(&[0x9E, 0x37, 0xF1, 0x03]);
+
+    let files: &[&[&str]] = &[
+      &["war3map.j", "scripts\\war3map.j"],
+      &["war3map.w3e"],
+      &["war3map.wpm"],
+      &["war3map.doo"],
+      &["war3map.w3u"],
+      &["war3map.w3b"],
+      &["war3map.w3d"],
+      &["war3map.w3a"],
+      &["war3map.w3q"],
+    ];
+
+    for paths in files {
+      for path in *paths {
+        if let Some(bytes) = archive.read_file_all_opt(path)? {
+          xoro.update(&XoroHasher::all(&bytes).to_le_bytes());
+          break;
+        } else {
+          if let Some(bytes) = storage
+            .resolve_file(path)?
+            .map(|mut f| f.read_all())
+            .transpose()?
+          {
+            xoro.update(&XoroHasher::all(&bytes).to_le_bytes());
+            break;
+          }
+        }
+      }
+    }
+
     Ok(Self {
-      xoro: 0xFFFFFFFF,
+      xoro: xoro.finalize(),
       crc32: crc32.finalize(),
       sha1: sha1.digest().bytes(),
     })
+  }
+}
+
+struct XoroHasher(u32);
+
+impl XoroHasher {
+  fn new() -> Self {
+    XoroHasher(0)
+  }
+
+  fn all(bytes: &[u8]) -> u32 {
+    let mut hasher = XoroHasher::new();
+    hasher.update(bytes);
+    dbg!(hasher.finalize())
+  }
+
+  fn rol3(v: u32) -> u32 {
+    v << 3 | v >> 29
+  }
+
+  fn update(&mut self, bytes: &[u8]) {
+    let mut v = self.0;
+    for chunk in bytes.chunks(4) {
+      if chunk.len() == 4 {
+        v = v ^ u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        v = Self::rol3(v)
+      } else {
+        for byte in chunk {
+          v = v ^ (*byte as u32);
+          v = Self::rol3(v)
+        }
+      }
+    }
+    self.0 = v;
+  }
+
+  fn finalize(self) -> u32 {
+    self.0
   }
 }
