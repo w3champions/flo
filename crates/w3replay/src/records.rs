@@ -236,26 +236,58 @@ pub struct EndTimer {
 #[test]
 fn test_record() {
   use crate::header::Header;
+  use bytes::buf::ext::Chain;
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();
   buf.get_tag(crate::constants::SIGNATURE).unwrap();
   let header = crate::header::Header::decode(&mut buf).unwrap();
   dbg!(&header);
 
+  let mut rec_count = 0;
   let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
-  for block in blocks {
+  let empty = Bytes::new();
+  let mut tail = empty.clone();
+  for (i, block) in blocks.enumerate() {
+    dbg!(i);
+
     let block = block.unwrap();
-    let mut buf = block.data.as_ref();
-    let block_size = buf.len();
-    while buf.has_remaining() {
-      let pos = block_size - buf.remaining();
-      let rec = crate::records::Record::decode(&mut buf)
-        .map_err(|e| {
-          flo_util::dump_hex(buf);
-          e
-        })
-        .unwrap();
-      dbg!(rec);
+    let mut buf = Chain::new(tail, block.data);
+    let buf_size = buf.remaining();
+    loop {
+      let pos = buf.remaining();
+
+      dbg!(buf_size - pos);
+
+      let r = crate::records::Record::decode(&mut buf).map_err(|e| {
+        // flo_util::dump_hex(buf);
+        e
+      });
+      match r {
+        Ok(rec) => {
+          rec_count = rec_count + 1;
+          dbg!(rec_count);
+        }
+        Err(e) => {
+          if e.is_incomplete() {
+            let offset = pos - buf.remaining();
+            let last_len = buf.last_ref().len();
+            tail = buf.last_mut().split_off(last_len - offset);
+            flo_util::dump_hex(tail.as_ref());
+            break;
+          } else {
+            Err(e).unwrap()
+          }
+        }
+      }
+
+      if !buf.has_remaining() {
+        tail = empty.clone();
+        break;
+      }
     }
+  }
+
+  if tail.len() > 0 {
+    panic!("extra bytes = {}", tail.len());
   }
 }

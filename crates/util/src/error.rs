@@ -51,6 +51,13 @@ impl BinDecodeError {
       }
     }
   }
+
+  pub fn is_incomplete(&self) -> bool {
+    match *self {
+      BinDecodeError::Incomplete { .. } => true,
+      _ => false,
+    }
+  }
 }
 
 #[derive(Debug)]
