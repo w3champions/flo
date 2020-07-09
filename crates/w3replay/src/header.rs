@@ -50,6 +50,8 @@ use crate::constants::SIGNATURE;
 
 #[derive(Debug, BinEncode, BinDecode)]
 pub struct Header {
+  #[bin(eq = SIGNATURE)]
+  pub _sig: [u8; 28],
   #[bin(eq = 68)]
   pub size_header: u32,
   pub size_file: u32,
@@ -75,7 +77,6 @@ pub struct GameVersion {
 fn test_header() {
   let bytes = flo_util::sample_bytes!("replay", "1.w3g");
   let mut buf = bytes.as_slice();
-  buf.get_tag(SIGNATURE).unwrap();
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);
 }

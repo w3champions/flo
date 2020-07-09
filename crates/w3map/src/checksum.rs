@@ -52,7 +52,6 @@ impl MapChecksum {
           .ok_or_else(|| Error::StorageFileNotFound(path.to_string()))?
           .read_all()?;
         xoro.0 = xoro.0 ^ XoroHasher::all(bytes.as_ref());
-        crc2.update(bytes.as_ref());
       }
     }
 
@@ -108,7 +107,7 @@ impl XoroHasher {
   fn all(bytes: &[u8]) -> u32 {
     let mut hasher = XoroHasher::new();
     hasher.update(bytes);
-    dbg!(hasher.finalize())
+    hasher.finalize()
   }
 
   fn rol3(v: u32) -> u32 {

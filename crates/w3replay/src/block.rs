@@ -26,7 +26,6 @@ use flate2::CrcReader;
 use std::io::{Cursor, Read};
 
 use flo_util::binary::*;
-use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::*;
@@ -45,6 +44,17 @@ pub struct Blocks<R> {
   num_blocks: usize,
   total_size: usize,
   finished_block: usize,
+}
+
+impl<R> Blocks<R> {
+  pub(crate) fn new(r: R, num_blocks: usize, total_size: usize) -> Self {
+    Self {
+      total_size,
+      r,
+      num_blocks,
+      finished_block: 0,
+    }
+  }
 }
 
 impl<B> Blocks<bytes::buf::ext::Reader<B>>
@@ -91,7 +101,9 @@ where
     };
     let mut r =
       CrcReader::new(Cursor::new(header_for_crc.encode_to_bytes()).chain(self.r.by_ref()));
-    r.read_exact(&mut buf[0..BlockHeader::MIN_SIZE]);
+    if let Err(e) = r.read_exact(&mut buf[0..BlockHeader::MIN_SIZE]) {
+      return Some(Err(Error::ReadBlockHeader(e)));
+    }
 
     let crc = r.crc().sum();
     let crc = (crc ^ (crc >> 16)) as u16;
@@ -105,7 +117,7 @@ where
       )));
     }
 
-    let mut r = CrcReader::new(self.r.by_ref().take(header.compressed_data_size as u64));
+    let r = CrcReader::new(self.r.by_ref().take(header.compressed_data_size as u64));
     let mut d = ZlibDecoder::new(r);
     if let Err(err) = d.read_exact(&mut buf) {
       return Some(Err(Error::ReadBlockHeader(err)));
@@ -137,7 +149,6 @@ fn test_block() {
   use crate::header::Header;
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();
-  buf.get_tag(crate::constants::SIGNATURE).unwrap();
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);
 

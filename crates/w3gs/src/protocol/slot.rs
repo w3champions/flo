@@ -19,7 +19,7 @@ pub struct SlotInfo {
 
 impl SlotInfo {
   pub fn new(num_slots: u8, num_players: u8) -> Self {
-    let mut slots = (0..(num_slots as usize))
+    let slots = (0..(num_slots as usize))
       .map(|i| SlotData::new(i))
       .collect();
     Self {

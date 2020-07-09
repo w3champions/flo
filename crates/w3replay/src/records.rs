@@ -1,13 +1,135 @@
+use bytes::buf::ext::Chain;
+use std::io::prelude::*;
+
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 pub use flo_w3gs::action::PlayerAction;
-use flo_w3gs::constants::{LeaveReason, RacePref};
+pub use flo_w3gs::constants::{GameFlags, LeaveReason, RacePref};
 pub use flo_w3gs::desync::Desync;
+pub use flo_w3gs::game::GameSettings;
 pub use flo_w3gs::packet::ProtoBufPayload;
-use flo_w3gs::protocol::chat::ChatMessage;
+pub use flo_w3gs::protocol::chat::ChatMessage;
 pub use flo_w3gs::slot::SlotInfo;
 
+use crate::block::{Block, Blocks};
 use crate::constants::RecordTypeId;
+
+#[derive(Debug)]
+pub struct RecordIter<R> {
+  blocks: Blocks<R>,
+  empty: Bytes,
+  state: State,
+}
+
+impl<R> RecordIter<R> {
+  pub(crate) fn new(blocks: Blocks<R>) -> Self {
+    Self {
+      blocks,
+      empty: Bytes::new(),
+      state: State::Initial,
+    }
+  }
+}
+
+#[derive(Debug)]
+enum State {
+  Initial,
+  DecodingBlock(Block, Chain<Bytes, Bytes>),
+  BlockDone,
+  Done,
+}
+
+impl<R> Iterator for RecordIter<R>
+where
+  R: Read,
+{
+  type Item = Result<Record, BinDecodeError>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let (item, next_state) = match std::mem::replace(&mut self.state, State::Done) {
+      State::Initial => extract_next_block_first_record(self.empty.clone(), &mut self.blocks),
+      State::DecodingBlock(mut block, mut buf) => match buf.peek_u8() {
+        Some(n) if n != 0 => match extract_next_record(&mut block, &mut buf) {
+          Ok(NextRecord::Record(rec)) => (Some(Ok(rec)), State::DecodingBlock(block, buf)),
+          Ok(NextRecord::Partial(tail)) => extract_next_block_first_record(tail, &mut self.blocks),
+          Err(err) => (Some(Err(err)), State::Done),
+        },
+        _ => extract_next_block_first_record(self.empty.clone(), &mut self.blocks),
+      },
+      State::BlockDone => extract_next_block_first_record(self.empty.clone(), &mut self.blocks),
+      State::Done => (None, State::Done),
+    };
+
+    self.state = next_state;
+
+    item
+  }
+}
+
+fn extract_next_block_first_record<R>(
+  tail: Bytes,
+  blocks: &mut Blocks<R>,
+) -> (Option<Result<Record, BinDecodeError>>, State)
+where
+  R: Read,
+{
+  if let Some(block) = blocks.next() {
+    match block {
+      Ok(mut block) => {
+        let mut buf = Chain::new(tail, block.data.clone());
+        match extract_next_record(&mut block, &mut buf) {
+          Ok(NextRecord::Record(rec)) => {
+            match buf.peek_u8() {
+              Some(n) if n != 0 => (Some(Ok(rec)), State::DecodingBlock(block, buf)),
+              // end of block or 0 padding reached
+              _ => (Some(Ok(rec)), State::BlockDone),
+            }
+          }
+          Ok(NextRecord::Partial(_tail)) => (
+            Some(Err(BinDecodeError::failure("record larger than the block"))),
+            State::Done,
+          ),
+          Err(e) => (Some(Err(e)), State::Done),
+        }
+      }
+      Err(e) => (
+        Some(Err(BinDecodeError::failure(format!("read block: {}", e)))),
+        State::Done,
+      ),
+    }
+  } else {
+    if tail.is_empty(/* first block, or last block has no partial record bytes at the end */) {
+      (None, State::Done)
+    } else {
+      (Some(Err(BinDecodeError::incomplete())), State::Done)
+    }
+  }
+}
+
+fn extract_next_record(
+  block: &mut Block,
+  buf: &mut Chain<Bytes, Bytes>,
+) -> Result<NextRecord, BinDecodeError> {
+  let pos = buf.remaining();
+
+  let r = crate::records::Record::decode(buf);
+  match r {
+    Ok(rec) => Ok(NextRecord::Record(rec)),
+    Err(e) => {
+      if e.is_incomplete() {
+        let tail = block.data.split_off(block.data.len() - pos);
+        Ok(NextRecord::Partial(tail))
+      } else {
+        Err(e)
+      }
+    }
+  }
+}
+
+enum NextRecord {
+  Record(Record),
+  Partial(Bytes),
+}
 
 macro_rules! record_enum {
   (
@@ -20,6 +142,18 @@ macro_rules! record_enum {
       $(
         $type_id($payload_ty),
       )*
+    }
+
+    impl Record {
+      pub fn type_id(&self) -> RecordTypeId {
+        match *self {
+          $(
+            Record::$type_id(_) => {
+              RecordTypeId::$type_id
+            }
+          )*,
+        }
+      }
     }
 
     impl BinDecode for Record {
@@ -81,9 +215,10 @@ pub struct GameInfo {
   pub game_name: CString,
   #[bin(eq = 0)]
   pub _unk_1: u8,
-  pub encoded_string: CString,
+  pub game_settings: GameSettings,
   pub player_count: u32,
-  pub game_type: u32,
+  #[bin(bitflags(u32))]
+  pub game_flags: GameFlags,
   pub language_id: u32,
 }
 
@@ -241,22 +376,16 @@ fn test_record() {
   let mut buf = bytes.as_slice();
   buf.get_tag(crate::constants::SIGNATURE).unwrap();
   let header = crate::header::Header::decode(&mut buf).unwrap();
-  dbg!(&header);
 
   let mut rec_count = 0;
   let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
   let empty = Bytes::new();
   let mut tail = empty.clone();
   for (i, block) in blocks.enumerate() {
-    dbg!(i);
-
-    let block = block.unwrap();
-    let mut buf = Chain::new(tail, block.data);
-    let buf_size = buf.remaining();
+    let mut block = block.unwrap();
+    let mut buf = Chain::new(tail, block.data.clone());
     loop {
       let pos = buf.remaining();
-
-      dbg!(buf_size - pos);
 
       let r = crate::records::Record::decode(&mut buf).map_err(|e| {
         // flo_util::dump_hex(buf);
@@ -265,14 +394,14 @@ fn test_record() {
       match r {
         Ok(rec) => {
           rec_count = rec_count + 1;
-          dbg!(rec_count);
+          if let Record::GameInfo(gameinfo) = rec {
+            dbg!(gameinfo);
+          }
         }
         Err(e) => {
           if e.is_incomplete() {
-            let offset = pos - buf.remaining();
-            let last_len = buf.last_ref().len();
-            tail = buf.last_mut().split_off(last_len - offset);
-            flo_util::dump_hex(tail.as_ref());
+            tail = block.data.split_off(block.data.len() - pos);
+            // flo_util::dump_hex(tail.as_ref());
             break;
           } else {
             Err(e).unwrap()
@@ -280,9 +409,13 @@ fn test_record() {
         }
       }
 
-      if !buf.has_remaining() {
-        tail = empty.clone();
-        break;
+      match buf.peek_u8() {
+        Some(n) if n != 0 => {}
+        // end of block or 0 padding reached
+        _ => {
+          tail = empty.clone();
+          break;
+        }
       }
     }
   }
@@ -290,4 +423,23 @@ fn test_record() {
   if tail.len() > 0 {
     panic!("extra bytes = {}", tail.len());
   }
+
+  dbg!(rec_count);
+}
+
+#[test]
+fn test_record_iter() {
+  let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
+  let mut buf = bytes.as_slice();
+  buf.get_tag(crate::constants::SIGNATURE).unwrap();
+  let header = crate::header::Header::decode(&mut buf).unwrap();
+
+  let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
+  let mut iter = RecordIter::new(blocks);
+  let mut n = 0;
+  for record in iter {
+    let record = record.unwrap();
+    n = n + 1;
+  }
+  dbg!(n);
 }

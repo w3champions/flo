@@ -46,6 +46,7 @@ use crate::protocol::packet::PacketPayload;
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameSettings {
   pub game_setting_flags: GameSettingFlags,
+  pub unk_1: u8,
   pub map_width: u16,
   pub map_height: u16,
   pub map_xoro: u32,
@@ -73,7 +74,7 @@ impl BinEncode for GameSettings {
     let len = self.get_encode_size();
     let mut stat_string_buf = Vec::<u8>::with_capacity(len);
     stat_string_buf.put_u32_le(self.game_setting_flags.bits());
-    stat_string_buf.put_u8(0);
+    stat_string_buf.put_u8(self.unk_1);
     stat_string_buf.put_u16_le(self.map_width);
     stat_string_buf.put_u16_le(self.map_height);
     stat_string_buf.put_u32_le(self.map_xoro);
@@ -118,7 +119,7 @@ impl BinDecode for GameSettings {
       ))
     })?;
 
-    buf.get_tag(b"\0")?;
+    let unk_1 = buf.get_u8();
 
     let map_width = buf.get_u16_le();
     let map_height = buf.get_u16_le();
@@ -141,6 +142,7 @@ impl BinDecode for GameSettings {
 
     Ok(GameSettings {
       game_setting_flags,
+      unk_1,
       map_width,
       map_height,
       map_xoro,
