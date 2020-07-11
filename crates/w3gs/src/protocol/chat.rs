@@ -17,7 +17,7 @@ impl PacketPayload for ChatToHost {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ChatToHost;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ChatMessage {
   Chat(CString),
   TeamChange(u8),
@@ -82,6 +82,21 @@ impl BinEncode for ChatMessage {
         MessageType::Scoped.encode(buf);
         scope.encode(buf);
         message.encode(buf);
+      }
+    }
+  }
+}
+
+impl ChatMessage {
+  pub fn encode_len(&self) -> usize {
+    1 + match *self {
+      ChatMessage::Chat(ref msg) => msg.as_bytes_with_nul().len(),
+      ChatMessage::TeamChange(v) => size_of::<u8>(),
+      ChatMessage::ColorChange(v) => size_of::<u8>(),
+      ChatMessage::RaceChange(v) => size_of::<u8>(),
+      ChatMessage::HandicapChange(v) => size_of::<u8>(),
+      ChatMessage::Scoped { scope, ref message } => {
+        MessageScope::MIN_SIZE + message.as_bytes_with_nul().len()
       }
     }
   }

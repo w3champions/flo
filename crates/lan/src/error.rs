@@ -12,6 +12,10 @@ pub enum Error {
   MdnsUpdateGameInfo(&'static str),
   #[error("get hostname: {0}")]
   GetHostName(std::io::Error),
+  #[error("couldn't find game info record in the replay file")]
+  ReplayNoGameInfoRecord,
+  #[error("the game info record in the replay file is invalid")]
+  ReplayInvalidGameInfoRecord,
   #[error("get ip: {0}")]
   GetIp(#[from] ipconfig::error::Error),
   #[error("bin decode: {0}")]
@@ -28,6 +32,8 @@ pub enum Error {
   ProtoBufDecode(#[from] prost::DecodeError),
   #[error("base64 decode: {0}")]
   Base64Decode(#[from] base64::DecodeError),
+  #[error("replay: {0}")]
+  Replay(#[from] flo_w3replay::error::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

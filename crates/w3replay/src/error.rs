@@ -10,6 +10,10 @@ pub enum Error {
   ReadBlockHeader(std::io::Error),
   #[error("invalid checksum")]
   InvalidChecksum,
+  #[error("no game info record")]
+  NoGameInfoRecord,
+  #[error("no slot info record")]
+  NoSlotInfoRecord,
   #[error("decompress: {0}")]
   Decompress(#[from] flate2::DecompressError),
   #[error("bin decode: {0}")]

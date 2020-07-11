@@ -3,6 +3,7 @@ use std::fmt;
 use std::time::Instant;
 
 use flo_util::binary::*;
+use flo_util::{BinDecode, BinEncode};
 
 use crate::error::*;
 use crate::protocol::constants::{LeaveReason, PacketTypeId};
@@ -60,10 +61,7 @@ impl PacketPayload for OutgoingAction {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct IncomingAction {
-  pub time_increment_ms: u16,
-  pub action: Option<PlayerAction>,
-}
+pub struct IncomingAction(pub TimeSlot);
 
 impl PacketPayload for IncomingAction {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::IncomingAction;
@@ -71,85 +69,51 @@ impl PacketPayload for IncomingAction {
 
 impl PacketPayloadEncode for IncomingAction {
   fn encode(&self, buf: &mut BytesMut) {
-    let action_len: usize = self.action.iter().map(PlayerAction::byte_len).sum();
-    let header_len = size_of::<u16>() + // send_interval
-      size_of::<u16>(); // crc16
-    buf.reserve(header_len + action_len);
-
-    if let Some(ref action) = self.action.as_ref() {
-      buf.put_u16_le(self.time_increment_ms);
-      let mut actions_buf = buf.split_off(header_len);
-
-      action.encode(&mut actions_buf);
-
-      buf.put_u16_le(crc16(actions_buf.as_ref()));
-
-      buf.unsplit(actions_buf);
-    } else {
-      buf.put_u16_le(self.time_increment_ms);
-    }
+    self.0.encode(buf)
   }
 }
 
 impl PacketPayloadDecode for IncomingAction {
   fn decode(buf: &mut Bytes) -> Result<Self, Error> {
-    if buf.remaining() < size_of::<u16>() {
-      return Err(
-        BinDecodeError::incomplete()
-          .context("IncomingAction time_increment_ms")
-          .into(),
-      );
-    }
-
-    let time_increment_ms = buf.get_u16_le();
-
-    if !buf.has_remaining() {
-      return Ok(Self {
-        time_increment_ms,
-        action: None,
-      });
-    }
-
-    if buf.remaining() < size_of::<u16>() {
-      return Err(
-        BinDecodeError::incomplete()
-          .context("IncomingAction crc16")
-          .into(),
-      );
-    }
-
-    let crc16_value = buf.get_u16_le();
-    let expected_crc16 = crc16(buf.as_ref());
-
-    if crc16_value != expected_crc16 {
-      return Err(Error::InvalidChecksum);
-    }
-
-    let action = Some(PlayerAction::decode(buf)?);
-
-    Ok(Self {
-      time_increment_ms,
-      action,
-    })
+    Ok(Self(PacketPayloadDecode::decode(buf)?))
   }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct IncomingAction2 {
+pub struct IncomingAction2(pub TimeSlot);
+
+impl PacketPayload for IncomingAction2 {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::IncomingAction2;
+}
+
+impl PacketPayloadEncode for IncomingAction2 {
+  fn encode(&self, buf: &mut BytesMut) {
+    self.0.encode(buf)
+  }
+}
+
+impl PacketPayloadDecode for IncomingAction2 {
+  fn decode(buf: &mut Bytes) -> Result<Self, Error> {
+    Ok(Self(PacketPayloadDecode::decode(buf)?))
+  }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TimeSlot {
   pub time_increment_ms: u16,
   pub actions: Vec<PlayerAction>,
 }
 
 enum IncomingAction2Chunks {
   Empty,
-  One(IncomingAction2),
-  Many(Vec<IncomingAction2>),
+  One(TimeSlot),
+  Many(Vec<TimeSlot>),
 }
 
 pub struct IncomingAction2ChunksIter(IncomingAction2Chunks);
 
 impl Iterator for IncomingAction2ChunksIter {
-  type Item = IncomingAction2;
+  type Item = TimeSlot;
 
   fn next(&mut self) -> Option<Self::Item> {
     let (item, next) = match std::mem::replace(&mut self.0, IncomingAction2Chunks::Empty) {
@@ -168,7 +132,7 @@ impl Iterator for IncomingAction2ChunksIter {
   }
 }
 
-impl IncomingAction2 {
+impl TimeSlot {
   // https://github.com/Josko/aura-bot/blob/1e5df425fd325e9b0e6aa8fa5eed35f0c61f3114/src/game.cpp#L963
   const MAX_ACTION_DATA_LEN: usize = 1452;
 
@@ -193,7 +157,7 @@ impl IncomingAction2 {
         let action_len = action.byte_len();
         if data_len + action_len > Self::MAX_ACTION_DATA_LEN {
           data_len = 0;
-          payloads.push(IncomingAction2 {
+          payloads.push(TimeSlot {
             time_increment_ms: 0,
             actions: std::mem::replace(&mut actions, vec![action]),
           });
@@ -204,7 +168,7 @@ impl IncomingAction2 {
       }
 
       if !actions.is_empty() {
-        payloads.push(IncomingAction2 {
+        payloads.push(TimeSlot {
           time_increment_ms: self.time_increment_ms,
           actions,
         })
@@ -220,11 +184,7 @@ impl IncomingAction2 {
   }
 }
 
-impl PacketPayload for IncomingAction2 {
-  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::IncomingAction2;
-}
-
-impl PacketPayloadEncode for IncomingAction2 {
+impl PacketPayloadEncode for TimeSlot {
   fn encode(&self, buf: &mut BytesMut) {
     let actions_len: usize = self.actions.iter().map(PlayerAction::byte_len).sum();
     let header_len = size_of::<u16>() + // send_interval
@@ -248,7 +208,7 @@ impl PacketPayloadEncode for IncomingAction2 {
   }
 }
 
-impl PacketPayloadDecode for IncomingAction2 {
+impl PacketPayloadDecode for TimeSlot {
   fn decode(buf: &mut Bytes) -> Result<Self, Error> {
     if buf.remaining() < size_of::<u16>() {
       return Err(
@@ -294,7 +254,7 @@ impl PacketPayloadDecode for IncomingAction2 {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PlayerAction {
   pub player_id: u8,
   pub data: Bytes,
@@ -338,6 +298,16 @@ impl PlayerAction {
   }
 }
 
+#[derive(Debug, PartialEq, BinDecode, BinEncode)]
+pub struct OutgoingKeepAlive {
+  pub unknown: u8,
+  pub checksum: u32,
+}
+
+impl PacketPayload for OutgoingKeepAlive {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::OutgoingKeepAlive;
+}
+
 fn crc16(data: &[u8]) -> u16 {
   let mut crc32 = crc32fast::Hasher::new();
   crc32.update(data);
@@ -366,23 +336,23 @@ fn test_outgoing_action() {
 fn test_incoming_action() {
   crate::packet::test_payload_type(
     "incoming_action.bin",
-    &IncomingAction {
+    &IncomingAction(TimeSlot {
       time_increment_ms: 100,
-      action: Some(PlayerAction {
+      actions: vec![PlayerAction {
         player_id: 2,
         data: Bytes::from(vec![
           22, 1, 4, 0, 116, 51, 0, 0, 116, 51, 0, 0, 139, 51, 0, 0, 139, 51, 0, 0, 185, 51, 0, 0,
           185, 51, 0, 0, 208, 51, 0, 0, 208, 51, 0, 0, 26, 25, 97, 101, 112, 104, 116, 51, 0, 0,
           116, 51, 0, 0,
         ]),
-      }),
-    },
+      }],
+    }),
   )
 }
 
 #[test]
 fn test_incoming_action2_split_chunk_1() {
-  let mut payload = IncomingAction2 {
+  let mut payload = TimeSlot {
     time_increment_ms: 100,
     actions: vec![PlayerAction {
       player_id: 1,
@@ -393,7 +363,7 @@ fn test_incoming_action2_split_chunk_1() {
   let splitted = payload.split_chunks().collect::<Vec<_>>();
   assert_eq!(
     splitted,
-    vec![IncomingAction2 {
+    vec![TimeSlot {
       time_increment_ms: 100,
       actions: vec![PlayerAction {
         player_id: 1,
@@ -405,7 +375,7 @@ fn test_incoming_action2_split_chunk_1() {
 
 #[test]
 fn test_incoming_action2_split_chunk_30() {
-  let mut payload = IncomingAction2 {
+  let mut payload = TimeSlot {
     time_increment_ms: 100,
     actions: vec![],
   };
@@ -418,10 +388,7 @@ fn test_incoming_action2_split_chunk_30() {
   }
 
   let splitted = payload.split_chunks().collect::<Vec<_>>();
-  assert_eq!(
-    splitted.len(),
-    3000 / IncomingAction2::MAX_ACTION_DATA_LEN + 1
-  );
+  assert_eq!(splitted.len(), 3000 / TimeSlot::MAX_ACTION_DATA_LEN + 1);
 
   for i in splitted.iter().rev().skip(1) {
     assert_eq!(i.time_increment_ms, 0);

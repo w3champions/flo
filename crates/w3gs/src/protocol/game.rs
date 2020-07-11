@@ -4,45 +4,6 @@ use flo_util::{BinDecode, BinEncode};
 use crate::protocol::constants::{GameSettingFlags, PacketTypeId};
 use crate::protocol::packet::PacketPayload;
 
-/// GameSettings stores the settings of a created game.
-///
-/// Flags:
-///
-///   Speed: (mask 0x00000003) cannot be combined
-///     0x00000000 - Slow game speed
-///     0x00000001 - Normal game speed
-///     0x00000002 - Fast game speed
-///   Visibility: (mask 0x00000F00) cannot be combined
-///     0x00000100 - Hide terrain
-///     0x00000200 - Map explored
-///     0x00000400 - Always visible (no fog of war)
-///     0x00000800 - Default
-///   Observers/Referees: (mask 0x40003000) cannot be combined
-///     0x00000000 - No Observers
-///     0x00002000 - Observers on Defeat
-///     0x00003000 - Additional players as observer allowed
-///     0x40000000 - Referees
-///   Teams/Units/Hero/Race: (mask 0x07064000) can be combined
-///     0x00004000 - Teams Together (team members are placed at neighbored starting locations)
-///     0x00060000 - Fixed teams
-///     0x01000000 - Unit share
-///     0x02000000 - Random hero
-///     0x04000000 - Random races
-///
-/// Format:
-///
-///    (UINT32)     Flags
-///    (UINT16)     Map width
-///    (UINT16)     Map height
-///    (UINT32)     Map xoro
-///    (STRING)     Map path
-///    (STRING)     Host name
-///     (UINT8)[20] Map Sha1 hash
-///
-/// Encoded as a null terminated string where every even byte-value was
-/// incremented by 1. So all encoded bytes are odd. A control-byte stores
-/// the transformations for the next 7 bytes.
-///
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameSettings {
   pub game_setting_flags: GameSettingFlags,
