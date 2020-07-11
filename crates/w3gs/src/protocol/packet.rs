@@ -11,6 +11,13 @@ pub trait PacketPayload: Sized {
   const PACKET_TYPE_ID: PacketTypeId;
 }
 
+impl<'a, T> PacketPayload for &'a T
+where
+  T: PacketPayload,
+{
+  const PACKET_TYPE_ID: PacketTypeId = T::PACKET_TYPE_ID;
+}
+
 /// Specialized version of `BinEncode`
 /// `BinEncode` generic over `BufMut` but we need `BytesMut`
 /// to reduce allocations/copies
@@ -23,6 +30,21 @@ pub trait PacketPayloadEncode {
     let mut buf = BytesMut::new();
     self.encode(&mut buf);
     buf.freeze()
+  }
+}
+
+impl<'a, T> PacketPayloadEncode for &'a T
+where
+  T: PacketPayloadEncode,
+{
+  fn encode(&self, buf: &mut BytesMut) {
+    <T as PacketPayloadEncode>::encode(*self, buf)
+  }
+  fn encode_len(&self) -> Option<usize> {
+    <T as PacketPayloadEncode>::encode_len(*self)
+  }
+  fn encode_to_bytes(&self) -> Bytes {
+    <T as PacketPayloadEncode>::encode_to_bytes(*self)
   }
 }
 

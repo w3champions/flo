@@ -5,7 +5,8 @@ use std::ffi::CString;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::sync::Notify;
+use tokio::time::{delay_for, delay_until, Instant};
 use tracing_futures::Instrument;
 
 use flo_lan::{GameInfo, MdnsPublisher};
@@ -16,11 +17,12 @@ use flo_w3gs::packet::{Packet, PacketPayload, PacketProtoBufMessage};
 use flo_w3gs::protocol::action::*;
 use flo_w3gs::protocol::constants::PacketTypeId::{IncomingAction, IncomingAction2, PlayerLoaded};
 use flo_w3map::{MapChecksum, W3Map};
+use flo_w3replay::{Record, ReplayInfo, W3Replay};
 use flo_w3storage::W3Storage;
 
 #[tokio::main]
 async fn main() {
-  flo_log::init_env("poc_host=debug");
+  flo_log::init_env("replay2=debug");
 
   use flo_w3gs::net::W3GSListener;
 
@@ -28,22 +30,23 @@ async fn main() {
   tracing::info!("listening on {}", listener.local_addr());
   let port = listener.port();
 
-  let mut game_info =
-    GameInfo::decode_bytes(&flo_util::sample_bytes!("lan", "mdns_gamedata.bin")).unwrap();
-  game_info.name = CString::new("DEMO").unwrap();
-  game_info.data.name = CString::new("DEMO").unwrap();
-  game_info.data.port = port;
-  game_info.create_time = std::time::SystemTime::now();
-  game_info.game_id = "1".to_owned();
+  let mut game_info = GameInfo::from_replay(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
+  game_info.set_port(port);
+  game_info.data.settings.map_xoro = 3389385288;
 
-  let map_path = game_info.data.settings.map_path.to_str().unwrap();
-  tracing::debug!("map: {}", map_path);
+  let (inspect, rest) = W3Replay::inspect(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
+  let inspect = Arc::new(inspect);
+
+  // dbg!(&inspect);
+  //0x6c744e17 != 0x6c75722f
+
+  let rest: Arc<Vec<_>> = Arc::new(rest.map(|r| r.unwrap()).collect());
 
   let storage = W3Storage::from_env().unwrap();
-  let (map, checksum) = W3Map::open_storage_with_checksum(&storage, map_path).unwrap();
+  let (map, checksum) =
+    W3Map::open_storage_with_checksum(&storage, game_info.data.settings.map_path.to_str().unwrap())
+      .unwrap();
   let map = Arc::new(map);
-
-  // game_info.data.settings.map_xoro = checksum.xoro;
 
   let _p = MdnsPublisher::start(game_info.clone()).await.unwrap();
   while let Some(stream) = listener.incoming().try_next().await.unwrap() {
@@ -54,11 +57,15 @@ async fn main() {
     let map = map.clone();
     let game_info = game_info.clone();
     let checksum = checksum.clone();
+    let inspect = inspect.clone();
+    let rest = rest.clone();
     tokio::spawn(async move {
       run_lobby(
         peer_addr.clone(),
         stream,
         &game_info.data.settings,
+        &inspect,
+        rest,
         &map,
         &checksum,
       )
@@ -82,24 +89,49 @@ async fn run_lobby(
   server_addr: SocketAddr,
   mut transport: W3GSStream,
   settings: &GameSettings,
+  inspect: &ReplayInfo,
+  rest: Arc<Vec<Record>>,
   map: &W3Map,
   map_checksum: &MapChecksum,
 ) -> Result<(), LobbyError> {
   use flo_w3gs::protocol::player::PlayerProfileMessage;
   use flo_w3gs::protocol::slot::SlotInfo;
   use std::time::Instant;
-  let mut slot_info = SlotInfo::new(2, 2);
-  let slot = slot_info.join().unwrap();
+  let slot_info = inspect.slots.clone();
   let time = Instant::now();
 
-  slot.color = 23;
-  slot.download_status = 100;
+  // find first ob player
+  let player_id = inspect
+    .slots
+    .slots()
+    .iter()
+    .find(|s| s.team == 24)
+    .unwrap()
+    .player_id;
+
+  let mut players: Vec<_> = inspect
+    .players
+    .iter()
+    .filter(|p| p.id != player_id)
+    .collect();
+  players.push(&inspect.game.host_player_info);
 
   let mut profiles = HashMap::new();
+
   profiles.insert(
-    slot.player_id,
-    PlayerProfileMessage::new(slot.player_id, "Flo Host"),
+    inspect.game.host_player_info.id,
+    PlayerProfileMessage::new(
+      inspect.game.host_player_info.id,
+      inspect.game.host_player_info.name.to_str().unwrap(),
+    ),
   );
+
+  for player in &inspect.players {
+    profiles.insert(
+      player.id,
+      PlayerProfileMessage::new(player.id, player.name.to_str().unwrap()),
+    );
+  }
 
   // <- ReqJoin
   let req = {
@@ -111,44 +143,35 @@ async fn run_lobby(
   };
 
   // -> SlotInfoJoin
-  let player_id = {
+  {
     use flo_w3gs::protocol::join::{RejectJoin, SlotInfoJoin};
 
-    if let Some(slot) = slot_info.join() {
-      slot.team = 1;
-      slot.color = 1;
-      let player_id = slot.player_id;
-      let payload = SlotInfoJoin {
-        slot_info: slot_info.clone(),
-        player_id,
-        external_addr: SockAddr::from(match server_addr {
-          SocketAddr::V4(addr) => addr,
-          SocketAddr::V6(_) => return Err(flo_w3gs::error::Error::Ipv6NotSupported.into()),
-        }),
-      };
+    let payload = SlotInfoJoin {
+      slot_info: slot_info.clone(),
+      player_id,
+      external_addr: SockAddr::from(match server_addr {
+        SocketAddr::V4(addr) => addr,
+        SocketAddr::V6(_) => return Err(flo_w3gs::error::Error::Ipv6NotSupported.into()),
+      }),
+    };
 
-      transport
-        .send(Packet::with_simple_payload(payload)?)
-        .await?;
-      tracing::debug!("accepted: player_id = {}", player_id);
-      player_id
-    } else {
-      transport
-        .send(Packet::with_simple_payload(RejectJoin::FULL)?)
-        .await?;
-      tracing::debug!("rejected: full");
-      return Ok(());
-    }
-  };
-
-  // -> PlayerInfo (Host)
-  {
-    use flo_w3gs::protocol::player::PlayerInfo;
-    let payload = PlayerInfo::new(1, CString::new("HOST").unwrap());
     transport
       .send(Packet::with_simple_payload(payload)?)
       .await?;
-    tracing::debug!("player info sent");
+    tracing::debug!("accepted: player_id = {}", player_id);
+    player_id
+  };
+
+  for player in &players {
+    // -> PlayerInfo
+    {
+      use flo_w3gs::protocol::player::PlayerInfo;
+      let payload = PlayerInfo::new(player.id, player.name.clone());
+      transport
+        .send(Packet::with_simple_payload(payload)?)
+        .await?;
+      tracing::debug!("player info sent: {}", player.id);
+    }
   }
 
   // -> MapCheck
@@ -204,60 +227,50 @@ async fn run_lobby(
     let payload: PlayerProfileMessage = packet.decode_protobuf()?;
     tracing::debug!("PlayerProfileMessage received: {:?}", payload);
 
-    if payload.player_id > 23
-      || slot_info
-        .find_active_player_slot_mut(payload.player_id as u8)
-        .is_none()
-    {
-      return Err(LobbyError::InvalidPlayerId);
-    }
-
-    profiles.insert(payload.player_id as u8, payload);
-
     transport.send(packet).await?;
     tracing::debug!("PlayerProfile ack sent");
   }
 
-  // #14:
-  // -> PlayerSkin (Host)
-  {
-    use flo_w3gs::protocol::packet::ProtoBufPayload;
-    use flo_w3gs::protocol::player::PlayerSkinsMessage;
+  for player in &players {
+    // #14:
+    // -> PlayerSkin
+    {
+      use flo_w3gs::protocol::packet::ProtoBufPayload;
+      use flo_w3gs::protocol::player::PlayerSkinsMessage;
 
-    let payload = ProtoBufPayload::new(PlayerSkinsMessage {
-      player_id: 1,
-      ..Default::default()
-    });
-    transport
-      .send(Packet::with_simple_payload(payload)?)
-      .await?;
-    tracing::debug!("PlayerSkins (Host)  sent");
+      let payload = ProtoBufPayload::new(PlayerSkinsMessage {
+        player_id: player.id as u32,
+        ..Default::default()
+      });
+      transport
+        .send(Packet::with_simple_payload(payload)?)
+        .await?;
+      tracing::debug!("PlayerSkins sent: {}", player.id);
+    }
   }
 
   // #15/#17:
   // -> SlotInfo
   {
-    slot_info
-      .find_active_player_slot_mut(1)
-      .unwrap()
-      .download_status = 100;
-
     let packet = Packet::with_simple_payload(slot_info.clone())?;
     transport.send(packet).await?;
     tracing::debug!("SlotInfo sent");
   }
 
   // #16:
-  // -> PlayerProfile (Host)
-  {
-    use flo_w3gs::protocol::packet::ProtoBufPayload;
-    use flo_w3gs::protocol::player::PlayerProfileMessage;
+  // -> PlayerProfile all
+  for player in &players {
+    {
+      use flo_w3gs::protocol::packet::ProtoBufPayload;
+      use flo_w3gs::protocol::player::PlayerProfileMessage;
 
-    let packet =
-      Packet::with_simple_payload(ProtoBufPayload::new(profiles.get(&1).cloned().unwrap()))?;
+      let packet = Packet::with_simple_payload(ProtoBufPayload::new(
+        profiles.get(&player.id).cloned().unwrap(),
+      ))?;
 
-    transport.send(packet).await?;
-    tracing::debug!("Host PlayerProfile sent");
+      transport.send(packet).await?;
+      tracing::debug!("PlayerProfile sent: {}", player.id);
+    }
   }
 
   // #18
@@ -308,6 +321,8 @@ async fn run_lobby(
     }
   }
 
+  // delay_for(Duration::from_secs(100)).await;
+
   {
     use flo_w3gs::game::*;
     transport
@@ -323,32 +338,195 @@ async fn run_lobby(
     tracing::debug!("count down end sent");
   }
 
-  // #21
-  // -> PlayerLoaded (Host)
-  {
-    use flo_w3gs::protocol::player::PlayerLoaded;
-    let packet = Packet::with_simple_payload(PlayerLoaded::new(1))?;
-    transport.send(packet).await?;
-    tracing::debug!("PlayerLoaded (Host) sent");
+  for player in &players {
+    // #21
+    // -> PlayerLoaded
+    {
+      use flo_w3gs::protocol::player::PlayerLoaded;
+      let packet = Packet::with_simple_payload(PlayerLoaded::new(player.id))?;
+      transport.send(packet).await?;
+      tracing::debug!("PlayerLoaded sent: {}", player.id);
+    }
   }
 
   use flo_w3gs::error::Error;
+  use std::sync::atomic::AtomicU32;
+  use std::sync::atomic::Ordering;
   use std::sync::Mutex;
   use tokio::sync::mpsc;
-  let (tx, mut rx) = mpsc::channel(100);
+  let (tx, mut rx) = mpsc::channel(5);
   let action_q: Arc<Mutex<Vec<Bytes>>> = Arc::new(Mutex::new(vec![]));
+  let mut all_players: Vec<_> = inspect.players.iter().map(|p| p.id).collect();
+  all_players.push(inspect.game.host_player_info.id);
+  let loaded = Arc::new(Notify::new());
+  let ack = Arc::new(Notify::new());
+  let checksum = Arc::new(AtomicU32::new(0));
 
   tokio::spawn(
     {
       let mut sender = tx.clone();
       let q = action_q.clone();
+      let rest = rest.clone();
+      let loaded = loaded.clone();
+      let ack = ack.clone();
+      let checksum = checksum.clone();
       async move {
         use flo_w3gs::action::*;
-        use tokio::time::{delay_until, Instant};
-        let mut t = Instant::now();
+        let mut t = tokio::time::Instant::now();
+        let mut ms = 0;
+
+        loaded.notified().await;
+
+        let mut batched_slot = TimeSlot {
+          time_increment_ms: 0,
+          actions: vec![],
+        };
+
+        for (i, record) in rest.iter().enumerate() {
+          match *record {
+            Record::ChatMessage(ref msg) => {
+              use flo_w3gs::chat::*;
+              let p = ChatFromHost::new(ChatToHost {
+                to_players_len: all_players.len() as u8,
+                to_players: all_players.clone(),
+                from_player: msg.player_id,
+                message: msg.message.clone(),
+              });
+              sender
+                .send(Packet::with_simple_payload(p).unwrap())
+                .await
+                .unwrap();
+            }
+            Record::TimeSlotFragment(ref f) => {
+              tracing::debug!(
+                "TimeSlotFragment: ms = {}, actions = {}",
+                f.0.time_increment_ms,
+                f.0.actions.len()
+              );
+              unreachable!()
+              // if f.0.time_increment_ms > 0 {
+              //   ms = ms + (f.0.time_increment_ms as u64);
+              //   delay_until(t + Duration::from_millis(ms)).await;
+              // }
+              // sender
+              //   .send(
+              //     Packet::with_payload(IncomingAction2(TimeSlot {
+              //       time_increment_ms: f.0.time_increment_ms,
+              //       actions: f.0.actions.clone(),
+              //     }))
+              //     .unwrap(),
+              //   )
+              //   .await
+              //   .unwrap();
+            }
+            Record::TimeSlot(ref f) => {
+              // tracing::debug!(
+              //   "TimeSlot: ms = {}, actions = {}",
+              //   f.time_increment_ms,
+              //   f.actions.len()
+              // );
+
+              batched_slot.time_increment_ms = batched_slot.time_increment_ms + f.time_increment_ms;
+              batched_slot.actions.extend(f.actions.clone());
+
+              // if f.time_increment_ms > 0 {
+              //   ms = ms + (f.time_increment_ms as u64);
+              //   delay_until(t + Duration::from_millis(ms)).await;
+              // }
+              // sender
+              //   .send(
+              //     Packet::with_payload(IncomingAction(TimeSlot {
+              //       time_increment_ms: f.time_increment_ms,
+              //       actions: f.actions.clone(),
+              //     }))
+              //     .unwrap(),
+              //   )
+              //   .await
+              //   .unwrap();
+            }
+            Record::TimeSlotAck(ref p) => {
+              if batched_slot.time_increment_ms >= 500 {
+                tracing::debug!(
+                  "batched actions: time = {}, len = {}",
+                  batched_slot.time_increment_ms,
+                  batched_slot.actions.len()
+                );
+
+                ms = ms + (batched_slot.time_increment_ms as u64);
+                delay_until(t + Duration::from_millis(ms / 10)).await;
+
+                if batched_slot
+                  .actions
+                  .iter()
+                  .map(|a| a.data.len())
+                  .sum::<usize>()
+                  > 1452
+                {
+                  let mut fragments = vec![];
+
+                  let mut batch_size = 0;
+                  let mut batch = vec![];
+                  for action in std::mem::replace(&mut batched_slot.actions, vec![]) {
+                    if batch_size + action.byte_len() > 1452 {
+                      fragments.push(TimeSlot {
+                        time_increment_ms: 0,
+                        actions: std::mem::replace(&mut batch, vec![]),
+                      });
+                      batch_size = 0;
+                    }
+                    batch_size = batch_size + action.byte_len();
+                    batch.push(action);
+                  }
+
+                  tracing::debug!("sending multiple action packets: {}", fragments.len() + 1);
+
+                  for fragment in fragments {
+                    sender
+                      .send(Packet::with_payload(IncomingAction2(fragment)).unwrap())
+                      .await
+                      .unwrap();
+                  }
+
+                  sender
+                    .send(
+                      Packet::with_payload(IncomingAction(TimeSlot {
+                        time_increment_ms: batched_slot.time_increment_ms,
+                        actions: batch,
+                      }))
+                      .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                } else {
+                  sender
+                    .send(
+                      Packet::with_payload(IncomingAction(TimeSlot {
+                        time_increment_ms: batched_slot.time_increment_ms,
+                        actions: std::mem::replace(&mut batched_slot.actions, vec![]),
+                      }))
+                      .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                }
+
+                batched_slot.time_increment_ms = 0;
+                checksum.store(p.checksum, Ordering::SeqCst);
+
+                // ack.notified().await;
+              }
+            }
+            ref r => {
+              tracing::debug!("{:?}", r);
+            }
+          }
+        }
+
+        tracing::info!("replay actions done.");
+
         loop {
           delay_until(t + Duration::from_millis(100)).await;
-          let now = Instant::now();
+          let now = tokio::time::Instant::now();
           let d = now - t;
           t = now;
 
@@ -385,7 +563,7 @@ async fn run_lobby(
                   .unwrap();
               }
 
-              let p = IncomingAction2(TimeSlot {
+              let p = IncomingAction(TimeSlot {
                 time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
                 actions: vec![PlayerAction {
                   player_id: 2,
@@ -396,10 +574,8 @@ async fn run_lobby(
             } else {
               let p = IncomingAction(TimeSlot {
                 time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
-                actions: items
-                  .into_iter()
-                  .map(|data| PlayerAction { player_id: 2, data })
-                  .collect(),
+                // action: items.pop().map(|data| PlayerAction { player_id: 2, data }),
+                actions: vec![],
               });
               sender.send(Packet::with_payload(p).unwrap()).await.unwrap();
             }
@@ -445,6 +621,8 @@ async fn run_lobby(
               .await?;
             tracing::debug!("Player {} loaded ack sent", player_id);
             // return Ok(());
+
+            loaded.notify();
           }
           ProtoBufPayload::PACKET_TYPE_ID => {
             let req: ProtoBufPayload = p.decode_simple_payload()?;
@@ -453,7 +631,7 @@ async fn run_lobby(
               PlayerProfileMessage::MESSAGE_TYPE_ID => {
                 let msg: PlayerProfileMessage = req.decode_message()?;
                 tracing::debug!("PlayerProfileMessage: {:?}", msg);
-                break;
+                continue;
               }
               _ => {
                 tracing::debug!("recv: {:?}", req);
@@ -466,7 +644,16 @@ async fn run_lobby(
             action_q.lock().unwrap().push(req.data);
           }
           PacketTypeId::OutgoingKeepAlive => {
-            // tracing::debug!("action ack");
+            let req: OutgoingKeepAlive = p.decode_simple_payload()?;
+            let checksum = checksum.load(Ordering::SeqCst);
+            // tracing::debug!("ack: {:?}", req);
+            // if checksum != req.checksum {
+            //   tracing::error!("desync: 0x{:x} != 0x{:x}", req.checksum, checksum);
+            //   break;
+            // } else {
+            //   tracing::info!("checksum ok");
+            // }
+            // ack.notify();
           }
           PacketTypeId::ChatToHost => {
             let mut req: ChatToHost = p.decode_simple_payload()?;

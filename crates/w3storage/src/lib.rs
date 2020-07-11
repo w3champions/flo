@@ -43,6 +43,20 @@ impl W3Storage {
     Ok(())
   }
 
+  pub fn list_storage_files(&self, mask: &str) -> Result<Vec<String>> {
+    let mask = Self::get_storage_path(mask);
+    self
+      .with_storage(|s| -> Result<_, casclib::CascError> {
+        use std::iter::FromIterator;
+        Result::<_, casclib::CascError>::from_iter(
+          s.files_with_mask(mask)
+            .into_iter()
+            .map(|f| f.map(|f| f.get_name().to_string())),
+        )
+      })?
+      .map_err(Into::into)
+  }
+
   pub fn resolve_file(&self, path: &str) -> Result<Option<File>> {
     let lower = path.to_lowercase();
     let overrides = self.find_overrides(&lower);

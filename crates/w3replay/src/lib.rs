@@ -39,6 +39,31 @@ impl W3Replay<BufReader<File>> {
       header,
     })
   }
+
+  pub fn inspect<P: AsRef<Path>>(path: P) -> Result<(ReplayInfo, RecordIter<BufReader<File>>)> {
+    let replay = Self::open(path)?;
+    let mut game = None;
+    let mut players = vec![];
+    let mut slots = None;
+    let mut iter = replay.into_records();
+    while let Some(record) = iter.next() {
+      match record? {
+        Record::GameInfo(info) => game = Some(info),
+        Record::SlotInfo(info) => slots = Some(info),
+        Record::PlayerInfo(info) => players.push(info.player_info),
+        Record::GameStart(_) => break,
+        _ => {}
+      }
+    }
+    Ok((
+      ReplayInfo {
+        game: game.ok_or_else(|| Error::NoGameInfoRecord)?,
+        players,
+        slots: slots.ok_or_else(|| Error::NoSlotInfoRecord)?,
+      },
+      iter,
+    ))
+  }
 }
 
 impl<B> W3Replay<Reader<B>>
@@ -61,14 +86,34 @@ impl<R> W3Replay<R> {
   }
 }
 
+#[derive(Debug)]
+pub struct ReplayInfo {
+  pub game: GameInfo,
+  pub players: Vec<PlayerInfo>,
+  pub slots: SlotInfo,
+}
+
 #[test]
 fn test_open() {
   let path = flo_util::sample_path!("replay", "16k.w3g");
   for r in W3Replay::open(&path).unwrap().into_records() {
     let r = r.unwrap();
     if r.type_id() == RecordTypeId::GameInfo {
-      dbg!(r);
       break;
     }
   }
+}
+
+#[test]
+fn test_inspect() {
+  let path = flo_util::sample_path!("replay", "grubby_happy.w3g");
+  let (info, _) = W3Replay::inspect(&path).unwrap();
+  dbg!(info);
+}
+
+#[test]
+fn test_inspect2() {
+  let path = flo_util::sample_path!("replay", "bn.w3g");
+  let (info, _) = W3Replay::inspect(&path).unwrap();
+  dbg!(info);
 }

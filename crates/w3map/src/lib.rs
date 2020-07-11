@@ -240,7 +240,8 @@ fn test_open_map() {
 fn test_open_storage() {
   let storage = W3Storage::from_env().unwrap();
   let _map = W3Map::open_storage(&storage, "maps\\(4)adrenaline.w3m").unwrap();
-  std::fs::write("adrenaline.png", _map.render_preview_png()).unwrap()
+  // std::fs::write("adrenaline.png", _map.render_preview_png()).unwrap()
+  dbg!(_map.info);
 }
 
 #[test]

@@ -1,9 +1,12 @@
+use std::path::Path;
 use std::time::SystemTime;
 
 use flo_util::binary::BinEncode;
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
+use flo_w3gs::constants::GameFlags;
 use flo_w3gs::protocol::game::GameSettings;
+use flo_w3replay::W3Replay;
 
 use crate::error::*;
 use crate::proto;
@@ -33,6 +36,41 @@ impl GameInfo {
   //     data: GameData,
   //   }
   // }
+
+  pub fn from_replay<P: AsRef<Path>>(path: P) -> Result<Self> {
+    use flo_w3replay::Record;
+    for record in W3Replay::open(path)?.into_records() {
+      match record? {
+        Record::GameInfo(gameinfo) => {
+          let name = CString::new("Replay").unwrap();
+          let players_max = if gameinfo.player_count <= 24 {
+            gameinfo.player_count as u8
+          } else {
+            return Err(Error::ReplayInvalidGameInfoRecord);
+          };
+          return Ok(Self {
+            message_id: 0,
+            game_id: "1".to_string(),
+            create_time: SystemTime::now(),
+            secret: 0xDDDDDDDD,
+            name: name.clone(),
+            players_num: 0,
+            players_max,
+            data: GameData {
+              name,
+              _unknown_byte: 0,
+              settings: gameinfo.game_settings,
+              slots_total: gameinfo.player_count,
+              flags: gameinfo.game_flags,
+              port: 16000,
+            },
+          });
+        }
+        _ => {}
+      }
+    }
+    Err(Error::ReplayNoGameInfoRecord)
+  }
 
   pub fn encode_to_bytes(&self) -> Result<Vec<u8>> {
     use prost::Message;
@@ -156,6 +194,10 @@ impl GameInfo {
       data: game_data,
     })
   }
+
+  pub fn set_port(&mut self, port: u16) {
+    self.data.port = port;
+  }
 }
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq, Clone)]
@@ -165,7 +207,8 @@ pub struct GameData {
   _unknown_byte: u8,
   pub settings: GameSettings,
   pub slots_total: u32,
-  pub flags: u32,
+  #[bin(bitflags(u32))]
+  pub flags: GameFlags,
   pub port: u16,
 }
 

@@ -200,7 +200,7 @@ record_enum! {
     GameStart(GameStart),
     TimeSlotFragment(TimeSlotFragment),
     TimeSlot(TimeSlot),
-    ChatMessage(ChatMessage),
+    ChatMessage(PlayerChatMessage),
     TimeSlotAck(TimeSlotAck),
     Desync(Desync),
     EndTimer(EndTimer),
@@ -208,7 +208,7 @@ record_enum! {
   }
 }
 
-#[derive(Debug, BinEncode, BinDecode, PartialEq)]
+#[derive(Debug, BinEncode, BinDecode, PartialEq, Clone)]
 pub struct GameInfo {
   pub num_of_host_records: u32,
   pub host_player_info: PlayerInfo,
@@ -222,7 +222,7 @@ pub struct GameInfo {
   pub language_id: u32,
 }
 
-#[derive(Debug, BinEncode, BinDecode, PartialEq)]
+#[derive(Debug, BinEncode, BinDecode, PartialEq, Clone)]
 pub struct PlayerInfo {
   pub id: u8,
   pub name: CString,
@@ -353,7 +353,39 @@ impl BinEncode for TimeSlot {
 }
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
-pub struct TimeSlotFragment(TimeSlot);
+pub struct TimeSlotFragment(pub TimeSlot);
+
+#[derive(Debug, PartialEq)]
+pub struct PlayerChatMessage {
+  pub player_id: u8,
+  pub message: ChatMessage,
+}
+
+impl BinDecode for PlayerChatMessage {
+  const MIN_SIZE: usize = 1 + 2 + ChatMessage::MIN_SIZE;
+  const FIXED_SIZE: bool = false;
+
+  fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
+    buf.check_size(Self::MIN_SIZE)?;
+    let player_id = buf.get_u8();
+    let len = buf.get_u16_le() as usize;
+    buf.check_size(len)?;
+    let expected_remaining = buf.remaining() - len;
+    let message = ChatMessage::decode(buf)?;
+    if buf.remaining() != expected_remaining {
+      return Err(BinDecodeError::failure("unexpected chat message length"));
+    }
+    Ok(Self { player_id, message })
+  }
+}
+
+impl BinEncode for PlayerChatMessage {
+  fn encode<T: BufMut>(&self, buf: &mut T) {
+    buf.put_u8(self.player_id);
+    buf.put_u16_le(self.message.encode_len() as u16 + 1);
+    self.message.encode(buf)
+  }
+}
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct TimeSlotAck {
@@ -429,9 +461,8 @@ fn test_record() {
 
 #[test]
 fn test_record_iter() {
-  let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
+  let bytes = flo_util::sample_bytes!("replay", "grubby_happy.w3g");
   let mut buf = bytes.as_slice();
-  buf.get_tag(crate::constants::SIGNATURE).unwrap();
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
   let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
