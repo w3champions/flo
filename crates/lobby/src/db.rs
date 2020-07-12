@@ -1,1 +1,1 @@
-pub use bs_diesel_utils::DbConn;
+pub use bs_diesel_utils::{DbConn, Executor, ExecutorRef};

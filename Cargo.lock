@@ -117,6 +117,17 @@ checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 
 [[package]]
 name = "bigdecimal"
+version = "0.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f73d2953c59932d4a0ac941bb5ccca17e324ddae9aa487353dc22f0aade2c4b4"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "bigdecimal"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1374191e2dd25f9ae02e3aa95041ed5d747fc77b3c102b49fe2dd9a8117a6244"
@@ -137,7 +148,7 @@ name = "bs-diesel-utils"
 version = "0.1.0"
 source = "git+https://github.com/BSpaceinc/bs-diesel-utils.git#bcce89808f9009d7c36bd4df38da4b7ca482a122"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "bs-diesel-utils-codegen",
  "diesel",
  "dotenv",
@@ -417,7 +428,7 @@ version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2de9deab977a153492a1468d1b1c0662c1cf39e5ea87d0c060ecd59ef18d8c"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "bitflags",
  "byteorder",
  "chrono",
@@ -441,6 +452,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "doc-comment"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "dotenv"
@@ -599,12 +616,17 @@ dependencies = [
  "diesel",
  "flo-grpc",
  "flo-w3gs",
+ "futures 0.3.5",
  "jsonwebtoken",
  "lazy_static",
+ "s2-grpc-utils",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "tonic",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]
@@ -632,6 +654,10 @@ dependencies = [
  "serde_json",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "flo-node"
+version = "0.1.0"
 
 [[package]]
 name = "flo-platform"
@@ -1824,6 +1850,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
+name = "s2-grpc-utils"
+version = "0.1.0"
+source = "git+https://github.com/Ventmere/s2-grpc-utils.git#eeb88a5080313cb68e03d15067335303aa950cb6"
+dependencies = [
+ "bigdecimal 0.0.15",
+ "chrono",
+ "prost-types",
+ "s2-grpc-utils-derive",
+ "serde",
+ "serde_json",
+ "snafu",
+]
+
+[[package]]
+name = "s2-grpc-utils-derive"
+version = "0.1.0"
+source = "git+https://github.com/Ventmere/s2-grpc-utils.git#eeb88a5080313cb68e03d15067335303aa950cb6"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "scheduled-thread-pool"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1943,6 +1994,27 @@ name = "smallvec"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7cb5678e1615754284ec264d9bb5b4c27d2018577fd90ac0ceb578591ed5ee4"
+
+[[package]]
+name = "snafu"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f5aed652511f5c9123cf2afbe9c244c29db6effa2abb05c866e965c82405ce"
+dependencies = [
+ "doc-comment",
+ "snafu-derive",
+]
+
+[[package]]
+name = "snafu-derive"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebf8f7d5720104a9df0f7076a8682024e958bba0fe9848767bb44f251f3648e9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "socket2"

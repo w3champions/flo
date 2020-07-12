@@ -13,6 +13,7 @@ members = [
   "./crates/config",
   "./crates/w3storage",
   "./crates/w3replay",
+  "./crates/node",
 
   "./binaries/flo-lobby-service",
   "./binaries/flo-map-checksum-dump",

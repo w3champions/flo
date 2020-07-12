@@ -1,8 +1,4 @@
-use serde::{Deserialize, Serialize};
+pub mod db;
+mod types;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Node {
-  pub name: String,
-  pub location: String,
-  pub ip_addr: String,
-}
+pub use types::*;

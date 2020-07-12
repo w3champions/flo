@@ -1,13 +1,14 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use s2_grpc_utils::S2ProtoUnpack;
 use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::player::PlayerSource;
+use crate::player::{Player, PlayerSource};
 use crate::schema::player;
 
-pub fn get(conn: &DbConn, id: i32) -> Result<Row> {
+pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
   use player::dsl;
   player::table
     .find(id)
@@ -17,7 +18,7 @@ pub fn get(conn: &DbConn, id: i32) -> Result<Row> {
     .map_err(Into::into)
 }
 
-pub fn get_by_source_id(conn: &DbConn, source_id: &str) -> Result<Option<Row>> {
+pub fn get_by_source_id(conn: &DbConn, source_id: &str) -> Result<Option<Player>> {
   use player::dsl;
   player::table
     .filter(dsl::source_id.eq(source_id))
@@ -26,8 +27,9 @@ pub fn get_by_source_id(conn: &DbConn, source_id: &str) -> Result<Option<Row>> {
     .map_err(Into::into)
 }
 
-#[derive(Debug, Insertable)]
+#[derive(Debug, Insertable, S2ProtoUnpack)]
 #[table_name = "player"]
+#[s2_grpc(message_type = "flo_grpc::auth::UpdateAndGetPlayerRequest")]
 pub struct UpsertPlayer {
   pub name: String,
   pub source: PlayerSource,
@@ -36,7 +38,7 @@ pub struct UpsertPlayer {
   pub realm: Option<String>,
 }
 
-pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Row> {
+pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Player> {
   use player::dsl;
   diesel::insert_into(player::table)
     .values(data)
@@ -49,18 +51,6 @@ pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Row> {
     })
     .get_result(conn)
     .map_err(Into::into)
-}
-
-#[derive(Debug, Queryable)]
-pub struct Row {
-  pub id: i32,
-  pub name: String,
-  pub source: PlayerSource,
-  pub source_id: String,
-  pub source_state: Option<Value>,
-  pub realm: Option<String>,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Insertable)]
