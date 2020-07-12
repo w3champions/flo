@@ -347,7 +347,7 @@ async fn run_lobby(
         use tokio::time::{delay_until, Instant};
         let mut t = Instant::now();
         loop {
-          delay_until(t + Duration::from_millis(100)).await;
+          delay_until(t + Duration::from_millis(25)).await;
           let now = Instant::now();
           let d = now - t;
           t = now;
@@ -386,7 +386,7 @@ async fn run_lobby(
               }
 
               let p = IncomingAction2(TimeSlot {
-                time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
+                time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16) * 4,
                 actions: vec![PlayerAction {
                   player_id: 2,
                   data: last,
@@ -395,7 +395,7 @@ async fn run_lobby(
               sender.send(Packet::with_payload(p).unwrap()).await.unwrap();
             } else {
               let p = IncomingAction(TimeSlot {
-                time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16),
+                time_increment_ms: (d.subsec_millis() as u16 + d.as_secs() as u16) * 4,
                 actions: items
                   .into_iter()
                   .map(|data| PlayerAction { player_id: 2, data })

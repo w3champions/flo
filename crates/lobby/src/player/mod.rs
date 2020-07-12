@@ -1,4 +1,4 @@
-mod db;
+pub mod db;
 mod service;
 mod token;
 mod types;

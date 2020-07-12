@@ -40,27 +40,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/connect.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/game/service.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/game/state.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/node/db.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/node/types.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lobby/src/player/service.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/flo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/flo.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/config.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/db.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/poc_host.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lan/src/bin/poc_host.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/replay.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lan/src/bin/replay.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/error.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/service.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/service.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/state.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/state.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/types.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/map.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/map.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/db.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/token.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/token.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/types.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -149,9 +137,9 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test test_inspect2" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+    <configuration name="Run replay" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
-      <option name="command" value="test --package flo-w3replay --lib test_inspect2 -- --exact" />
+      <option name="command" value="run --package flo-lan --bin replay" />
       <option name="allFeatures" value="false" />
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
@@ -161,9 +149,9 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test test_open_storage" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+    <configuration name="Test test_inspect2" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
-      <option name="command" value="test --package flo-w3map --lib test_open_storage -- --exact" />
+      <option name="command" value="test --package flo-w3replay --lib test_inspect2 -- --exact" />
       <option name="allFeatures" value="false" />
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
@@ -199,10 +187,10 @@
     </configuration>
     <list>
       <item itemvalue="Cargo Command.check [flo]" />
+      <item itemvalue="Cargo Command.clean [flo]" />
+      <item itemvalue="Cargo Command.Run replay" />
       <item itemvalue="Cargo Command.Test test_inspect2" />
       <item itemvalue="Cargo Command.Run poc_host" />
-      <item itemvalue="Cargo Command.Test test_open_storage" />
-      <item itemvalue="Cargo Command.clean [flo]" />
     </list>
     <recent_temporary>
       <list>
@@ -321,7 +309,14 @@
       <option name="project" value="LOCAL" />
       <updated>1594491876822</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="feat: lobby impl WIP">
+      <created>1594526244265</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1594526244265</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -386,7 +381,8 @@
     <MESSAGE value="feat: Replay records." />
     <MESSAGE value="feat: Testing stream replays." />
     <MESSAGE value="feat: lobby: game, map and player" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: lobby: game, map and player" />
+    <MESSAGE value="feat: lobby impl WIP" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: lobby impl WIP" />
   </component>
   <component name="WindowStateProjectService">
     <state x="724" y="276" key="#Inspections" timestamp="1593760914337">
@@ -418,29 +414,29 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="834" y="522" key="#com.intellij.refactoring.move.MoveHandler.SelectRefactoringDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593577951587" />
-    <state width="2151" height="353" key="GridCell.Tab.0.bottom" timestamp="1594525961367">
+    <state width="2151" height="353" key="GridCell.Tab.0.bottom" timestamp="1594584428548">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.bottom/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510860" />
-    <state width="2151" height="353" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594525961367" />
+    <state width="2151" height="353" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594584428548" />
     <state width="2151" height="424" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="353" key="GridCell.Tab.0.center" timestamp="1594525961367">
+    <state width="2151" height="353" key="GridCell.Tab.0.center" timestamp="1594584428548">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.center/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="353" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594525961367" />
+    <state width="2151" height="353" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594584428548" />
     <state width="2151" height="424" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="353" key="GridCell.Tab.0.left" timestamp="1594525961367">
+    <state width="2151" height="353" key="GridCell.Tab.0.left" timestamp="1594584428548">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.left/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510858" />
-    <state width="2151" height="353" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594525961367" />
+    <state width="2151" height="353" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594584428548" />
     <state width="2151" height="424" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="353" key="GridCell.Tab.0.right" timestamp="1594525961367">
+    <state width="2151" height="353" key="GridCell.Tab.0.right" timestamp="1594584428548">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.right/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="353" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594525961367" />
+    <state width="2151" height="353" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594584428548" />
     <state width="2151" height="424" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
     <state x="946" y="318" key="RollbackChangesDialog" timestamp="1594214894599">
       <screen x="0" y="0" width="2194" height="1194" />
@@ -455,10 +451,10 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="498" height="446" key="SwitcherDM/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593920003585" />
-    <state x="690" y="330" key="Vcs.Push.Dialog.v2" timestamp="1594273971763">
+    <state x="690" y="330" key="Vcs.Push.Dialog.v2" timestamp="1594526250673">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="690" y="330" key="Vcs.Push.Dialog.v2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594273971763" />
+    <state x="690" y="330" key="Vcs.Push.Dialog.v2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594526250673" />
     <state x="3945" y="138" width="1994" height="994" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog" timestamp="1593438987071">
       <screen x="3840" y="0" width="2194" height="1194" />
     </state>
@@ -481,10 +477,10 @@
     </state>
     <state x="676" y="184" width="598" height="735" key="find.popup/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593209314658" />
     <state x="747" y="182" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594272815652" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1594525900242">
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1594584428261">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594525900242" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1594584428261" />
     <state x="4594" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593444445589" />
     <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1594302911704">
       <screen x="0" y="0" width="2194" height="1194" />

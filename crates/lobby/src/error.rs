@@ -13,6 +13,8 @@ pub enum Error {
   GameNotDeletable,
   #[error("invalid game data, please re-create")]
   GameDataInvalid,
+  #[error("this map has no player slot")]
+  MapHasNoPlayer,
   #[error("db error: {0}")]
   Db(#[from] bs_diesel_utils::result::DbError),
   #[error("json: {0}")]

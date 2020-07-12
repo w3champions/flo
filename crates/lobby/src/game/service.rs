@@ -56,6 +56,8 @@ impl FloLobby for FloLobbyService {
     &self,
     request: Request<CreateGameRequest>,
   ) -> Result<Response<CreateGameReply>, Status> {
+    let params =
+      crate::game::db::CreateGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
     unimplemented!()
   }
 

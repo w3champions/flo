@@ -7,6 +7,9 @@ use crate::map::Map;
 use crate::node::NodeRef;
 use crate::player::PlayerRef;
 
+#[derive(Debug, Clone, Copy)]
+pub struct GameId(pub i32);
+
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
 #[s2_grpc(message_type = "flo_grpc::game::Game")]
 pub struct Game {
@@ -21,7 +24,7 @@ pub struct Game {
   pub is_live: bool,
   pub num_players: i32,
   pub max_players: i32,
-  pub created_by: PlayerRef,
+  pub created_by: Option<PlayerRef>,
   pub started_at: Option<DateTime<Utc>>,
   pub ended_at: Option<DateTime<Utc>>,
   pub created_at: DateTime<Utc>,

@@ -6,8 +6,9 @@ use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::game::{GameStatus, Slot};
+use crate::game::{Computer, GameStatus, Race, Slot, SlotSettings, SlotStatus};
 use crate::map::Map;
+use crate::player::PlayerRef;
 use crate::schema::game;
 
 #[derive(Debug, Queryable)]
@@ -21,7 +22,7 @@ pub struct Row {
   pub secret: Option<i32>,
   pub is_live: bool,
   pub max_players: i32,
-  pub created_by: i32,
+  pub created_by: Option<i32>,
   pub started_at: Option<DateTime<Utc>>,
   pub ended_at: Option<DateTime<Utc>>,
   pub meta: Value,
@@ -137,7 +138,8 @@ pub fn delete(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()
   Ok(())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::lobby::CreateGameRequest")]
 pub struct CreateGameParams {
   pub name: String,
   pub map: Map,
@@ -145,26 +147,86 @@ pub struct CreateGameParams {
   pub is_live: bool,
 }
 
-pub fn create(conn: &DbConn, params: CreateGameParams, created_by: Option<i32>) -> Result<Row> {
-  let num_players = 1;
-  let max_players = params.map.players.len() as i32;
+pub fn create(
+  conn: &DbConn,
+  params: CreateGameParams,
+  created_by: Option<i32>,
+) -> Result<(Row, Meta)> {
+  let max_players = params.map.players.len();
 
-  // let slots = Vec::with_capacity(24);
-  // for i in 0..24 {
-  //   slots.push(Slot {
-  //
-  //   });
-  // }
-  //
-  // let meta = Meta {
-  //   map: params.map,
-  // };
-  //
-  // let insert = Insert {
-  //   name: &params.name,
-  //   map_name: &params.map.name,
-  // }
-  unimplemented!()
+  if max_players == 0 {
+    return Err(Error::MapHasNoPlayer);
+  }
+
+  let num_players = if created_by.is_some() { 1 } else { 0 };
+
+  let creator = created_by
+    .clone()
+    .map(|id| crate::player::db::get(conn, id))
+    .transpose()?;
+
+  let mut slots = Vec::with_capacity(24);
+  // Players
+  for i in 0..max_players {
+    slots.push(Slot {
+      player: None,
+      player_id: None,
+      settings: SlotSettings {
+        team: 0,
+        color: 0,
+        computer: Computer::Easy,
+        handicap: 100,
+        status: SlotStatus::Open,
+        race: Race::Human,
+      },
+    });
+  }
+
+  if let Some(player) = creator {
+    let player = PlayerRef::from(player);
+    let player_id = player.id;
+    slots[0].player = player.into();
+    slots[0].player_id = (player_id as u32).into();
+  }
+
+  // Referees
+  for i in max_players..24 {
+    slots.push(Slot {
+      player: None,
+      player_id: None,
+      settings: SlotSettings {
+        team: 24,
+        color: 0,
+        computer: Computer::Easy,
+        handicap: 100,
+        status: SlotStatus::Open,
+        race: Race::Human,
+      },
+    });
+  }
+
+  let meta = Meta {
+    map: params.map,
+    slots,
+  };
+
+  let meta_value = serde_json::to_value(&meta)?;
+
+  let insert = Insert {
+    name: &params.name,
+    map_name: &meta.map.name,
+    is_private: params.is_private,
+    is_live: params.is_live,
+    max_players: max_players as i32,
+    created_by,
+    meta: meta_value,
+  };
+
+  let row = diesel::insert_into(game::table)
+    .values(&insert)
+    .get_result(conn)?;
+
+  Ok((row, meta))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -181,7 +243,7 @@ pub struct Insert<'a> {
   pub is_private: bool,
   pub is_live: bool,
   pub max_players: i32,
-  pub created_by: i32,
+  pub created_by: Option<i32>,
   pub meta: Value,
 }
 

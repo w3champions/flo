@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::connect::NotificationSender;
-use crate::player::PlayerId;
+use crate::game::GameId;
 
 #[derive(Debug)]
 pub struct GameState {
@@ -10,12 +10,12 @@ pub struct GameState {
 
 #[derive(Debug)]
 pub struct GameStateSnapshot {
-  pub players: Vec<PlayerId>,
+  pub players: Vec<i32>,
 }
 
 #[derive(Debug)]
 pub struct GameStatePlayer {
-  pub player: PlayerId,
+  pub player: i32,
   pub sender: NotificationSender,
 }
 
@@ -28,3 +28,9 @@ pub struct GameStateHandle;
 
 #[derive(Debug, Clone)]
 pub struct StorageHandle;
+
+impl StorageHandle {
+  pub async fn register_game(&self, id: GameId) -> GameStateHandle {
+    GameStateHandle
+  }
+}

@@ -43,6 +43,3 @@ impl From<Player> for PlayerRef {
     }
   }
 }
-
-#[derive(Debug, Clone, Copy)]
-pub struct PlayerId(i32);

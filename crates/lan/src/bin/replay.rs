@@ -30,11 +30,11 @@ async fn main() {
   tracing::info!("listening on {}", listener.local_addr());
   let port = listener.port();
 
-  let mut game_info = GameInfo::from_replay(flo_util::sample_path!("replay", "local.w3g")).unwrap();
+  let mut game_info = GameInfo::from_replay(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
   game_info.set_port(port);
-  // game_info.data.settings.map_xoro = 3389385288;
+  game_info.data.settings.map_xoro = 3389385288;
 
-  let (inspect, rest) = W3Replay::inspect(flo_util::sample_path!("replay", "local.w3g")).unwrap();
+  let (inspect, rest) = W3Replay::inspect(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
   let inspect = Arc::new(inspect);
 
   // dbg!(&inspect);
@@ -105,7 +105,7 @@ async fn run_lobby(
     .slots
     .slots()
     .iter()
-    .find(|s| s.team == 24)
+    .find(|s| s.team == 0)
     .unwrap()
     .player_id;
 
@@ -114,7 +114,7 @@ async fn run_lobby(
     .iter()
     .filter(|p| p.id != player_id)
     .collect();
-  players.push(&inspect.game.host_player_info);
+  // players.push(&inspect.game.host_player_info);
 
   let mut profiles = HashMap::new();
 
@@ -354,7 +354,7 @@ async fn run_lobby(
   use std::sync::atomic::Ordering;
   use std::sync::Mutex;
   use tokio::sync::mpsc;
-  let (tx, mut rx) = mpsc::channel(5);
+  let (tx, mut rx) = mpsc::channel(500);
   let action_q: Arc<Mutex<Vec<Bytes>>> = Arc::new(Mutex::new(vec![]));
   let mut all_players: Vec<_> = inspect.players.iter().map(|p| p.id).collect();
   all_players.push(inspect.game.host_player_info.id);
@@ -420,16 +420,17 @@ async fn run_lobby(
               //   .unwrap();
             }
             Record::TimeSlot(ref f) => {
-              // tracing::debug!(
-              //   "TimeSlot: ms = {}, actions = {}",
-              //   f.time_increment_ms,
-              //   f.actions.len()
-              // );
+              tracing::debug!(
+                "TimeSlot: ms = {}, actions = {}",
+                f.time_increment_ms,
+                f.actions.len()
+              );
 
               if f.time_increment_ms > 0 {
                 ms = ms + (f.time_increment_ms as u64);
-                delay_until(t + Duration::from_millis(ms / 8)).await;
+                delay_until(t + Duration::from_millis(ms)).await;
               }
+
               sender
                 .send(
                   Packet::with_payload(IncomingAction(TimeSlot {
@@ -533,6 +534,7 @@ async fn run_lobby(
     tokio::select! {
       r = transport.recv() => {
         let p = r?;
+        // dbg!(&p);
         match p.type_id() {
           LeaveReq::PACKET_TYPE_ID => {
             let req: LeaveReq = p.decode_simple_payload()?;
@@ -575,7 +577,7 @@ async fn run_lobby(
           PacketTypeId::OutgoingKeepAlive => {
             let req: OutgoingKeepAlive = p.decode_simple_payload()?;
             let checksum = checksum.load(Ordering::SeqCst);
-            // tracing::debug!("ack: {:?}", req);
+            tracing::debug!("ack: {:?}", req);
             // if checksum != req.checksum {
             //   tracing::error!("desync: 0x{:x} != 0x{:x}", req.checksum, checksum);
             //   break;
