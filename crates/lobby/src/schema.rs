@@ -12,6 +12,7 @@ table! {
         created_by -> Nullable<Int4>,
         started_at -> Nullable<Timestamptz>,
         ended_at -> Nullable<Timestamptz>,
+        slots -> Jsonb,
         meta -> Jsonb,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,

@@ -6,29 +6,11 @@ use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::game::{Computer, GameStatus, Race, Slot, SlotSettings, SlotStatus};
+use crate::game::{Computer, Game, GameStatus, Race, Slot, SlotSettings, SlotStatus, Slots};
 use crate::map::Map;
 use crate::player::PlayerRef;
 use crate::schema::game;
-
-#[derive(Debug, Queryable)]
-pub struct Row {
-  pub id: i32,
-  pub name: String,
-  pub map_name: String,
-  pub status: GameStatus,
-  pub node: Option<Value>,
-  pub is_private: bool,
-  pub secret: Option<i32>,
-  pub is_live: bool,
-  pub max_players: i32,
-  pub created_by: Option<i32>,
-  pub started_at: Option<DateTime<Utc>>,
-  pub ended_at: Option<DateTime<Utc>>,
-  pub meta: Value,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
-}
+use crate::state::LockedGameState;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Row> {
   let row = game::table
@@ -141,73 +123,28 @@ pub fn delete(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()
 #[derive(Debug, Deserialize, S2ProtoUnpack)]
 #[s2_grpc(message_type = "flo_grpc::lobby::CreateGameRequest")]
 pub struct CreateGameParams {
+  pub player_id: i32,
   pub name: String,
   pub map: Map,
   pub is_private: bool,
   pub is_live: bool,
 }
 
-pub fn create(
-  conn: &DbConn,
-  params: CreateGameParams,
-  created_by: Option<i32>,
-) -> Result<(Row, Meta)> {
+/// Creates a game, make the creator as the first player
+pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
   let max_players = params.map.players.len();
 
   if max_players == 0 {
     return Err(Error::MapHasNoPlayer);
   }
 
-  let num_players = if created_by.is_some() { 1 } else { 0 };
-
-  let creator = created_by
-    .clone()
-    .map(|id| crate::player::db::get(conn, id))
-    .transpose()?;
-
-  let mut slots = Vec::with_capacity(24);
-  // Players
-  for i in 0..max_players {
-    slots.push(Slot {
-      player: None,
-      player_id: None,
-      settings: SlotSettings {
-        team: 0,
-        color: 0,
-        computer: Computer::Easy,
-        handicap: 100,
-        status: SlotStatus::Open,
-        race: Race::Human,
-      },
-    });
-  }
-
-  if let Some(player) = creator {
-    let player = PlayerRef::from(player);
-    let player_id = player.id;
-    slots[0].player = player.into();
-    slots[0].player_id = (player_id as u32).into();
-  }
-
-  // Referees
-  for i in max_players..24 {
-    slots.push(Slot {
-      player: None,
-      player_id: None,
-      settings: SlotSettings {
-        team: 24,
-        color: 0,
-        computer: Computer::Easy,
-        handicap: 100,
-        status: SlotStatus::Open,
-        race: Race::Human,
-      },
-    });
-  }
+  let player = crate::player::db::get_ref(conn, params.player_id)?;
+  let mut slots = Slots::new(max_players);
+  slots.join(&player);
 
   let meta = Meta {
     map: params.map,
-    slots,
+    created_by: player.into(),
   };
 
   let meta_value = serde_json::to_value(&meta)?;
@@ -218,21 +155,155 @@ pub fn create(
     is_private: params.is_private,
     is_live: params.is_live,
     max_players: max_players as i32,
-    created_by,
+    created_by: Some(params.player_id),
+    slots: serde_json::to_value(&slots as &[Slot])?,
     meta: meta_value,
   };
 
-  let row = diesel::insert_into(game::table)
+  let row: Row = diesel::insert_into(game::table)
     .values(&insert)
     .get_result(conn)?;
 
-  Ok((row, meta))
+  Ok(row.into_game(meta, slots.into_inner())?)
+}
+
+#[derive(Debug, Deserialize, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::lobby::JoinGameRequest")]
+pub struct JoinGameParams {
+  pub game_id: i32,
+  pub player_id: i32,
+}
+
+/// Adds a player into a game
+pub fn join(conn: &DbConn, params: JoinGameParams) -> Result<Vec<Slot>> {
+  let mut slots = get_slots(conn, params.game_id)?;
+
+  if slots.is_full() {
+    return Err(Error::GameFull);
+  }
+
+  let player = crate::player::db::get(conn, params.player_id)?;
+  let player = PlayerRef::from(player);
+
+  slots.join(&player);
+  update_slots(conn, params.game_id, &slots)?;
+
+  Ok(slots.into_inner())
+}
+
+#[derive(Debug, Deserialize, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::lobby::LeaveGameRequest")]
+pub struct LeaveGameParams {
+  pub game_id: i32,
+  pub player_id: i32,
+}
+
+/// Removes a player from a game
+pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<Vec<Slot>> {
+  let mut slots = get_slots(conn, params.game_id)?;
+  if slots.release_player_slot(params.player_id) {
+    update_slots(conn, params.game_id, &slots)?
+  }
+  Ok(slots.into_inner())
+}
+
+#[derive(Debug, Deserialize, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::lobby::UpdateGameSlotSettingsRequest")]
+pub struct UpdateGameSlotSettingsParams {
+  pub game_id: i32,
+  pub player_id: i32,
+  pub settings: SlotSettings,
+}
+
+pub fn update_slot_settings(
+  conn: &DbConn,
+  params: UpdateGameSlotSettingsParams,
+) -> Result<Vec<Slot>> {
+  let mut slots = get_slots(conn, params.game_id)?;
+  if slots.update_player_slot(params.player_id, &params.settings) {
+    update_slots(conn, params.game_id, &slots)?
+  }
+  Ok(slots.into_inner())
+}
+
+pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
+  let row: Row = game::table
+    .find(id)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+  let meta: Meta = serde_json::from_value(row.meta.clone())?;
+  let slots: Vec<Slot> = serde_json::from_value(row.slots.clone())?;
+  Ok(row.into_game(meta, slots)?)
+}
+
+fn get_slots(conn: &DbConn, id: i32) -> Result<Slots> {
+  use game::dsl;
+  let value: Value = game::table
+    .select(dsl::slots)
+    .find(id)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+  Ok(Slots::from_vec(serde_json::from_value(value)?))
+}
+
+fn update_slots(conn: &DbConn, id: i32, slots: &[Slot]) -> Result<()> {
+  use game::dsl;
+  diesel::update(game::table.find(id))
+    .set(dsl::slots.eq(serde_json::to_value(slots)?))
+    .execute(conn)?;
+  Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
   pub map: Map,
-  pub slots: Vec<Slot>,
+  pub created_by: Option<PlayerRef>,
+}
+
+#[derive(Debug, Queryable)]
+pub struct Row {
+  pub id: i32,
+  pub name: String,
+  pub map_name: String,
+  pub status: GameStatus,
+  pub node: Option<Value>,
+  pub is_private: bool,
+  pub secret: Option<i32>,
+  pub is_live: bool,
+  pub max_players: i32,
+  pub created_by: Option<i32>,
+  pub started_at: Option<DateTime<Utc>>,
+  pub ended_at: Option<DateTime<Utc>>,
+  pub slots: Value,
+  pub meta: Value,
+  pub created_at: DateTime<Utc>,
+  pub updated_at: DateTime<Utc>,
+}
+
+impl Row {
+  pub(crate) fn into_game(self, meta: Meta, slots: Vec<Slot>) -> Result<Game> {
+    let num_players = slots.iter().filter(|s| s.player.is_some()).count() as i32;
+    Ok(Game {
+      id: self.id,
+      name: self.name,
+      status: self.status,
+      map: meta.map,
+      slots,
+      node: self.node.map(serde_json::from_value).transpose()?,
+      is_private: self.is_private,
+      secret: self.secret,
+      is_live: self.is_live,
+      num_players,
+      max_players: self.max_players,
+      created_by: meta.created_by,
+      started_at: self.started_at,
+      ended_at: self.ended_at,
+      created_at: self.created_at,
+      updated_at: self.updated_at,
+    })
+  }
 }
 
 #[derive(Debug, Insertable)]
@@ -244,14 +315,6 @@ pub struct Insert<'a> {
   pub is_live: bool,
   pub max_players: i32,
   pub created_by: Option<i32>,
-  pub meta: Value,
-}
-
-#[derive(Debug, AsChangeset)]
-#[table_name = "game"]
-#[changeset_options(treat_none_as_null = "true")]
-pub struct Update<'a> {
-  pub name: &'a str,
-  pub map_name: &'a str,
+  pub slots: Value,
   pub meta: Value,
 }

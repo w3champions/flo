@@ -26,6 +26,7 @@ create table game (
     created_by integer,
     started_at timestamp with time zone,
     ended_at timestamp with time zone,
+    slots jsonb not null,
     meta jsonb not null,
     created_at timestamp with time zone default now() not null,
     updated_at timestamp with time zone default now() not null

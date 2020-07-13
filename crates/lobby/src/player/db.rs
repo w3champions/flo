@@ -5,13 +5,24 @@ use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::player::{Player, PlayerSource};
+use crate::player::{Player, PlayerRef, PlayerSource};
 use crate::schema::player;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
   use player::dsl;
   player::table
     .find(id)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::PlayerNotFound)
+    .map_err(Into::into)
+}
+
+pub fn get_ref(conn: &DbConn, id: i32) -> Result<PlayerRef> {
+  use player::dsl;
+  player::table
+    .find(id)
+    .select((dsl::id, dsl::name, dsl::source, dsl::realm))
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::PlayerNotFound)

@@ -1,5 +1,6 @@
 mod config;
 mod connect;
+mod state;
 
 #[macro_use]
 extern crate diesel;

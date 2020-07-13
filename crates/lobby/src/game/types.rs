@@ -3,12 +3,10 @@ use chrono::{DateTime, Utc};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
+use crate::game::db::Row;
 use crate::map::Map;
 use crate::node::NodeRef;
 use crate::player::PlayerRef;
-
-#[derive(Debug, Clone, Copy)]
-pub struct GameId(pub i32);
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
 #[s2_grpc(message_type = "flo_grpc::game::Game")]
@@ -41,15 +39,23 @@ pub enum GameStatus {
   Paused = 4,
 }
 
-#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type = "flo_grpc::game::Slot")]
 pub struct Slot {
   pub player: Option<PlayerRef>,
-  pub player_id: Option<u32>,
   pub settings: SlotSettings,
 }
 
-#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+impl Default for Slot {
+  fn default() -> Self {
+    Slot {
+      player: None,
+      settings: Default::default(),
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type = "flo_grpc::game::SlotSettings")]
 pub struct SlotSettings {
   pub team: u32,
@@ -58,6 +64,19 @@ pub struct SlotSettings {
   pub handicap: u32,
   pub status: SlotStatus,
   pub race: Race,
+}
+
+impl Default for SlotSettings {
+  fn default() -> Self {
+    SlotSettings {
+      team: 0,
+      color: 0,
+      computer: Computer::Easy,
+      handicap: 100,
+      status: SlotStatus::Open,
+      race: Race::Human,
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]

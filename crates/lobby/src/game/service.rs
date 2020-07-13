@@ -8,7 +8,7 @@ use tonic::{Request, Response, Status};
 
 use crate::db::ExecutorRef;
 use crate::error::{Error, Result};
-use crate::game::state::StorageHandle;
+use crate::state::StorageHandle;
 
 pub struct FloLobbyService {
   db: ExecutorRef,
@@ -58,13 +58,58 @@ impl FloLobby for FloLobbyService {
   ) -> Result<Response<CreateGameReply>, Status> {
     let params =
       crate::game::db::CreateGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
-    unimplemented!()
+    let player_id = params.player_id;
+    let game = self
+      .db
+      .exec(move |conn| crate::game::db::create(conn, params))
+      .await
+      .map_err(|e| Status::internal(e.to_string()))?;
+    self
+      .state_storage
+      .register_game(game.id, &[player_id])
+      .await?;
+    Ok(Response::new(CreateGameReply {
+      game: game.pack().map_err(Status::internal)?,
+    }))
   }
 
   async fn join_game(
     &self,
     request: Request<JoinGameRequest>,
   ) -> Result<Response<JoinGameReply>, Status> {
+    let params =
+      crate::game::db::JoinGameParams::unpack(request.into_inner()).map_err(Error::from)?;
+    let player_id = params.player_id;
+    let mut player_state = self.state_storage.lock_player_state(player_id).await;
+
+    if player_state.joined_game_id().is_some() {
+      return Err(Error::MultiJoin.into());
+    }
+
+    let mut state = self
+      .state_storage
+      .lock_game_state(params.game_id)
+      .await
+      .ok_or_else(|| Error::GameNotFound)?;
+    let game = self
+      .db
+      .exec(move |conn| {
+        let id = params.game_id;
+        crate::game::db::join(conn, params)?;
+        crate::game::db::get_full(conn, id)
+      })
+      .await
+      .map_err(Error::from)?;
+
+    player_state.join_game(game.id);
+    state.add_player(player_id);
+
+    Ok(Response::new(JoinGameReply {
+      game: game.pack().map_err(Error::from)?,
+    }))
+  }
+
+  async fn leave_game(&self, request: Request<LeaveGameRequest>) -> Result<Response<()>, Status> {
     unimplemented!()
   }
 

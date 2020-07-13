@@ -24,7 +24,7 @@ pub enum PlayerSource {
   BNet = 0,
 }
 
-#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone, Queryable)]
 #[s2_grpc(message_type = "flo_grpc::player::PlayerRef")]
 pub struct PlayerRef {
   pub id: i32,
