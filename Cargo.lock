@@ -614,6 +614,7 @@ dependencies = [
  "bs-diesel-utils",
  "chrono",
  "diesel",
+ "dotenv",
  "flo-grpc",
  "flo-w3gs",
  "futures 0.3.5",

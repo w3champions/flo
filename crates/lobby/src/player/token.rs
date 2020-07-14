@@ -42,3 +42,11 @@ pub fn validate_player_token(token: &str) -> Result<PlayerToken> {
       _ => e.into(),
     })
 }
+
+#[test]
+fn test_player_token() {
+  dotenv::dotenv().unwrap();
+  let token = create_player_token(100).unwrap();
+  let token = validate_player_token(&token).unwrap();
+  dbg!(token);
+}

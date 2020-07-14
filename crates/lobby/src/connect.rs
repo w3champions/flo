@@ -22,7 +22,6 @@ pub struct NotificationStream {
 pub struct NotificationSender {
   tx: Arc<Mutex<Tx>>,
 }
-
 pub struct InitialState {
   pub me: PlayerRef,
   pub joined_game: Option<Game>,

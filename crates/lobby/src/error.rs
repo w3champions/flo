@@ -20,6 +20,8 @@ pub enum Error {
   MapHasNoPlayer,
   #[error("you can only join one game at a time")]
   MultiJoin,
+  #[error("player not in game")]
+  PlayerNotInGame,
   #[error("db error: {0}")]
   Db(#[from] bs_diesel_utils::result::DbError),
   #[error("json: {0}")]

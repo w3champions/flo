@@ -8,6 +8,7 @@ use tonic::{Request, Response, Status};
 
 use crate::db::ExecutorRef;
 use crate::error::{Error, Result};
+use crate::game::db::LeaveGameParams;
 use crate::state::StorageHandle;
 
 pub struct FloLobbyService {
@@ -67,7 +68,7 @@ impl FloLobby for FloLobbyService {
     self
       .state_storage
       .register_game(game.id, &[player_id])
-      .await?;
+      .await;
     Ok(Response::new(CreateGameReply {
       game: game.pack().map_err(Status::internal)?,
     }))
@@ -110,17 +111,99 @@ impl FloLobby for FloLobbyService {
   }
 
   async fn leave_game(&self, request: Request<LeaveGameRequest>) -> Result<Response<()>, Status> {
-    unimplemented!()
+    let params =
+      crate::game::db::LeaveGameParams::unpack(request.into_inner()).map_err(Error::from)?;
+    let player_id = params.player_id;
+    let mut player_state = self.state_storage.lock_player_state(player_id).await;
+
+    let player_state_game_id = if let Some(id) = player_state.joined_game_id() {
+      id
+    } else {
+      return Ok(Response::new(()));
+    };
+
+    if player_state_game_id != params.game_id {
+      tracing::warn!("player joined game id mismatch: player_id = {}, player_state_game_id = {}, params.game_id = {}", 
+        player_id,
+        player_state_game_id,
+        params.game_id
+      );
+    }
+
+    let mut state = self
+      .state_storage
+      .lock_game_state(player_state_game_id)
+      .await
+      .ok_or_else(|| Error::GameNotFound)?;
+
+    self
+      .db
+      .exec(move |conn| {
+        crate::game::db::leave(
+          conn,
+          LeaveGameParams {
+            player_id,
+            game_id: player_state_game_id,
+          },
+        )
+      })
+      .await
+      .map_err(Error::from)?;
+
+    player_state.leave_game();
+    state.remove_player(player_id);
+
+    Ok(Response::new(()))
   }
 
   async fn update_game_slot_settings(
     &self,
     request: Request<UpdateGameSlotSettingsRequest>,
   ) -> Result<Response<UpdateGameSlotSettingsReply>, Status> {
-    unimplemented!()
+    let params = crate::game::db::UpdateGameSlotSettingsParams::unpack(request.into_inner())
+      .map_err(Error::from)?;
+
+    let mut state = self
+      .state_storage
+      .lock_game_state(params.game_id)
+      .await
+      .ok_or_else(|| Error::GameNotFound)?;
+
+    if !state.has_player(params.player_id) {
+      return Err(Error::PlayerNotInGame.into());
+    }
+
+    let slots = self
+      .db
+      .exec(move |conn| crate::game::db::update_slot_settings(conn, params))
+      .await
+      .map_err(Error::from)?;
+
+    Ok(Response::new(UpdateGameSlotSettingsReply {
+      slots: slots.pack().map_err(Error::from)?,
+    }))
   }
 
   async fn cancel_game(&self, request: Request<CancelGameRequest>) -> Result<Response<()>, Status> {
-    unimplemented!()
+    let req = request.into_inner();
+    let game_id = req.game_id;
+    let player_id = req.player_id;
+    let mut state = self
+      .state_storage
+      .lock_game_state(game_id)
+      .await
+      .ok_or_else(|| Error::GameNotFound)?;
+    self
+      .db
+      .exec(move |conn| crate::game::db::delete(conn, game_id, Some(player_id)))
+      .await
+      .map_err(Error::from)?;
+    for player in state.players() {
+      let mut player_state = self.state_storage.lock_player_state(player_id).await;
+      player_state.leave_game();
+    }
+    state.close();
+
+    Ok(Response::new(()))
   }
 }
