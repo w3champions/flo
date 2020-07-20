@@ -22,6 +22,8 @@ pub enum Error {
   MultiJoin,
   #[error("player not in game")]
   PlayerNotInGame,
+  #[error("invalid player source state")]
+  InvalidPlayerSourceState,
   #[error("db error: {0}")]
   Db(#[from] bs_diesel_utils::result::DbError),
   #[error("json: {0}")]
@@ -53,9 +55,20 @@ impl From<Error> for Status {
       | e @ Error::PlayerNotFound
       | e @ Error::MapHasNoPlayer
       | e @ Error::GameFull
-      | e @ Error::GameNotDeletable => Status::internal(e.to_string()),
+      | e @ Error::GameNotDeletable
+      | e @ Error::MultiJoin => Status::invalid_argument(e.to_string()),
       e @ Error::PlayerTokenExpired => Status::unauthenticated(e.to_string()),
+      Error::JsonWebToken(e) => Status::unauthenticated(e.to_string()),
       e => Status::internal(e.to_string()),
+    }
+  }
+}
+
+impl From<ExecutorError<diesel::result::Error>> for Error {
+  fn from(e: ExecutorError<diesel::result::Error>) -> Self {
+    match e {
+      ExecutorError::Task(e) => Error::Db(e.into()),
+      ExecutorError::Executor(e) => e.into(),
     }
   }
 }

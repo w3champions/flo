@@ -1,0 +1,77 @@
+syntax = "proto3";
+package flo_node;
+
+import "proto/common.proto";
+
+message PacketControllerConnect {
+  flo_common.Version lobby_version = 1;
+  bytes secret_key = 2;
+}
+
+message PacketControllerConnectAccept {
+  flo_common.Version node_version = 1;
+}
+
+message PacketControllerConnectReject {
+  ControllerConnectRejectReason reason = 1;
+}
+
+enum ControllerConnectRejectReason {
+  ConnectLobbyRejectReasonUnknown = 0;
+  ConnectLobbyRejectReasonControllerVersionTooOld = 1;
+  ConnectLobbyRejectReasonInvalidSecretKey = 2;
+}
+
+message NodeSession {
+  bytes id = 1;
+}
+
+message PacketCreatePlayerSession {
+  int32 player_id = 1;
+  string name = 2;
+  int32 player_source = 3;
+}
+
+message PacketCreatePlayerSessionReply {
+  NodeSession session = 1;
+}
+
+message PacketNodeDisconnect {
+  NodeDisconnectReason reason = 1;
+}
+
+enum NodeDisconnectReason {
+  NodeDisconnectReasonUnknown = 0;
+  NodeDisconnectReasonMulti = 1;
+  NodeDisconnectReasonMaintenance = 2;
+}
+
+message PacketPing {
+  uint32 ms = 1;
+}
+
+message PacketPong {
+  uint32 ms = 1;
+}
+
+message PacketCreateGame {
+  int32 game_id = 1;
+  bytes game_info = 2;
+}
+
+message PacketPlayerConnect {
+  flo_common.Version connect_version = 1;
+  bytes session_id = 2;
+}
+
+message PacketPlayerConnectAccept {
+  flo_common.Version node_version = 1;
+}
+
+message PacketPlayerConnectReject {
+  NodeDisconnectReason reason = 1;
+}
+
+message PacketJoinGame {
+  int32 game_id = 1;
+}

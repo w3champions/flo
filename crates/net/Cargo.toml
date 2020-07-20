@@ -1,0 +1,14 @@
+[package]
+name = "flo-net"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-util = { path = "../util" }
+
+prost = "0.6.1"
+tokio = { version = "0.2.21", features = ["tcp", "stream", "macros", "sync"] }
+
+[build-dependencies]
+prost-build = { version = "0.6.1" }

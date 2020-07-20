@@ -5,3 +5,8 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+flo-util = { path = "../util" }
+flo-w3gs = { path = "../w3gs" }
+flo-grpc = "0.1"
+
+bytes = "0.5.6"

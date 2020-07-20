@@ -27,7 +27,7 @@ impl S2ProtoUnpack<Vec<u8>> for MapSha1 {
     if value.len() >= 20 {
       bytes.clone_from_slice(&value[0..20]);
     } else {
-      bytes.clone_from_slice(&value[0..(value.len())]);
+      (&mut bytes[0..(value.len())]).clone_from_slice(&value[0..(value.len())]);
     }
     Ok(MapSha1(bytes))
   }

@@ -24,6 +24,9 @@
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-map-checksum-dump/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-lobby-service/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/node/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/controller/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/net/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/binaries/flo-connect/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

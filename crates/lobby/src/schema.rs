@@ -1,4 +1,13 @@
 table! {
+    api_client (id) {
+        id -> Int4,
+        name -> Text,
+        secret_key -> Text,
+        created_at -> Timestamptz,
+    }
+}
+
+table! {
     game (id) {
         id -> Int4,
         name -> Text,
@@ -44,7 +53,10 @@ table! {
     }
 }
 
+joinable!(game -> player (created_by));
+
 allow_tables_to_appear_in_same_query!(
+    api_client,
     game,
     node,
     player,

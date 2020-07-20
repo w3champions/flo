@@ -1,4 +1,3 @@
-use flo_grpc::connect::{Notification, NotificationType};
 use futures::stream::Stream;
 use futures::task::Context;
 use std::pin::Pin;
@@ -12,6 +11,9 @@ use crate::player::PlayerRef;
 
 type Tx = mpsc::Sender<Notification>;
 type Rx = mpsc::Receiver<Notification>;
+
+pub struct Notification;
+pub enum NotificationType {}
 
 pub struct NotificationStream {
   rx: Rx,

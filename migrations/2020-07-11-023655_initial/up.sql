@@ -23,7 +23,7 @@ create table game (
     secret integer,
     is_live boolean not null,
     max_players integer not null,
-    created_by integer,
+    created_by integer references player(id),
     started_at timestamp with time zone,
     ended_at timestamp with time zone,
     slots jsonb not null,
@@ -45,3 +45,10 @@ create table node (
     updated_at timestamp with time zone default now() not null
 );
 SELECT diesel_manage_updated_at('node');
+
+create table api_client (
+    id serial not null primary key,
+    name text not null,
+    secret_key text not null,
+    created_at timestamp with time zone default now() not null
+);

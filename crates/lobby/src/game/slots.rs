@@ -67,6 +67,10 @@ impl Slots {
       .any(|s| s.settings.status == SlotStatus::Open)
   }
 
+  pub fn is_empty(&self) -> bool {
+    !self.inner.iter().any(|s| s.player.is_some())
+  }
+
   pub fn join(&mut self, player: &PlayerRef) -> Option<&mut Slot> {
     self.acquire_slot_mut().map(|s| {
       s.player = Some(player.clone());
@@ -97,6 +101,7 @@ impl Slots {
     for i in 0..24 {
       if !color_set[i] {
         color = i as i32;
+        break;
       }
     }
 

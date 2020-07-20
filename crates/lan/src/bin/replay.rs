@@ -81,8 +81,6 @@ async fn main() {
 enum LobbyError {
   #[error(transparent)]
   Protocol(#[from] flo_w3gs::error::Error),
-  #[error("invalid player id")]
-  InvalidPlayerId,
 }
 
 async fn run_lobby(

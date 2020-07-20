@@ -1,7 +1,11 @@
-#[cfg(test)]
-mod tests {
-  #[test]
-  fn it_works() {
-    assert_eq!(2 + 2, 4);
-  }
+mod game;
+mod net;
+mod protocol;
+
+pub enum Status {
+  Idle,
+}
+
+pub struct ConnectionState {
+  pub player_id: i32,
 }

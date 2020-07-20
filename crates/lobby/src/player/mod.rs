@@ -1,6 +1,5 @@
 pub mod db;
-mod service;
-mod token;
+pub mod token;
 mod types;
 
 pub use types::*;

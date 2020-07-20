@@ -1,5 +1,4 @@
 pub mod db;
-mod service;
 mod slots;
 mod types;
 

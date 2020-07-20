@@ -6,7 +6,9 @@ use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::game::{Computer, Game, GameStatus, Race, Slot, SlotSettings, SlotStatus, Slots};
+use crate::game::{
+  Computer, Game, GameEntry, GameStatus, Race, Slot, SlotSettings, SlotStatus, Slots,
+};
 use crate::map::Map;
 use crate::player::PlayerRef;
 use crate::schema::game;
@@ -32,8 +34,10 @@ pub struct QueryGameParams {
   pub since_id: Option<i32>,
 }
 
+#[derive(Debug, S2ProtoPack)]
+#[s2_grpc(message_type = "flo_grpc::lobby::ListGamesReply")]
 pub struct QueryGame {
-  pub rows: Vec<Row>,
+  pub games: Vec<GameEntry>,
   pub has_more: bool,
 }
 
@@ -41,10 +45,10 @@ pub struct QueryGame {
 #[repr(u8)]
 #[s2_grpc(proto_enum_type = "flo_grpc::lobby::GameStatusFilter")]
 pub enum GameStatusFilter {
-  All,
-  Open,
-  Live,
-  Ended,
+  All = 0,
+  Open = 1,
+  Live = 2,
+  Ended = 3,
 }
 
 impl Default for GameStatusFilter {
@@ -54,11 +58,31 @@ impl Default for GameStatusFilter {
 }
 
 pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
+  use crate::schema::player::{self, dsl as player_dsl};
+  use diesel::dsl::sql;
   use game::dsl;
 
   let take = std::cmp::min(100, params.take.clone().unwrap_or(30));
 
-  let mut q = game::table.limit(take + 1).into_boxed();
+  let mut q = game::table
+    .left_outer_join(player::table)
+    .select((
+      dsl::id,
+      dsl::name,
+      dsl::map_name,
+      dsl::status,
+      dsl::is_private,
+      dsl::is_live,
+      sql::<diesel::sql_types::Integer>("0"),
+      dsl::max_players,
+      dsl::started_at,
+      dsl::ended_at,
+      dsl::created_at,
+      dsl::updated_at,
+      PlayerRef::COLUMNS.nullable(),
+    ))
+    .limit(take + 1)
+    .into_boxed();
 
   if let Some(ref keyword) = params.keyword {
     let like = format!("%{}%", keyword.trim());
@@ -66,7 +90,7 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
   }
 
   match params.status {
-    GameStatusFilter::All => {}
+    GameStatusFilter::All => q = q.filter(dsl::status.ne(GameStatus::Ended)),
     GameStatusFilter::Open => q = q.filter(dsl::status.eq(GameStatus::Preparing)),
     GameStatusFilter::Live => {
       q = q.filter(
@@ -92,13 +116,14 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
     q = q.filter(dsl::id.gt(id))
   }
 
-  let mut rows: Vec<Row> = q.load(conn)?;
-  let has_more = rows.len() > take as usize;
+  let mut games: Vec<GameEntry> = q.load(conn)?;
+
+  let has_more = games.len() > take as usize;
   if has_more {
-    rows.truncate(take as usize);
+    games.truncate(take as usize);
   }
 
-  Ok(QueryGame { rows, has_more })
+  Ok(QueryGame { games, has_more })
 }
 
 pub fn delete(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()> {
@@ -182,8 +207,7 @@ pub fn join(conn: &DbConn, params: JoinGameParams) -> Result<Vec<Slot>> {
     return Err(Error::GameFull);
   }
 
-  let player = crate::player::db::get(conn, params.player_id)?;
-  let player = PlayerRef::from(player);
+  let player = crate::player::db::get_ref(conn, params.player_id)?;
 
   slots.join(&player);
   update_slots(conn, params.game_id, &slots)?;
@@ -202,7 +226,11 @@ pub struct LeaveGameParams {
 pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<Vec<Slot>> {
   let mut slots = get_slots(conn, params.game_id)?;
   if slots.release_player_slot(params.player_id) {
-    update_slots(conn, params.game_id, &slots)?
+    if slots.is_empty() {
+      end_game(conn, params.game_id)?;
+    } else {
+      update_slots(conn, params.game_id, &slots)?;
+    }
   }
   Ok(slots.into_inner())
 }
@@ -237,6 +265,35 @@ pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
   Ok(row.into_game(meta, slots)?)
 }
 
+#[derive(Debug)]
+pub struct GameStateFromDb {
+  pub id: i32,
+  pub players: Vec<i32>,
+}
+
+/// Loads game players info from database
+/// This is used after server restart to restore in-memory state
+pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> {
+  use game::dsl;
+
+  let rows: Vec<(i32, Value)> = game::table
+    .filter(dsl::status.eq_any(&[GameStatus::Preparing, GameStatus::Playing]))
+    .select((dsl::id, dsl::slots))
+    .load(conn)?;
+  let mut games = Vec::with_capacity(rows.len());
+  for (id, slots) in rows {
+    let slots: Vec<Slot> = serde_json::from_value(slots)?;
+    games.push(GameStateFromDb {
+      id,
+      players: slots
+        .into_iter()
+        .filter_map(|s| s.player.map(|p| p.id))
+        .collect(),
+    });
+  }
+  Ok(games)
+}
+
 fn get_slots(conn: &DbConn, id: i32) -> Result<Slots> {
   use game::dsl;
   let value: Value = game::table
@@ -252,6 +309,18 @@ fn update_slots(conn: &DbConn, id: i32, slots: &[Slot]) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
     .set(dsl::slots.eq(serde_json::to_value(slots)?))
+    .execute(conn)?;
+  Ok(())
+}
+
+fn end_game(conn: &DbConn, id: i32) -> Result<()> {
+  use diesel::dsl::sql;
+  use game::dsl;
+  diesel::update(game::table.find(id))
+    .set((
+      dsl::status.eq(GameStatus::Ended),
+      dsl::ended_at.eq(sql("now()")),
+    ))
     .execute(conn)?;
   Ok(())
 }

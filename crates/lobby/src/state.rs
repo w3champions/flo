@@ -1,3 +1,4 @@
+use bs_diesel_utils::ExecutorRef;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -5,6 +6,10 @@ use tokio::sync::{Mutex, OwnedMutexGuard};
 
 use crate::connect::NotificationSender;
 use crate::error::Result;
+use crate::game::{
+  db::{get_all_active_game_state, GameStateFromDb},
+  GameEntry,
+};
 
 #[derive(Debug)]
 pub struct GameState {
@@ -33,6 +38,14 @@ pub struct Storage {
 }
 
 impl Storage {
+  pub async fn init(db: ExecutorRef) -> Result<Self> {
+    let data = db.exec(|conn| get_all_active_game_state(conn)).await?;
+
+    Ok(Storage {
+      state: Arc::new(RwLock::new(StorageState::new(data))),
+    })
+  }
+
   pub fn handle(&self) -> StorageHandle {
     StorageHandle(self.state.clone())
   }
@@ -42,6 +55,43 @@ impl Storage {
 struct StorageState {
   players: HashMap<i32, Arc<Mutex<PlayerState>>>,
   games: HashMap<i32, Arc<Mutex<GameState>>>,
+  game_num_players: HashMap<i32, usize>,
+}
+
+impl StorageState {
+  fn new(data: Vec<GameStateFromDb>) -> Self {
+    let mut players = HashMap::new();
+    let mut games = HashMap::new();
+    let mut game_num_players = HashMap::new();
+
+    for item in data {
+      for player_id in &item.players {
+        players.insert(
+          *player_id,
+          Arc::new(Mutex::new(PlayerState {
+            game_id: Some(item.id),
+            sender: None,
+          })),
+        );
+      }
+
+      game_num_players.insert(item.id, item.players.len());
+
+      games.insert(
+        item.id,
+        Arc::new(Mutex::new(GameState {
+          players: item.players,
+          closed: false,
+        })),
+      );
+    }
+
+    Self {
+      players,
+      games,
+      game_num_players,
+    }
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +103,7 @@ impl StorageHandle {
     if storage_lock.games.contains_key(&id) {
       tracing::warn!("override game state: id = {}", id);
     }
+    storage_lock.game_num_players.insert(id, players.len());
     storage_lock
       .games
       .insert(id, Arc::new(Mutex::new(GameState::new(players))));
@@ -86,10 +137,23 @@ impl StorageHandle {
           storage_guard.games.remove(&id);
           None
         } else {
-          Some(LockedGameState { id, guard })
+          Some(LockedGameState {
+            id,
+            guard,
+            storage_state: self.0.clone(),
+          })
         }
       }
       None => None,
+    }
+  }
+
+  pub fn fetch_num_players(&self, games: &mut [GameEntry]) {
+    for game in games {
+      let state = self.0.read();
+      if let Some(num) = state.game_num_players.get(&game.id).cloned() {
+        game.num_players = num as i32;
+      }
     }
   }
 }
@@ -122,6 +186,7 @@ impl LockedPlayerState {
 pub struct LockedGameState {
   id: i32,
   guard: OwnedMutexGuard<GameState>,
+  storage_state: Arc<RwLock<StorageState>>,
 }
 
 impl LockedGameState {
@@ -139,12 +204,24 @@ impl LockedGameState {
 
   pub fn add_player(&mut self, player_id: i32) {
     if !self.guard.players.contains(&player_id) {
-      self.guard.players.push(player_id)
+      self.guard.players.push(player_id);
+      {
+        let mut s = self.storage_state.write();
+        s.game_num_players
+          .entry(self.id)
+          .and_modify(|v| *v = *v + 1);
+      }
     }
   }
 
   pub fn remove_player(&mut self, player_id: i32) {
-    self.guard.players.retain(|id| *id != player_id)
+    self.guard.players.retain(|id| *id != player_id);
+    {
+      let mut s = self.storage_state.write();
+      s.game_num_players
+        .entry(self.id)
+        .and_modify(|v| *v = *v - 1);
+    }
   }
 
   pub fn close(&mut self) {

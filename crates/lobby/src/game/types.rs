@@ -29,6 +29,24 @@ pub struct Game {
   pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Queryable)]
+#[s2_grpc(message_type = "flo_grpc::game::GameEntry")]
+pub struct GameEntry {
+  pub id: i32,
+  pub name: String,
+  pub map_name: String,
+  pub status: GameStatus,
+  pub is_private: bool,
+  pub is_live: bool,
+  pub num_players: i32,
+  pub max_players: i32,
+  pub started_at: Option<DateTime<Utc>>,
+  pub ended_at: Option<DateTime<Utc>>,
+  pub created_at: DateTime<Utc>,
+  pub updated_at: DateTime<Utc>,
+  pub created_by: Option<PlayerRef>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, BSDieselEnum, S2ProtoEnum)]
 #[repr(i32)]
 #[s2_grpc(proto_enum_type = "flo_grpc::game::GameStatus")]

@@ -1,0 +1,59 @@
+syntax = "proto3";
+package flo_connect;
+
+import "google/protobuf/wrappers.proto";
+import "proto/common.proto";
+
+enum PlayerSource {
+  PlayerSourceTest = 0;
+  PlayerSourceBNet = 2;
+}
+
+message PlayerInfo {
+  int32 id = 1;
+  string name = 2;
+  PlayerSource source = 3;
+}
+
+enum PlayerStatus {
+  PlayerStatusIdle = 0;
+  PlayerStatusInGame = 1;
+}
+
+message Session {
+  PlayerInfo player = 1;
+  PlayerStatus status = 2;
+  google.protobuf.StringValue game_id = 3;
+}
+
+message PacketConnectLobby {
+  flo_common.Version connect_version = 1;
+  string token = 2;
+}
+
+message PacketConnectLobbyAccept {
+  flo_common.Version lobby_version = 1;
+  Session session = 2;
+}
+
+enum ConnectLobbyRejectReason {
+  ConnectLobbyRejectReasonUnknown = 0;
+  ConnectLobbyRejectReasonClientVersionTooOld = 1;
+  ConnectLobbyRejectReasonInvalidToken = 2;
+}
+
+message PacketConnectLobbyReject {
+  flo_common.Version lobby_version = 1;
+  ConnectLobbyRejectReason reason = 2;
+}
+
+
+enum LobbyDisconnectReason {
+  LobbyDisconnectReasonUnknown = 0;
+  LobbyDisconnectReasonMulti = 1;
+  LobbyDisconnectReasonMaintenance = 2;
+}
+
+message PacketLobbyDisconnect {
+  LobbyDisconnectReason reason = 1;
+}
