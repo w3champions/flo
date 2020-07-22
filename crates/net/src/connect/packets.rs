@@ -1,4 +1,4 @@
-use crate::proto::flo_connect::*;
+pub use crate::proto::flo_connect::*;
 
 packet_type!(ConnectLobby, PacketConnectLobby);
 packet_type!(ConnectLobbyAccept, PacketConnectLobbyAccept);

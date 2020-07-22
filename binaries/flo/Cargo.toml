@@ -1,0 +1,32 @@
+[package]
+name = "flo"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+flo-constants = { path = "../../crates/constants" }
+flo-log = { path = "../../crates/log" }
+flo-net = { path = "../../crates/net" }
+flo-config = { path = "../../crates/config" }
+flo-platform = { path = "../../crates/platform" }
+flo-w3storage = { path = "../../crates/w3storage" }
+flo-w3map = { path = "../../crates/w3map" }
+
+bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
+s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git" }
+dotenv = "0.15.0"
+tokio = { version = "0.2.22", features = ["full"] }
+async-tungstenite = { version = "0.7.1", features = ["tokio-runtime"] }
+tracing = "0.1"
+tracing-futures = "0.2.4"
+thiserror = "1.0.20"
+parking_lot = "0.11.0"
+http = "0.2.1"
+futures = "0.3.5"
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1.0.56"
+base64 = "0.12.3"
+
+[build-dependencies]
+flo-constants = { path = "../../crates/constants" }

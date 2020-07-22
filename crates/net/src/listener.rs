@@ -19,8 +19,8 @@ pub struct FloListener {
 }
 
 impl FloListener {
-  pub async fn bind_v4() -> Result<Self, Error> {
-    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).await?;
+  pub async fn bind_v4(port: u16) -> Result<Self, Error> {
+    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
     let local_addr = listener.local_addr()?;
     Ok(FloListener {
       listener,
@@ -51,15 +51,12 @@ impl Incoming<'_> {
   }
 
   pub fn poll_accept(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<FloStream>> {
-    let (socket, addr) = ready!(self.inner.poll_accept(cx))?;
+    let (socket, _addr) = ready!(self.inner.poll_accept(cx))?;
 
     socket.set_nodelay(true).ok();
     socket.set_keepalive(None).ok();
 
-    let stream = FloStream {
-      peer_addr: addr,
-      transport: Framed::new(socket, FloFrameCodec::new()),
-    };
+    let stream = FloStream::new(socket);
 
     Poll::Ready(Ok(stream))
   }

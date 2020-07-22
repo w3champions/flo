@@ -1,3 +1,5 @@
+pub mod db;
+
 use s2_grpc_utils::result::Error as ProtoError;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};

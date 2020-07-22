@@ -1,3 +1,5 @@
+pub mod path_tree;
+
 use bytes::Bytes;
 use casclib::Storage;
 use glob::Pattern;

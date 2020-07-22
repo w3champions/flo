@@ -34,7 +34,10 @@ impl BinDecode for TriggerStringMap {
       return Err(BinDecodeError::incomplete());
     }
 
-    buf.get_tag(UTF8_BOM)?;
+    if buf.peek_u8() == Some(UTF8_BOM[0]) {
+      buf.get_tag(UTF8_BOM)?;
+    }
+
     let mut map = BTreeMap::new();
 
     while buf.has_remaining() {
@@ -113,6 +116,7 @@ impl BinDecode for TriggerStringRef {
       None => return Err(BinDecodeError::incomplete()),
       _ => {}
     }
+
     buf.get_tag("TRIGSTR_")?;
     let (bytes, _) = buf.get_delimited_bytes(b'\0')?;
     if let Some(pos) = bytes.iter().position(|b| *b != b'0') {

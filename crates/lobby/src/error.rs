@@ -24,6 +24,8 @@ pub enum Error {
   PlayerNotInGame,
   #[error("invalid player source state")]
   InvalidPlayerSourceState,
+  #[error("net: {0}")]
+  Net(#[from] flo_net::error::Error),
   #[error("db error: {0}")]
   Db(#[from] bs_diesel_utils::result::DbError),
   #[error("json: {0}")]

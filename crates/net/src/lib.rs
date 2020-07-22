@@ -1,11 +1,14 @@
-mod error;
-#[macro_use]
-mod packet;
 mod codec;
-mod constants;
-mod keep_alive;
-mod listener;
-mod stream;
+mod common;
+mod version;
+
+pub mod error;
+#[macro_use]
+pub mod packet;
+
+pub mod constants;
+pub mod listener;
+pub mod stream;
 
 pub mod proto {
   pub mod flo_common {

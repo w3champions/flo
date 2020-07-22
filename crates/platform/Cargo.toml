@@ -10,6 +10,9 @@ flo-config = { path = "../config" }
 dotenv = "0.15.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3.9", features = ["shlobj", "knownfolders", "winerror", "combaseapi", "winreg"] }
+winapi = { version = "0.3.9", features = ["processthreadsapi", "shlobj", "knownfolders", "winerror", "combaseapi", "winreg"] }
 widestring = "0.4.2"
 thiserror = "1"
+
+[build-dependencies]
+cc = "1.0"

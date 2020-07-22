@@ -23,7 +23,7 @@ pub struct ApiClientStorage {
 
 impl ApiClientStorage {
   pub async fn init(db: ExecutorRef) -> Result<Self> {
-    let mut storage = ApiClientStorage {
+    let storage = ApiClientStorage {
       db: db.clone(),
       map: DashMap::new(),
     };

@@ -73,6 +73,18 @@ impl W3Map {
     Ok((map, checksum))
   }
 
+  pub fn render_preview_jpeg(&self) -> Vec<u8> {
+    let mut bg = self.image.clone();
+    for icon in self.minimap_icons.iter() {
+      icon.draw_into(&mut bg);
+    }
+    let mut bytes = vec![];
+    image::DynamicImage::ImageRgba8(bg)
+      .write_to(&mut bytes, image::ImageFormat::Jpeg)
+      .ok();
+    bytes
+  }
+
   pub fn render_preview_png(&self) -> Vec<u8> {
     let mut bg = self.image.clone();
     for icon in self.minimap_icons.iter() {
@@ -98,6 +110,71 @@ impl W3Map {
       .trigger_strings
       .get(self.info.description)
       .unwrap_or("")
+  }
+
+  pub fn author(&self) -> &str {
+    self.trigger_strings.get(self.info.author).unwrap_or("")
+  }
+
+  pub fn suggested_players(&self) -> &str {
+    self.suggested_players.as_ref()
+  }
+
+  pub fn dimension(&self) -> (u32, u32) {
+    (self.info.width, self.info.height)
+  }
+
+  pub fn num_players(&self) -> usize {
+    self.info.num_players as usize
+  }
+
+  pub fn get_players(&self) -> Vec<MapPlayer> {
+    self
+      .info
+      .players_classic
+      .as_ref()
+      .map(|players| {
+        players
+          .iter()
+          .map(|p| MapPlayer {
+            name: self.trigger_strings.get(p.name).unwrap_or_default(),
+            r#type: p.type_,
+            race: p.race,
+            flags: p.flags,
+          })
+          .collect::<Vec<_>>()
+      })
+      .or_else(|| {
+        self.info.players_reforged.as_ref().map(|players| {
+          players
+            .iter()
+            .map(|p| MapPlayer {
+              name: self.trigger_strings.get(p.name).unwrap_or_default(),
+              r#type: p.type_,
+              race: p.race,
+              flags: p.flags,
+            })
+            .collect()
+        })
+      })
+      .unwrap_or_default()
+  }
+
+  pub fn num_forces(&self) -> usize {
+    self.info.num_forces as usize
+  }
+
+  pub fn get_forces(&self) -> Vec<MapForce> {
+    self
+      .info
+      .forces
+      .iter()
+      .map(|force| MapForce {
+        name: self.trigger_strings.get(force.name).unwrap_or_default(),
+        flags: force.flags,
+        player_set: force.player_set,
+      })
+      .collect()
   }
 }
 
@@ -127,13 +204,14 @@ impl W3Map {
   }
 
   fn load_info(mut archive: Archive) -> Result<Self> {
-    let info: MapInfo = {
-      let bytes = archive.read_file_all("war3map.w3i")?;
-      BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadInfo)?
-    };
     let trigger_strings = {
       let bytes = archive.read_file_all("war3map.wts")?;
       TriggerStringMap::decode(&mut bytes.as_slice()).map_err(Error::ReadTriggerStrings)?
+    };
+
+    let info: MapInfo = {
+      let bytes = archive.read_file_all("war3map.w3i")?;
+      BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadInfo)?
     };
 
     Ok(W3Map {
@@ -201,6 +279,7 @@ impl<'a> Archive<'a> {
     Ok(bytes)
   }
 
+  #[cfg(feature = "xoro")]
   fn read_file_all_opt(&mut self, path: &str) -> Result<Option<Vec<u8>>> {
     self.read_file_all(path).map(Some).or_else(|e| {
       if Self::is_err_file_not_found(&e) {
@@ -211,6 +290,7 @@ impl<'a> Archive<'a> {
     })
   }
 
+  #[cfg(feature = "xoro")]
   fn is_err_file_not_found(e: &Error) -> bool {
     match *e {
       Error::Storm(stormlib::error::StormError::FileNotFound) => true,
@@ -218,6 +298,21 @@ impl<'a> Archive<'a> {
       _ => false,
     }
   }
+}
+
+#[derive(Debug)]
+pub struct MapPlayer<'a> {
+  pub name: &'a str,
+  pub r#type: u32,
+  pub race: u32,
+  pub flags: u32,
+}
+
+#[derive(Debug)]
+pub struct MapForce<'a> {
+  pub name: &'a str,
+  pub flags: u32,
+  pub player_set: u32,
 }
 
 #[test]
@@ -239,7 +334,19 @@ fn test_open_map() {
 #[test]
 fn test_open_storage() {
   let storage = W3Storage::from_env().unwrap();
-  let _map = W3Map::open_storage(&storage, "maps\\(4)adrenaline.w3m").unwrap();
+  let _map = W3Map::open_storage(
+    &storage,
+    "maps\\frozenthrone\\community\\(5)circleoffallenheroes.w3x",
+  )
+  .unwrap();
+  // std::fs::write("adrenaline.png", _map.render_preview_png()).unwrap()
+  dbg!(_map.info);
+  let _map =
+    W3Map::open_storage(&storage, "maps\\frozenthrone\\scenario\\(6)blizzardtd.w3x").unwrap();
+  // std::fs::write("adrenaline.png", _map.render_preview_png()).unwrap()
+  dbg!(_map.info);
+  let _map =
+    W3Map::open_storage(&storage, "maps\\frozenthrone\\scenario\\(4)monolith.w3x").unwrap();
   // std::fs::write("adrenaline.png", _map.render_preview_png()).unwrap()
   dbg!(_map.info);
 }
@@ -254,6 +361,7 @@ fn test_open_storage_with_checksum() {
   assert_eq!(
     checksum,
     MapChecksum {
+      #[cfg(feature = "xoro")]
       xoro: 2039165270,
       crc32: 1444344839,
       sha1: [

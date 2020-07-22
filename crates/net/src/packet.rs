@@ -1,5 +1,5 @@
 use bytes::{Buf, Bytes, BytesMut};
-use prost::Message;
+pub use prost::Message;
 
 use flo_util::{BinDecode, BinEncode};
 
@@ -50,6 +50,41 @@ impl Frame {
   }
 }
 
+/// Decodes packet by type id
+/// If no branch matches, returns Err(...)
+///
+/// ```no_run
+/// docode_packet! {
+///   packet = ConnectLobbyPacket => {},
+///   packet = ConnectLobbyRejectPacket => {},
+/// }
+/// ```
+#[macro_export]
+macro_rules! frame_packet {
+  (
+    $frame:expr => {
+      $(
+        $binding:ident = $packet_type:ty => $block:block
+      ),*
+      $(,)?
+    }
+  ) => {
+    match $frame.type_id {
+      $(
+        <$packet_type as $crate::packet::FloPacket>::TYPE_ID => {
+          let $binding = <$packet_type as $crate::packet::Message>::decode(
+            $frame.payload
+          ).map_err($crate::error::Error::from)?;
+          $block
+        }
+      ),*
+      other => {
+        return Err($crate::error::Error::unexpected_packet_type_id(other).into())
+      },
+    }
+  };
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
 pub enum PacketTypeId {
@@ -80,3 +115,13 @@ macro_rules! packet_type {
 
 packet_type!(Ping, crate::proto::flo_common::PacketPing);
 packet_type!(Pong, crate::proto::flo_common::PacketPong);
+
+pub trait OptionalFieldExt<T> {
+  fn extract(self) -> Result<T>;
+}
+
+impl<T> OptionalFieldExt<T> for Option<T> {
+  fn extract(self) -> Result<T, Error> {
+    self.ok_or_else(|| Error::PacketFieldNotPresent)
+  }
+}

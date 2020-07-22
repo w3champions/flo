@@ -6,7 +6,7 @@ import "proto/common.proto";
 
 enum PlayerSource {
   PlayerSourceTest = 0;
-  PlayerSourceBNet = 2;
+  PlayerSourceBNet = 1;
 }
 
 message PlayerInfo {
@@ -23,7 +23,7 @@ enum PlayerStatus {
 message Session {
   PlayerInfo player = 1;
   PlayerStatus status = 2;
-  google.protobuf.StringValue game_id = 3;
+  google.protobuf.Int32Value game_id = 3;
 }
 
 message PacketConnectLobby {

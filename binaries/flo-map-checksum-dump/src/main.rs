@@ -15,15 +15,19 @@ const TEMP_REPLAY_FILE_PATH: &str =
   r#"C:\Users\fluxx\OneDrive\Documents\Warcraft III\BattleNet\298266\Replays\TempReplay.w3g"#;
 const WAR3_PATH: &str = r#"C:\Program Files (x86)\Warcraft III\_retail_\x86_64\Warcraft III.exe"#;
 
-const OUTPUT_DIR: &str = r#"target\map_info_dump"#;
+const OUTPUT_DIR: &str = r#"deps\wc3-samples\map_checksum"#;
 
 fn main() {
   let storage = W3Storage::from_env().unwrap();
 
   let maps = storage.list_storage_files("maps\\*").unwrap();
 
-  for (i, path) in maps.iter().enumerate().skip(201) {
+  for (i, path) in maps.iter().enumerate() {
     println!("[{}/{}] processing: {}", i + 1, maps.len(), path);
+    if path.contains("scenario") {
+      println!("skip scenario map");
+      continue;
+    }
 
     let (sha1, checksum) = process_map(path);
 
@@ -165,5 +169,5 @@ fn send_key(key: i32) {
 }
 
 fn to_hex(sha1: [u8; 20]) -> String {
-  sha1.iter().map(|b| format!("{:x}", b)).collect()
+  sha1.iter().map(|b| format!("{:02x}", b)).collect()
 }

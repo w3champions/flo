@@ -29,6 +29,14 @@ table! {
 }
 
 table! {
+    map_checksum (id) {
+        id -> Int4,
+        sha1 -> Text,
+        checksum -> Bytea,
+    }
+}
+
+table! {
     node (id) {
         id -> Int4,
         name -> Text,
@@ -58,6 +66,7 @@ joinable!(game -> player (created_by));
 allow_tables_to_appear_in_same_query!(
     api_client,
     game,
+    map_checksum,
     node,
     player,
 );

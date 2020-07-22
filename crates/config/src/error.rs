@@ -2,6 +2,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("parse int: {0}")]
+  ParseInt(#[from] std::num::ParseIntError),
+
   #[error("io: {0}")]
   Io(#[from] std::io::Error),
 

@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("invalid path: {0}")]
+  InvalidPath(String),
   #[error("platform: {0}")]
   Platform(#[from] flo_platform::error::Error),
   #[error("io: {0}")]

@@ -13,7 +13,6 @@ type Tx = mpsc::Sender<Notification>;
 type Rx = mpsc::Receiver<Notification>;
 
 pub struct Notification;
-pub enum NotificationType {}
 
 pub struct NotificationStream {
   rx: Rx,
@@ -24,8 +23,8 @@ pub struct NotificationStream {
 pub struct NotificationSender {
   tx: Arc<Mutex<Tx>>,
 }
-pub struct InitialState {
-  pub me: PlayerRef,
+pub struct ConnectState {
+  pub player_id: i32,
   pub joined_game: Option<Game>,
 }
 

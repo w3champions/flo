@@ -5,8 +5,9 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+flo-log = { path = "../../crates/log" }
 flo-lobby = { path = "../../crates/lobby" }
 
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 dotenv = "0.15.0"
-tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros"] }
+tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros", "blocking"] }
