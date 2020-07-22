@@ -6,9 +6,7 @@ edition = "2018"
 
 [dependencies]
 flo-lobby = { path = "../../crates/lobby" }
-flo-grpc = "0.1"
 
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
-tonic = "0.2.2"
 dotenv = "0.15.0"
 tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros"] }

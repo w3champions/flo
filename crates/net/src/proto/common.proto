@@ -6,3 +6,11 @@ message Version {
   int32 minor = 2;
   int32 patch = 3;
 }
+
+message PacketPing {
+  uint32 ms = 1;
+}
+
+message PacketPong {
+  uint32 ms = 1;
+}

@@ -128,12 +128,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
-
-[[package]]
-name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
@@ -684,7 +678,7 @@ dependencies = [
 name = "flo-lan"
 version = "0.1.0"
 dependencies = [
- "base64 0.12.3",
+ "base64",
  "bytes 0.5.6",
  "flo-log",
  "flo-util",
@@ -717,6 +711,7 @@ dependencies = [
  "diesel",
  "dotenv",
  "flo-grpc",
+ "flo-net",
  "flo-w3gs",
  "futures 0.3.5",
  "jsonwebtoken",
@@ -738,10 +733,8 @@ version = "0.1.0"
 dependencies = [
  "bs-diesel-utils",
  "dotenv",
- "flo-grpc",
  "flo-lobby",
  "tokio",
- "tonic",
 ]
 
 [[package]]
@@ -767,10 +760,15 @@ dependencies = [
 name = "flo-net"
 version = "0.1.0"
 dependencies = [
+ "bytes 0.5.6",
  "flo-util",
+ "futures 0.3.5",
  "prost",
  "prost-build",
+ "thiserror",
  "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -801,6 +799,7 @@ dependencies = [
  "bytes 0.5.6",
  "enumflags2",
  "flo-codegen",
+ "lazy_static",
  "pretty-hex",
  "thiserror",
  "tokio-util",
@@ -1265,7 +1264,7 @@ version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afabcc15e437a6484fc4f12d0fd63068fe457bf93f1c148d3d9649c60b103f32"
 dependencies = [
- "base64 0.12.3",
+ "base64",
  "pem",
  "ring",
  "serde",
@@ -1587,7 +1586,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59698ea79df9bf77104aefd39cc3ec990cb9693fb59c3b0a70ddf2646fdffb4b"
 dependencies = [
- "base64 0.12.3",
+ "base64",
  "once_cell",
  "regex",
 ]
@@ -2330,13 +2329,13 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0096635c468e230b93125f635ecd8ad2072117afe89412f64439c18e18013873"
+checksum = "b13b102a19758191af97cff34c6785dffd6610f68de5ab1c4bb8378638e4ef90"
 dependencies = [
  "async-stream",
  "async-trait",
- "base64 0.11.0",
+ "base64",
  "bytes 0.5.6",
  "futures-core",
  "futures-util",
@@ -2360,9 +2359,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1e216f9afa06988e6598081b09d2852140fba0e28fc5c892a85cb270d5e3679"
+checksum = "daec8b14e55497072204b53d5c0b1eb0a6ad1cd8301d6d4c079d4aeec35b21e9"
 dependencies = [
  "proc-macro2",
  "prost-build",
@@ -2685,7 +2684,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5c7d464221cb0b538a1cd12f6d9127ed1e6bb7f3ffca98fb3cd4c6e3af8175c"
 dependencies = [
- "base64 0.12.3",
+ "base64",
  "byteorder",
  "bytes 0.5.6",
  "http",

@@ -4,12 +4,27 @@ use flo_grpc::lobby::flo_lobby_server::*;
 use flo_grpc::lobby::*;
 use flo_grpc::player;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
+use crate::api_client::ApiClientStorageRef;
 use crate::db::ExecutorRef;
 use crate::error::{Error, Result};
 use crate::game::db::LeaveGameParams;
 use crate::state::StorageHandle;
+
+pub async fn serve(
+  db: ExecutorRef,
+  state_storage: StorageHandle,
+  api_client: ApiClientStorageRef,
+) -> Result<()> {
+  let addr = "0.0.0.0:4095".parse().expect("parse grpc bind addr");
+  let server_impl = FloLobbyService::new(db, state_storage);
+  let server = FloLobbyServer::with_interceptor(server_impl, api_client.into_interceptor());
+  let server = Server::builder().add_service(server);
+  server.serve(addr).await?;
+  Ok(())
+}
 
 pub struct FloLobbyService {
   db: ExecutorRef,

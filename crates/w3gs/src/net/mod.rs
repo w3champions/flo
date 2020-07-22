@@ -1,18 +1,18 @@
 use futures::ready;
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::Stream;
 use tokio_util::codec::Framed;
 
 use crate::error::*;
+use crate::protocol::packet::Packet;
 
 mod codec;
 use self::codec::W3GSCodec;
-use crate::protocol::packet::Packet;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 #[derive(Debug)]
 pub struct W3GSListener {
@@ -99,7 +99,7 @@ impl Incoming<'_> {
 
     let stream = W3GSStream {
       local_addr: socket.local_addr()?,
-      peer_addr: socket.peer_addr()?,
+      peer_addr: addr,
       transport: Framed::new(socket, W3GSCodec::new()),
     };
 

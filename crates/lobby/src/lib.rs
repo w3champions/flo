@@ -9,13 +9,14 @@ mod config;
 mod connect;
 pub mod error;
 pub mod game;
+mod grpc;
 pub mod host;
 pub mod map;
 pub mod node;
 pub mod player;
-mod service;
 mod state;
 
-pub use api_client::Storage as ApiClientStorage;
-pub use service::FloLobbyService;
+pub use api_client::ApiClientStorage;
+pub use connect::serve as serve_socket;
+pub use grpc::serve as serve_grpc;
 pub use state::Storage as StateStorage;

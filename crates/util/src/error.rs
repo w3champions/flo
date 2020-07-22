@@ -20,12 +20,14 @@ pub enum BinDecodeError {
 }
 
 impl BinDecodeError {
+  #[inline]
   pub fn incomplete() -> Self {
     BinDecodeError::Incomplete {
       context: BinDecodeErrorContext::new(),
     }
   }
 
+  #[inline]
   pub fn failure<T>(msg: T) -> Self
   where
     T: std::fmt::Display,
@@ -52,6 +54,7 @@ impl BinDecodeError {
     }
   }
 
+  #[inline]
   pub fn is_incomplete(&self) -> bool {
     match *self {
       BinDecodeError::Incomplete { .. } => true,

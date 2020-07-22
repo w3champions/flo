@@ -2,6 +2,7 @@ pub mod binary;
 pub mod dword_string;
 pub mod error;
 pub mod stat_string;
+pub mod uptime;
 
 pub use flo_codegen::*;
 

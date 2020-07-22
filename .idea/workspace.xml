@@ -44,21 +44,35 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/crates/net/src/connect/mod.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/net/src/packets.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/net/src/proto/common.proto" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/net/src/proto/connect.proto" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/net/src/proto/node.proto" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/flo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/flo.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/lobby/src/connect/state.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/codec.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/connect/packets.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/constants.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/error.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/keep_alive.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/listener.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/packet.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/stream.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/util/src/uptime.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/db.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/player/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/player/types.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/service.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/service.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/net/src/constants.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/build.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3gs/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo-lobby-service/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo-lobby-service/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo-lobby-service/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo-lobby-service/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/api_client.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/api_client.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/connect.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/connect/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/service.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/grpc.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/connect/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/connect/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/packets.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/proto/common.proto" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/proto/common.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/util/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/util/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/w3gs/src/net/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3gs/src/net/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -93,7 +107,7 @@
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/crates/lan/src/bin" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/crates/lobby/src/connect" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
     <property name="project.structure.last.edited" value="Modules" />
     <property name="project.structure.proportion" value="0.15" />
@@ -102,18 +116,18 @@
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
+      <recent name="C:\Data\Projects\flo\crates\net\src" />
+      <recent name="C:\Data\Projects\flo\crates\net\src\packet" />
       <recent name="C:\Data\Projects\flo\crates\net" />
       <recent name="C:\Data\Projects\flo\crates\lobby\src" />
-      <recent name="C:\Data\Projects\flo\crates\node\src\protocol" />
-      <recent name="C:\Data\Projects\flo" />
-      <recent name="C:\Data\Projects\flo\crates\lobby\src\player" />
     </key>
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
       <recent name="C:\Data\Projects\flo\crates\lan\src\bin" />
       <recent name="C:\Data\Projects\flo\deps\wc3-samples\replay" />
       <recent name="C:\Data\Projects\flo\crates\w3storage\src" />
       <recent name="C:\Data\Projects\flo\crates\platform\src" />
-      <recent name="C:\Data\Projects\flo\crates\config\src" />
     </key>
   </component>
   <component name="RunAnythingCache">
@@ -135,21 +149,9 @@
     </option>
   </component>
   <component name="RunManager" selected="Cargo Command.check [flo]">
-    <configuration name="Expand flo_lobby::player::db [flo]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+    <configuration name="Test stream::test_lookup" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
-      <option name="command" value="expand --lib --color=always --theme=GitHub --tests player::db" />
-      <option name="allFeatures" value="false" />
-      <option name="emulateTerminal" value="false" />
-      <option name="backtrace" value="SHORT" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$/crates/lobby" />
-      <envs />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="Run flo-lobby-service" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="channel" value="DEFAULT" />
-      <option name="command" value="run --package flo-lobby-service --bin flo-lobby-service" />
+      <option name="command" value="test --package flo-net --lib stream::test_lookup -- --exact" />
       <option name="allFeatures" value="false" />
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
@@ -159,9 +161,21 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test player::token::test_player_token" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+    <configuration name="Test uptime::test_uptime_ms" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
-      <option name="command" value="test --package flo-lobby --lib player::token::test_player_token -- --exact" />
+      <option name="command" value="test --package flo-util --lib uptime::test_uptime_ms -- --exact" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test uptime::test_uptime_ms_inited" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="test --package flo-util --lib uptime::test_uptime_ms_inited -- --exact" />
       <option name="allFeatures" value="false" />
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
@@ -197,10 +211,10 @@
     </configuration>
     <list>
       <item itemvalue="Cargo Command.check [flo]" />
-      <item itemvalue="Cargo Command.Test player::token::test_player_token" />
-      <item itemvalue="Cargo Command.Run flo-lobby-service" />
-      <item itemvalue="Cargo Command.Expand flo_lobby::player::db [flo]" />
       <item itemvalue="Cargo Command.doc [flo]" />
+      <item itemvalue="Cargo Command.Test uptime::test_uptime_ms" />
+      <item itemvalue="Cargo Command.Test uptime::test_uptime_ms_inited" />
+      <item itemvalue="Cargo Command.Test stream::test_lookup" />
     </list>
     <recent_temporary>
       <list>
@@ -361,7 +375,14 @@
       <option name="project" value="LOCAL" />
       <updated>1595218115139</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="feat: Protobuf packets.">
+      <created>1595331467472</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1595331467472</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -432,7 +453,8 @@
     <MESSAGE value="feat: lobby service" />
     <MESSAGE value="feat: lobby service impl" />
     <MESSAGE value="wip" />
-    <option name="LAST_COMMIT_MESSAGE" value="wip" />
+    <MESSAGE value="feat: Protobuf packets." />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: Protobuf packets." />
   </component>
   <component name="WindowStateProjectService">
     <state x="724" y="276" key="#Inspections" timestamp="1593760914337">
@@ -464,29 +486,29 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="834" y="522" key="#com.intellij.refactoring.move.MoveHandler.SelectRefactoringDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593577951587" />
-    <state width="1211" height="353" key="GridCell.Tab.0.bottom" timestamp="1595288873199">
+    <state width="1207" height="353" key="GridCell.Tab.0.bottom" timestamp="1595393286000">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.bottom/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510860" />
-    <state width="1211" height="353" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595288873199" />
+    <state width="1207" height="353" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595393286000" />
     <state width="2151" height="424" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="1211" height="353" key="GridCell.Tab.0.center" timestamp="1595288873199">
+    <state width="1207" height="353" key="GridCell.Tab.0.center" timestamp="1595393285999">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.center/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="1211" height="353" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595288873199" />
+    <state width="1207" height="353" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595393285999" />
     <state width="2151" height="424" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="1211" height="353" key="GridCell.Tab.0.left" timestamp="1595288873199">
+    <state width="1207" height="353" key="GridCell.Tab.0.left" timestamp="1595393285999">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.left/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510858" />
-    <state width="1211" height="353" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595288873199" />
+    <state width="1207" height="353" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595393285999" />
     <state width="2151" height="424" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="1211" height="353" key="GridCell.Tab.0.right" timestamp="1595288873199">
+    <state width="1207" height="353" key="GridCell.Tab.0.right" timestamp="1595393285999">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1845" height="290" key="GridCell.Tab.0.right/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="1211" height="353" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595288873199" />
+    <state width="1207" height="353" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595393285999" />
     <state width="2151" height="424" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
     <state x="946" y="318" key="RollbackChangesDialog" timestamp="1594214894599">
       <screen x="0" y="0" width="2194" height="1194" />
@@ -522,19 +544,19 @@
       <screen x="3840" y="0" width="2194" height="1194" />
     </state>
     <state x="4275" y="207" width="1646" height="798" maximized="true" key="dock-window-1/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595190275809" />
-    <state x="747" y="182" width="696" height="831" key="find.popup" timestamp="1595258372222">
+    <state x="747" y="182" width="696" height="831" key="find.popup" timestamp="1595385652407">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="676" y="184" width="598" height="735" key="find.popup/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593209314658" />
-    <state x="747" y="182" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595258372222" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1595288872916">
+    <state x="747" y="182" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595385652407" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1595393285324">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595288872916" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595393285324" />
     <state x="4594" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593444445589" />
-    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1595211186939">
+    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1595382251069">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595211186939" />
+    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595382251069" />
   </component>
 </project>

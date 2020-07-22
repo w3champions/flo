@@ -32,6 +32,8 @@ pub enum Error {
   JsonWebToken(#[from] jsonwebtoken::errors::Error),
   #[error("proto: {0}")]
   Proto(#[from] s2_grpc_utils::result::Error),
+  #[error("gRPC transport: {0}")]
+  GrpcTransport(#[from] tonic::transport::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

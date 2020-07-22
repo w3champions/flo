@@ -12,3 +12,4 @@ tokio-util = { version = "0.3.1", features = ["codec"] }
 bytes = "0.5.5"
 pretty-hex = "0.1"
 enumflags2 = "0.6"
+lazy_static = "1"

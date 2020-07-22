@@ -16,14 +16,14 @@ pub struct ApiClient {
   created_at: DateTime<Utc>,
 }
 
-pub struct Storage {
+pub struct ApiClientStorage {
   db: ExecutorRef,
   map: DashMap<Vec<u8>, ApiClient>,
 }
 
-impl Storage {
+impl ApiClientStorage {
   pub async fn init(db: ExecutorRef) -> Result<Self> {
-    let mut storage = Storage {
+    let mut storage = ApiClientStorage {
       db: db.clone(),
       map: DashMap::new(),
     };
@@ -56,7 +56,7 @@ impl Storage {
     Ok(())
   }
 
-  pub fn into_ref(self) -> Arc<Self> {
+  pub fn into_ref(self) -> ApiClientStorageRef {
     Arc::new(self)
   }
 
@@ -75,3 +75,5 @@ impl Storage {
     })
   }
 }
+
+pub type ApiClientStorageRef = Arc<ApiClientStorage>;
