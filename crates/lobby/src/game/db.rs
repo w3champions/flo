@@ -12,7 +12,6 @@ use crate::game::{
 use crate::map::Map;
 use crate::player::PlayerRef;
 use crate::schema::game;
-use crate::state::LockedGameState;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Row> {
   let row = game::table
@@ -58,7 +57,7 @@ impl Default for GameStatusFilter {
 }
 
 pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
-  use crate::schema::player::{self, dsl as player_dsl};
+  use crate::schema::player::{self};
   use diesel::dsl::sql;
   use game::dsl;
 

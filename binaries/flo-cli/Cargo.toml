@@ -1,0 +1,19 @@
+[package]
+name = "flo-cli"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+flo-log = { path = "../../crates/log" }
+flo-lobby = { path = "../../crates/lobby" }
+flo-net = { path = "../../crates/net" }
+
+dotenv = "0.15.0"
+clap = "2.33.1"
+structopt = "0.3.15"
+tracing = "0.1"
+tracing-futures = "0.2.4"
+tokio = { version = "0.2", features = ["macros"] }

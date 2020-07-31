@@ -3,6 +3,8 @@ use s2_grpc_utils::result::Error as ProtoError;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
+use flo_net::proto::flo_connect as packet;
+
 #[derive(Debug, Serialize, Deserialize, Queryable)]
 pub struct Node {
   pub id: i32,
@@ -14,7 +16,7 @@ pub struct Node {
   pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum NodeRef {
   Public {
@@ -84,7 +86,7 @@ impl S2ProtoPack<flo_grpc::game::SelectedNode> for NodeRef {
         ip_addr,
         secret,
       } => Ok(SelectedNode {
-        r#type: SelectedNodeType::Public.into(),
+        r#type: SelectedNodeType::Private.into(),
         id: None,
         name,
         location,
@@ -102,6 +104,39 @@ impl From<Node> for NodeRef {
       name: node.name,
       location: node.location,
       ip_addr: node.ip_addr,
+    }
+  }
+}
+
+impl NodeRef {
+  pub fn into_packet(self) -> packet::SelectedNode {
+    match self {
+      Self::Public {
+        id,
+        name,
+        location,
+        ip_addr,
+      } => packet::SelectedNode {
+        r#type: packet::SelectedNodeType::Public.into(),
+        id: Some(id),
+        name,
+        location,
+        ip_addr,
+        secret: None,
+      },
+      Self::Private {
+        name,
+        location,
+        ip_addr,
+        secret,
+      } => packet::SelectedNode {
+        r#type: packet::SelectedNodeType::Private.into(),
+        id: None,
+        name,
+        location,
+        ip_addr,
+        secret: Some(secret),
+      },
     }
   }
 }

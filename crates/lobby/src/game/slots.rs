@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+
 
 use crate::game::{Computer, Race, Slot, SlotSettings, SlotStatus};
 use crate::player::PlayerRef;
@@ -182,5 +182,5 @@ impl Slots {
 
 #[test]
 fn test_slot_ops() {
-  let mut slots = Slots::new(4);
+  let _slots = Slots::new(4);
 }

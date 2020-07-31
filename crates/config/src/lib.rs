@@ -27,38 +27,47 @@ impl Default for ClientConfig {
 
 impl ClientConfig {
   pub fn from_env() -> Result<Self> {
-    use std::env;
     let mut config = ClientConfig::default();
+
+    config.apply_env();
+
+    Ok(config)
+  }
+
+  pub fn load() -> Result<Self> {
+    let mut config: Self = toml::from_str(&fs::read_to_string("flo.toml")?)?;
+
+    config.apply_env();
+
+    Ok(config)
+  }
+
+  pub fn save(&self) -> Result<()> {
+    fs::write("flo.toml", toml::to_string_pretty(self)?).map_err(Into::into)
+  }
+
+  fn apply_env(&mut self) {
+    use std::env;
 
     if let Ok(Some(port)) = env::var("FLO_LOCAL_PORT")
       .ok()
       .map(|v| v.parse())
       .transpose()
     {
-      config.local_port = port;
+      self.local_port = port;
     }
 
     if let Some(path) = env::var("FLO_USER_DATA_PATH").ok().map(PathBuf::from) {
-      config.user_data_path = Some(path);
+      self.user_data_path = Some(path);
     }
 
     if let Some(path) = env::var("FLO_INSTALLATION_PATH").ok().map(PathBuf::from) {
-      config.installation_path = Some(path);
+      self.installation_path = Some(path);
     }
 
     if let Some(domain) = env::var("FLO_LOBBY_DOMAIN").ok() {
-      config.lobby_domain = domain;
+      self.lobby_domain = domain;
     }
-
-    Ok(config)
-  }
-
-  pub fn load() -> Result<Self> {
-    toml::from_str(&fs::read_to_string("flo.toml")?).map_err(Into::into)
-  }
-
-  pub fn save(&self) -> Result<()> {
-    fs::write("flo.toml", toml::to_string_pretty(self)?).map_err(Into::into)
   }
 }
 

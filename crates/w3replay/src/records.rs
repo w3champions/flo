@@ -402,7 +402,7 @@ pub struct EndTimer {
 
 #[test]
 fn test_record() {
-  use crate::header::Header;
+  
   use bytes::buf::ext::Chain;
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();
@@ -410,10 +410,10 @@ fn test_record() {
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
   let mut rec_count = 0;
-  let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
+  let blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
   let empty = Bytes::new();
   let mut tail = empty.clone();
-  for (i, block) in blocks.enumerate() {
+  for (_i, block) in blocks.enumerate() {
     let mut block = block.unwrap();
     let mut buf = Chain::new(tail, block.data.clone());
     loop {
@@ -465,11 +465,11 @@ fn test_record_iter() {
   let mut buf = bytes.as_slice();
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
-  let mut blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
-  let mut iter = RecordIter::new(blocks);
+  let blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
+  let iter = RecordIter::new(blocks);
   let mut n = 0;
   for record in iter {
-    let record = record.unwrap();
+    let _record = record.unwrap();
     n = n + 1;
   }
   dbg!(n);

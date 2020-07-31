@@ -22,8 +22,14 @@ pub enum Error {
   MultiJoin,
   #[error("player not in game")]
   PlayerNotInGame,
+  #[error("send to player channel timeout")]
+  PlayerChannelSendTimeout,
+  #[error("player channel closed")]
+  PlayerChannelClosed,
   #[error("invalid player source state")]
   InvalidPlayerSourceState,
+  #[error("operation timeout")]
+  Timeout(#[from] tokio::time::Elapsed),
   #[error("net: {0}")]
   Net(#[from] flo_net::error::Error),
   #[error("db error: {0}")]

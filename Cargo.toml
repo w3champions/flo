@@ -1,26 +1,29 @@
 [workspace]
 members = [
-  "./crates/codegen",
-  "./crates/platform",
-  "./crates/util",
-  "./crates/w3gs",
-  "./crates/w3map",
-  "./crates/blp",
-  "./crates/lobby",
-  "./crates/lan",
-  "./crates/log",
-  "./crates/config",
-  "./crates/net",
-  "./crates/w3storage",
-  "./crates/w3replay",
-  "./crates/node",
-  "./crates/connect",
-  "./crates/constants",
+  "crates/codegen",
+  "crates/platform",
+  "crates/util",
+  "crates/w3gs",
+  "crates/w3map",
+  "crates/blp",
+  "crates/lobby",
+  "crates/lan",
+  "crates/log",
+  "crates/config",
+  "crates/net",
+  "crates/w3storage",
+  "crates/w3replay",
+  "crates/node",
+  "crates/connect",
+  "crates/constants",
 
-  "./binaries/flo",
-  "./binaries/flo-lobby-service",
-  "./binaries/flo-map-checksum-dump",
-  "./binaries/flo-map-checksum-import",
+  "binaries/flo",
+  "binaries/flo-cli",
+  "binaries/flo-lobby-service",
+  "binaries/flo-map-checksum-dump",
+  "binaries/flo-map-checksum-import",
+
+  "deps/flo-grpc"
 ]
 
 [patch.crates-io]
@@ -30,4 +33,3 @@ trust-dns-proto = { git = "https://github.com/fluxxu/trust-dns.git", branch = "m
 trust-dns-client = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
 casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
-flo-grpc = { path = "../flo-grpc" }

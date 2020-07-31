@@ -152,7 +152,7 @@ fn test_block() {
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);
 
-  let mut blocks = Blocks::from_buf(buf, header.num_blocks as usize);
+  let blocks = Blocks::from_buf(buf, header.num_blocks as usize);
   for block in blocks {
     let _block = block.unwrap();
   }

@@ -35,7 +35,6 @@ pub struct ImportItem {
 pub fn import(conn: &DbConn, mut items: Vec<ImportItem>) -> Result<usize> {
   use diesel::pg::upsert::excluded;
   use map_checksum::dsl;
-  use std::collections::HashMap;
 
   items.sort_by_cached_key(|i| i.sha1.clone());
   items.dedup_by(|a, b| a.sha1 == b.sha1);

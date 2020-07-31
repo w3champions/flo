@@ -2,10 +2,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
 use std::str::FromStr;
-use std::sync::Arc;
+
+use flo_net::proto::flo_connect::{
+  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGameSlotUpdate,
+  PacketGameSlotUpdateRequest,
+};
 
 use crate::error::{Error, Result};
-pub use crate::net::lobby::{DisconnectReason, PlayerSession, RejectReason};
+
+pub use crate::net::lobby::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
 use crate::state::FloState;
 use crate::state::PlatformStateError;
 
@@ -16,22 +21,26 @@ pub enum IncomingMessage {
   Connect(Connect),
   ListMaps,
   GetMapDetail(MapPath),
+  GameSlotUpdateRequest(PacketGameSlotUpdateRequest),
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 pub enum OutgoingMessage {
   ClientInfo(ClientInfo),
-  ReloadClientInfo,
   ReloadClientInfoError(ErrorMessage),
-  PlayerSession(Arc<PlayerSession>),
+  PlayerSession(PlayerSession),
   ConnectRejected(ErrorMessage),
   Disconnect(Disconnect),
-  Invitation,
   ListMaps(MapList),
   ListMapsError(ErrorMessage),
   GetMapDetail(MapDetail),
   GetMapDetailError(ErrorMessage),
+  CurrentGameInfo(GameInfo),
+  GamePlayerEnter(PacketGamePlayerEnter),
+  GamePlayerLeave(PacketGamePlayerLeave),
+  GameSlotUpdate(PacketGameSlotUpdate),
+  PlayerSessionUpdate(PlayerSessionUpdate),
 }
 
 impl FromStr for IncomingMessage {

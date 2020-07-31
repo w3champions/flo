@@ -91,11 +91,11 @@ impl ChatMessage {
   pub fn encode_len(&self) -> usize {
     1 + match *self {
       ChatMessage::Chat(ref msg) => msg.as_bytes_with_nul().len(),
-      ChatMessage::TeamChange(v) => size_of::<u8>(),
-      ChatMessage::ColorChange(v) => size_of::<u8>(),
-      ChatMessage::RaceChange(v) => size_of::<u8>(),
-      ChatMessage::HandicapChange(v) => size_of::<u8>(),
-      ChatMessage::Scoped { scope, ref message } => {
+      ChatMessage::TeamChange(_v) => size_of::<u8>(),
+      ChatMessage::ColorChange(_v) => size_of::<u8>(),
+      ChatMessage::RaceChange(_v) => size_of::<u8>(),
+      ChatMessage::HandicapChange(_v) => size_of::<u8>(),
+      ChatMessage::Scoped { scope: _, ref message } => {
         MessageScope::MIN_SIZE + message.as_bytes_with_nul().len()
       }
     }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
-use crate::connect::NotificationSender;
+use crate::connect::PlayerSenderRef;
 use crate::error::Result;
 use crate::game::{
   db::{get_all_active_game_state, GameStateFromDb},
@@ -53,7 +53,7 @@ impl MemGameState {
 #[derive(Debug, Default)]
 pub struct MemPlayerState {
   pub game_id: Option<i32>,
-  pub sender: Option<NotificationSender>,
+  pub sender: Option<PlayerSenderRef>,
 }
 
 #[derive(Debug)]
@@ -212,6 +212,36 @@ impl LockedPlayerState {
   pub fn leave_game(&mut self) {
     self.guard.game_id = None;
   }
+
+  #[tracing::instrument(skip(self))]
+  pub fn replace_sender(&mut self, sender: PlayerSenderRef) {
+    if let Some(mut sender) = self.guard.sender.take() {
+      tracing::debug!("sender replaced");
+      tokio::spawn(async move {
+        sender.disconnect_multi().await;
+      });
+    }
+    self.guard.sender = Some(sender);
+  }
+
+  pub fn remove_sender(&mut self, sender: PlayerSenderRef) {
+    let remove = if let Some(ref current) = self.guard.sender {
+      sender.ptr_eq(current)
+    } else {
+      false
+    };
+    if remove {
+      self.guard.sender.take();
+    }
+  }
+
+  pub fn get_sender_cloned(&self) -> Option<PlayerSenderRef> {
+    self.guard.sender.clone()
+  }
+
+  pub fn get_sender_mut(&mut self) -> Option<&mut PlayerSenderRef> {
+    self.guard.sender.as_mut()
+  }
 }
 
 #[derive(Debug)]
@@ -258,5 +288,9 @@ impl LockedGameState {
 
   pub fn close(&mut self) {
     self.guard.closed = true;
+  }
+
+  pub fn get_senders(&self) -> Vec<PlayerSenderRef> {
+    unimplemented!()
   }
 }

@@ -1,9 +1,9 @@
 use async_tungstenite::tungstenite::Message as WsMessage;
-use async_tungstenite::WebSocketStream;
+
 use futures::future::{abortable, AbortHandle};
 use futures::{SinkExt, TryStreamExt};
 use parking_lot::RwLock;
-use serde_json::Value;
+
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
@@ -16,6 +16,8 @@ use crate::ws::message::{
   OutgoingMessage,
 };
 use crate::ws::stream::{WsSenderRef, WsStream, WsStreamExt};
+
+use flo_net::proto::flo_connect::PacketGameSlotUpdateRequest;
 
 #[derive(Debug)]
 pub struct WsHandler {
@@ -94,11 +96,11 @@ impl StateRef {
           None
         }
       },
-      WsMessage::Ping(data) => {
+      WsMessage::Ping(_data) => {
         // tokio::spawn(Self::handle_ping(tx.clone(), data));
         None
       }
-      WsMessage::Pong(data) => {
+      WsMessage::Pong(_data) => {
         // tokio::spawn(Self::handle_pong(tx.clone(), data));
         None
       }
@@ -124,9 +126,10 @@ impl StateRef {
           broken_notify.clone(),
           self.clone().handle_get_map_detail(tx.clone(), payload),
         ),
-        msg => {
-          tracing::warn!("unknown incoming message: {:?}", msg);
-        }
+        IncomingMessage::GameSlotUpdateRequest(req) => Self::spawn_handler(
+          broken_notify.clone(),
+          self.clone().handle_slot_update(tx.clone(), req),
+        ),
       }
     }
   }
@@ -167,11 +170,11 @@ impl StateRef {
     Ok(())
   }
 
-  async fn handle_ping(tx: WsSenderRef, data: Vec<u8>) -> Result<()> {
+  async fn handle_ping(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
     Ok(())
   }
 
-  async fn handle_pong(tx: WsSenderRef, data: Vec<u8>) -> Result<()> {
+  async fn handle_pong(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
     Ok(())
   }
 
@@ -251,6 +254,14 @@ impl StateRef {
           .await?;
       }
     }
+    Ok(())
+  }
+
+  async fn handle_slot_update(
+    self,
+    tx: WsSenderRef,
+    req: PacketGameSlotUpdateRequest,
+  ) -> Result<()> {
     Ok(())
   }
 

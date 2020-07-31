@@ -3,12 +3,13 @@ use chrono::{DateTime, Utc};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
-use crate::game::db::Row;
+use flo_net::proto::flo_connect as packet;
+
 use crate::map::Map;
 use crate::node::NodeRef;
 use crate::player::PlayerRef;
 
-#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type = "flo_grpc::game::Game")]
 pub struct Game {
   pub id: i32,
@@ -124,4 +125,67 @@ pub enum Computer {
   Easy = 0,
   Normal = 1,
   Insane = 2,
+}
+
+impl Game {
+  pub fn into_packet(self) -> packet::GameInfo {
+    packet::GameInfo {
+      id: self.id,
+      name: self.name,
+      status: match self.status {
+        GameStatus::Preparing => packet::GameStatus::Preparing,
+        GameStatus::Playing => packet::GameStatus::Playing,
+        GameStatus::Ended => packet::GameStatus::Ended,
+        GameStatus::Paused => packet::GameStatus::Paused,
+      }
+      .into(),
+      map: Some(packet::Map {
+        sha1: self.map.sha1.to_vec(),
+        checksum: self.map.checksum,
+        path: self.map.path,
+      }),
+      slots: self
+        .slots
+        .into_iter()
+        .map(|slot| packet::Slot {
+          player: slot.player.map(|player| player.into_packet()),
+          settings: slot.settings.into_packet().into(),
+        })
+        .collect(),
+      node: self.node.map(|node| node.into_packet()),
+      is_private: self.is_private,
+      is_live: self.is_live,
+      created_by: self.created_by.map(|player| player.into_packet()),
+    }
+  }
+}
+
+impl SlotSettings {
+  pub fn into_packet(self) -> packet::SlotSettings {
+    packet::SlotSettings {
+      team: self.team,
+      color: self.color,
+      computer: match self.computer {
+        Computer::Easy => packet::Computer::Easy,
+        Computer::Normal => packet::Computer::Normal,
+        Computer::Insane => packet::Computer::Insane,
+      }
+      .into(),
+      handicap: self.handicap,
+      status: match self.status {
+        SlotStatus::Open => packet::SlotStatus::Open,
+        SlotStatus::Closed => packet::SlotStatus::Closed,
+        SlotStatus::Occupied => packet::SlotStatus::Occupied,
+      }
+      .into(),
+      race: match self.race {
+        Race::Human => packet::Race::Human,
+        Race::Orc => packet::Race::Orc,
+        Race::NightElf => packet::Race::NightElf,
+        Race::Undead => packet::Race::Undead,
+        Race::Random => packet::Race::Random,
+      }
+      .into(),
+    }
+  }
 }

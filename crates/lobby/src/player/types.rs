@@ -3,7 +3,8 @@ use chrono::{DateTime, Utc};
 use s2_grpc_utils::result::Error as ProtoError;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
+use flo_net::proto::flo_connect as packet;
 
 use crate::schema::player;
 
@@ -89,4 +90,18 @@ pub struct BNetState {
   pub account_id: u64,
   pub access_token: String,
   pub access_token_exp: u64,
+}
+
+impl PlayerRef {
+  pub fn into_packet(self) -> packet::PlayerInfo {
+    packet::PlayerInfo {
+      id: self.id,
+      name: self.name,
+      source: match self.source {
+        PlayerSource::Test => packet::PlayerSource::Test,
+        PlayerSource::BNet => packet::PlayerSource::BNet,
+      }
+      .into(),
+    }
+  }
 }

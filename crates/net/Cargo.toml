@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 flo-util = { path = "../util" }
 flo-constants = { path = "../constants" }
+flo-grpc = { path = "../../deps/flo-grpc" }
 
 bytes = "0.5.6"
 thiserror = "1"
@@ -15,6 +16,7 @@ tokio = { version = "0.2.22", features = ["time", "tcp", "stream", "macros", "sy
 tokio-util = { version = "0.3.1", features = ["codec"] }
 futures = "0.3.5"
 tracing = "0.1"
+serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
 prost-build = { version = "0.6.1" }

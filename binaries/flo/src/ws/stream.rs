@@ -1,6 +1,6 @@
 use async_tungstenite::tungstenite::{error::Error as WsError, Message as WsMessage};
 use async_tungstenite::WebSocketStream;
-use futures::stream::{SplitSink, SplitStream, Stream, StreamExt};
+use futures::stream::{SplitSink, SplitStream, StreamExt};
 use futures::SinkExt;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
 use crate::error::Result;
-use crate::ws::message::{IncomingMessage, OutgoingMessage};
+use crate::ws::message::{OutgoingMessage};
 
 pub type WsStream = WebSocketStream<async_tungstenite::tokio::TokioAdapter<TcpStream>>;
 

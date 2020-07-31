@@ -24,7 +24,6 @@ pub enum GetProcessPathByWindowTitleResult {
 
 #[test]
 fn test_get_version() {
-  use std::ffi::OsString;
   use std::os::windows::ffi::OsStrExt;
   use std::path::PathBuf;
   let mut path: Vec<u16> =
@@ -40,6 +39,7 @@ fn test_get_version() {
 
 #[test]
 fn test_get_process_path_by_window_title() {
+  use std::ffi::OsString;
   use std::os::windows::ffi::OsStrExt;
   use widestring::U16CString;
   let mut out = Vec::<u16>::with_capacity(256);

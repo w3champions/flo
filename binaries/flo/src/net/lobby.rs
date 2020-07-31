@@ -1,14 +1,13 @@
 use futures::stream::StreamExt;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
-use serde::{Deserialize, Serialize};
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
+use serde::Serialize;
+
 use tokio::sync::mpsc;
 use tracing_futures::Instrument;
 
 pub use flo_net::connect::*;
-use flo_net::packet::{Frame, PacketTypeId};
+use flo_net::packet::*;
+use flo_net::proto::flo_connect::GameInfo;
 use flo_net::stream::FloStream;
 
 use crate::error::{Error, Result};
@@ -16,7 +15,6 @@ use crate::ws::{message, OutgoingMessage, WsSenderRef};
 
 #[derive(Debug)]
 pub struct LobbyStream {
-  session: Arc<PlayerSession>,
   frame_sender: mpsc::Sender<Frame>,
   ws_sender: WsSenderRef,
 }
@@ -49,14 +47,9 @@ impl LobbyStream {
       }
     };
 
-    let session = Arc::new(session);
     let (frame_sender, mut frame_r) = mpsc::channel(5);
 
-    if let SendResult::Closed =
-      Self::send_event(&ws_sender, LobbyEvent::Connected(session.clone())).await?
-    {
-      return Err(Error::WebsocketClosed);
-    }
+    Self::send_message(&ws_sender, OutgoingMessage::PlayerSession(session)).await?;
 
     tokio::spawn({
       let ws_sender = ws_sender.clone();
@@ -79,20 +72,41 @@ impl LobbyStream {
             }
             recv = stream.recv_frame() => {
               match recv {
-                Ok(frame) => {
+                Ok(mut frame) => {
+                  if frame.type_id == PacketTypeId::Ping {
+                    frame.type_id = PacketTypeId::Pong;
+                    match stream.send_frame(frame).await {
+                      Ok(_) => {
+                        continue;
+                      },
+                      Err(e) => {
+                        tracing::debug!("exiting: send error: {}", e);
+                        break;
+                      }
+                    }
+                  }
+
                   match Self::dispatch(&ws_sender, frame).await {
                     Ok(_) => {},
                     Err(e) => {
                       tracing::debug!("exiting: dispatch: {}", e);
+                      match Self::send_message(&ws_sender, OutgoingMessage::Disconnect(message::Disconnect {
+                    reason: DisconnectReason::Unknown
+                  })).await {
+                        Ok(_) => {},
+                        Err(e) => {
+                          tracing::debug!("exiting: send disconnect: {}", e);
+                        }
+                      }
                       break;
                     }
                   }
                 },
                 Err(e) => {
                   tracing::debug!("exiting: recv: {}", e);
-                  match Self::send_event(&ws_sender, LobbyEvent::Disconnect(
-                    DisconnectReason::Unknown
-                  )).await {
+                  match Self::send_message(&ws_sender, OutgoingMessage::Disconnect(message::Disconnect {
+                    reason: DisconnectReason::Unknown
+                  })).await {
                     Ok(_) => {},
                     Err(e) => {
                       tracing::debug!("exiting: send disconnect: {}", e);
@@ -110,54 +124,47 @@ impl LobbyStream {
     });
 
     Ok(LobbyStream {
-      session,
       frame_sender,
       ws_sender,
     })
   }
 
-  async fn dispatch(sender: &WsSenderRef, frame: Frame) -> Result<SendResult> {
-    let event = flo_net::frame_packet! {
+  // forward server packets to the websocket connection
+  async fn dispatch(sender: &WsSenderRef, frame: Frame) -> Result<()> {
+    let msg = flo_net::frame_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
-          LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
+          OutgoingMessage::Disconnect(message::Disconnect { reason: S2ProtoUnpack::unpack(p.reason)? })
         },
+        p = PacketGameInfo => {
+          OutgoingMessage::CurrentGameInfo(p.game.extract()?)
+        },
+        p = PacketGamePlayerEnter => {
+          OutgoingMessage::GamePlayerEnter(p)
+        },
+        p = PacketGamePlayerLeave => {
+          OutgoingMessage::GamePlayerLeave(p)
+        },
+        p = PacketGameSlotUpdate => {
+          OutgoingMessage::GameSlotUpdate(p)
+        },
+        p = PacketPlayerSessionUpdate => {
+          OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
+        }
       }
     };
 
-    Self::send_event(sender, event).await
+    Self::send_message(sender, msg).await
   }
 
-  async fn send_event(sender: &WsSenderRef, evt: LobbyEvent) -> Result<SendResult> {
-    let msg = match evt {
-      LobbyEvent::Connected(session) => OutgoingMessage::PlayerSession(session.clone()),
-      LobbyEvent::Disconnect(reason) => OutgoingMessage::Disconnect(message::Disconnect { reason }),
-      LobbyEvent::Invitation => OutgoingMessage::Invitation,
-    };
+  async fn send_message(sender: &WsSenderRef, msg: OutgoingMessage) -> Result<()> {
     if let Err(err) = sender.send(msg).await {
       tracing::error!("send event: {}", err);
-      Ok(SendResult::Closed)
-    } else {
-      Ok(SendResult::Ok)
+      return Err(err);
     }
+    Ok(())
   }
 }
-
-#[derive(Debug)]
-enum SendResult {
-  Ok,
-  Closed,
-}
-
-#[derive(Debug)]
-pub enum LobbyEvent {
-  Connected(Arc<PlayerSession>),
-  Invitation,
-  Disconnect(DisconnectReason),
-}
-
-#[derive(Debug)]
-pub enum LobbyRequest {}
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
 #[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::LobbyDisconnectReason")]
@@ -167,13 +174,17 @@ pub enum DisconnectReason {
   Maintenance = 2,
 }
 
-#[derive(Debug)]
-pub struct Invitation;
-
 #[derive(Debug, S2ProtoUnpack, Serialize)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::Session")]
 pub struct PlayerSession {
   pub player: PlayerInfo,
+  pub status: PlayerStatus,
+  pub game_id: Option<i32>,
+}
+
+#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[s2_grpc(message_type = "flo_net::proto::flo_connect::PacketPlayerSessionUpdate")]
+pub struct PlayerSessionUpdate {
   pub status: PlayerStatus,
   pub game_id: Option<i32>,
 }

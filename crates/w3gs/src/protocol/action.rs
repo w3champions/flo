@@ -1,16 +1,16 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::time::Instant;
+
+
+
 
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::*;
-use crate::protocol::constants::{LeaveReason, PacketTypeId};
+use crate::protocol::constants::{PacketTypeId};
 use crate::protocol::packet::{
-  Header, Packet, PacketPayload, PacketPayloadDecode, PacketPayloadEncode,
+  PacketPayload, PacketPayloadDecode, PacketPayloadEncode,
 };
-use bitflags::_core::fmt::Formatter;
+
 
 #[derive(Debug, PartialEq)]
 pub struct OutgoingAction {
@@ -317,7 +317,7 @@ fn crc16(data: &[u8]) -> u16 {
 #[test]
 fn test_outgoing_action() {
   let mut buf = Bytes::from(flo_util::sample_bytes!("packet", "outgoing_action.bin")).split_off(4);
-  let p = OutgoingAction::decode(&mut buf).unwrap();
+  let _p = OutgoingAction::decode(&mut buf).unwrap();
 
   crate::packet::test_payload_type(
     "outgoing_action.bin",
@@ -352,7 +352,7 @@ fn test_incoming_action() {
 
 #[test]
 fn test_incoming_action2_split_chunk_1() {
-  let mut payload = TimeSlot {
+  let payload = TimeSlot {
     time_increment_ms: 100,
     actions: vec![PlayerAction {
       player_id: 1,

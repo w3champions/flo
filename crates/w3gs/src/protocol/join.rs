@@ -1,7 +1,7 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::protocol::constants::{PacketTypeId, RejectJoinReason, SlotLayout};
+use crate::protocol::constants::{PacketTypeId, RejectJoinReason};
 use crate::protocol::packet::PacketPayload;
 use crate::protocol::slot::SlotInfo;
 
@@ -74,7 +74,7 @@ fn test_req_join() {
 
 #[test]
 fn test_slot_info_join() {
-  use crate::protocol::constants::{RacePref, SlotStatus, AI};
+  use crate::protocol::constants::{RacePref, SlotLayout, SlotStatus, AI};
   use crate::slot::SlotData;
   crate::packet::test_simple_payload_type(
     "slot_info_join.bin",

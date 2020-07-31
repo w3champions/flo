@@ -2,27 +2,19 @@ mod handler;
 pub(crate) mod message;
 mod stream;
 
-use async_tungstenite::WebSocketStream;
-use futures::future::{self, FutureExt};
 use futures::stream::TryStreamExt;
 use futures::TryFutureExt;
 use http::{Request, Response};
 use parking_lot::RwLock;
-use std::future::Future;
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::mpsc;
-use tokio::sync::Notify;
-use tracing::field::debug;
 
-use crate::error::{Error, Result};
+use std::net::{Ipv4Addr, SocketAddrV4};
+
+use crate::error::Result;
 use crate::state::FloStateRef;
 use crate::ws::handler::WsHandler;
 pub use crate::ws::message::OutgoingMessage;
-use crate::ws::message::{ClientInfo, ErrorMessage, IncomingMessage, War3Info};
+
 pub use crate::ws::stream::WsSenderRef;
-use crate::ws::stream::*;
 
 #[derive(Debug)]
 pub struct Ws {
@@ -49,7 +41,7 @@ impl Ws {
     tracing::debug!("listen on {}", listener.local_addr()?);
 
     while let Some(stream) = listener.incoming().try_next().await? {
-      let addr = stream.peer_addr()?;
+      let _addr = stream.peer_addr()?;
       let stream = match accept_hdr_async(stream, check_origin).await {
         Ok(stream) => stream,
         Err(WsError::Http(_)) => continue,

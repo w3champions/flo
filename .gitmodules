@@ -1,3 +1,6 @@
 [submodule "deps/wc3-samples"]
 	path = deps/wc3-samples
 	url = https://github.com/wc3tools/wc3-samples.git
+[submodule "deps/flo-grpc"]
+	path = deps/flo-grpc
+	url = https://github.com/wc3tools/flo-grpc.git

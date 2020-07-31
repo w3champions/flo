@@ -4,6 +4,7 @@ pub use prost::Message;
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::{Error, Result};
+use tokio::time::Elapsed;
 
 pub trait FloPacket
 where
@@ -11,7 +12,7 @@ where
 {
   const TYPE_ID: PacketTypeId;
 
-  fn encode_as_frame(self) -> Result<Frame> {
+  fn encode_as_frame(&self) -> Result<Frame> {
     let payload_len = self.encoded_len();
     let mut buf = BytesMut::with_capacity(payload_len);
     self.encode(&mut buf)?;
@@ -54,10 +55,16 @@ impl Frame {
 /// If no branch matches, returns Err(...)
 ///
 /// ```no_run
-/// docode_packet! {
-///   packet = ConnectLobbyPacket => {},
-///   packet = ConnectLobbyRejectPacket => {},
-/// }
+/// let event = flo_net::frame_packet! {
+///   frame => {
+///     p = PacketLobbyDisconnect => {
+///       LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
+///     },
+///     p = PacketGameInfo => {
+///       LobbyEvent::GameInfo(p.game.extract()?)
+///     },
+///   }
+/// };
 /// ```
 #[macro_export]
 macro_rules! frame_packet {
@@ -100,6 +107,18 @@ pub enum PacketTypeId {
   ConnectLobbyReject,
   #[bin(value = 0x06)]
   LobbyDisconnect,
+  #[bin(value = 0x07)]
+  GameInfo,
+  #[bin(value = 0x08)]
+  GamePlayerEnter,
+  #[bin(value = 0x09)]
+  GamePlayerLeave,
+  #[bin(value = 0x10)]
+  GameSlotUpdate,
+  #[bin(value = 0x11)]
+  GameSlotUpdateRequest,
+  #[bin(value = 0x12)]
+  PlayerSessionUpdate,
   UnknownValue(u8),
 }
 
@@ -123,5 +142,35 @@ pub trait OptionalFieldExt<T> {
 impl<T> OptionalFieldExt<T> for Option<T> {
   fn extract(self) -> Result<T, Error> {
     self.ok_or_else(|| Error::PacketFieldNotPresent)
+  }
+}
+
+pub trait TimeoutResultExt<T, E> {
+  fn flatten_timeout_err<F>(self, f: F) -> Result<T, E>
+  where
+    F: FnOnce() -> E;
+
+  fn map_timeout_err<F1, F2, E2>(self, map_timeout: F1, map_err: F2) -> Result<T, E2>
+  where
+    F1: FnOnce() -> E2,
+    F2: FnOnce(E) -> E2;
+}
+
+impl<T, E> TimeoutResultExt<T, E> for Result<Result<T, E>, Elapsed> {
+  fn flatten_timeout_err<F>(self, f: F) -> Result<T, E>
+  where
+    F: FnOnce() -> E,
+  {
+    self.map_err(|_| f()).and_then(|res| res)
+  }
+
+  fn map_timeout_err<F1, F2, E2>(self, map_timeout: F1, map_err: F2) -> Result<T, E2>
+  where
+    F1: FnOnce() -> E2,
+    F2: FnOnce(E) -> E2,
+  {
+    self
+      .map_err(|_| map_timeout())
+      .and_then(|res| res.map_err(map_err))
   }
 }

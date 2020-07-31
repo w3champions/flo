@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Formatter, Result};
+use std::fmt::{Display, Formatter, Result};
 
 use crate::proto::flo_common::Version;
 

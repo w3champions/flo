@@ -2,3 +2,8 @@
 samples
 flo.toml
 .env
+*.iml
+.idea/modules.xml
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/tasks.xml

@@ -4,28 +4,6 @@ package flo_connect;
 import "google/protobuf/wrappers.proto";
 import "proto/common.proto";
 
-enum PlayerSource {
-  PlayerSourceTest = 0;
-  PlayerSourceBNet = 1;
-}
-
-message PlayerInfo {
-  int32 id = 1;
-  string name = 2;
-  PlayerSource source = 3;
-}
-
-enum PlayerStatus {
-  PlayerStatusIdle = 0;
-  PlayerStatusInGame = 1;
-}
-
-message Session {
-  PlayerInfo player = 1;
-  PlayerStatus status = 2;
-  google.protobuf.Int32Value game_id = 3;
-}
-
 message PacketConnectLobby {
   flo_common.Version connect_version = 1;
   string token = 2;
@@ -56,4 +34,139 @@ enum LobbyDisconnectReason {
 
 message PacketLobbyDisconnect {
   LobbyDisconnectReason reason = 1;
+}
+
+message PacketPlayerSessionUpdate {
+  PlayerStatus status = 1;
+  google.protobuf.Int32Value game_id = 2;
+}
+
+message PacketGameInfo {
+  GameInfo game = 1;
+}
+
+message PacketGamePlayerEnter {
+  int32 game_id = 1;
+  int32 slot_index = 2;
+  Slot slot = 3;
+}
+
+message PacketGamePlayerLeave {
+  int32 game_id = 1;
+  int32 player_id = 2;
+  PlayerLeaveReason reason = 3;
+}
+
+message PacketGameSlotUpdateRequest {
+  int32 game_id = 1;
+  int32 player_id = 2;
+  SlotSettings slot_settings = 3;
+}
+
+message PacketGameSlotUpdate {
+  int32 game_id = 1;
+  int32 slot_index = 2;
+  SlotSettings slot_settings = 3;
+}
+
+enum PlayerSource {
+  PlayerSourceTest = 0;
+  PlayerSourceBNet = 1;
+}
+
+message PlayerInfo {
+  int32 id = 1;
+  string name = 2;
+  PlayerSource source = 3;
+}
+
+enum PlayerStatus {
+  PlayerStatusIdle = 0;
+  PlayerStatusInGame = 1;
+}
+
+message Session {
+  PlayerInfo player = 1;
+  PlayerStatus status = 2;
+  google.protobuf.Int32Value game_id = 3;
+}
+
+message GameInfo {
+  int32 id = 1;
+  string name = 2;
+  GameStatus status = 3;
+  Map map = 4;
+  repeated Slot slots = 5;
+  SelectedNode node = 6;
+  bool is_private = 7;
+  bool is_live = 9;
+  PlayerInfo created_by = 12;
+}
+
+message SelectedNode {
+  SelectedNodeType type = 1;
+  google.protobuf.Int32Value id = 2;
+  string name = 3;
+  string location = 4;
+  string ip_addr = 5;
+  // for private node type
+  google.protobuf.StringValue secret = 6;
+}
+
+enum SelectedNodeType {
+  SelectedNodeTypePublic = 0;
+  SelectedNodeTypePrivate = 1;
+}
+
+message Slot {
+  PlayerInfo player = 1;
+  SlotSettings settings = 2;
+}
+
+message SlotSettings {
+  uint32 team = 1;
+  uint32 color = 2;
+  Computer computer = 3;
+  uint32 handicap = 4;
+  SlotStatus status = 5;
+  Race race = 6;
+}
+
+enum SlotStatus {
+  SlotStatusOpen = 0;
+  SlotStatusClosed = 1;
+  SlotStatusOccupied = 2;
+}
+
+enum Race {
+  RaceHuman = 0;
+  RaceOrc = 1;
+  RaceNightElf = 2;
+  RaceUndead = 3;
+  RaceRandom = 4;
+}
+
+enum Computer {
+  ComputerEasy = 0;
+  ComputerNormal = 1;
+  ComputerInsane = 2;
+}
+
+message Map {
+  bytes sha1 = 1;
+  uint32 checksum = 2;
+  string path = 3;
+}
+
+enum GameStatus {
+  GameStatusPreparing = 0;
+  GameStatusPlaying = 1;
+  GameStatusEnded = 2;
+  GameStatusPaused = 3;
+}
+
+enum PlayerLeaveReason {
+  PlayerLeaveReasonLeft = 0;
+  PlayerLeaveReasonKicked = 1;
+  PlayerLeaveReasonGameCancelled = 2;
 }

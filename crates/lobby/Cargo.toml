@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 flo-w3gs = { path = "../w3gs" }
-flo-grpc = "0.1"
+flo-grpc = { path = "../../deps/flo-grpc" }
 flo-net = { path = "../net" }
 flo-constants = { path = "../constants" }
 

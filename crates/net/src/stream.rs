@@ -1,10 +1,9 @@
-use futures::ready;
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::{TcpStream, ToSocketAddrs};
-use tokio::time::{timeout, Timeout};
+use tokio::time::timeout;
 use tokio_util::codec::Framed;
 
 use crate::codec::FloFrameCodec;
@@ -24,6 +23,7 @@ impl FloStream {
     let socket = TcpStream::connect(addr).await?;
 
     socket.set_nodelay(true).ok();
+    socket.set_keepalive(None).ok();
 
     let transport = Framed::new(socket, FloFrameCodec::new());
     Ok(FloStream {
@@ -62,24 +62,23 @@ impl FloStream {
   }
 
   #[inline]
-  pub async fn send<T>(&mut self, packet: T) -> Result<()>
+  pub async fn send_frames<I>(&mut self, iter: I) -> Result<()>
   where
-    T: FloPacket,
+    I: IntoIterator<Item = Frame>,
   {
-    self.send_frame(packet.encode_as_frame()?).await;
+    let mut stream = tokio::stream::iter(iter.into_iter().map(Ok));
+    timeout(self.timeout, self.transport.send_all(&mut stream))
+      .await
+      .map_err(|_elapsed| Error::StreamTimeout)??;
     Ok(())
   }
 
   #[inline]
-  pub async fn send_all<I, T>(&mut self, iter: I) -> Result<()>
+  pub async fn send<T>(&mut self, packet: T) -> Result<()>
   where
-    I: IntoIterator<Item = T>,
     T: FloPacket,
   {
-    let mut stream = tokio::stream::iter(iter.into_iter().map(|p| p.encode_as_frame()));
-    timeout(self.timeout, self.transport.send_all(&mut stream))
-      .await
-      .map_err(|_elapsed| Error::StreamTimeout)??;
+    self.send_frame(packet.encode_as_frame()?).await?;
     Ok(())
   }
 
@@ -114,7 +113,7 @@ impl FloStream {
 
 #[test]
 fn test_lookup() {
-  use std::net::{SocketAddr, ToSocketAddrs};
+  use std::net::ToSocketAddrs;
   let mut addrs_iter = "wc3.tools:443".to_socket_addrs().unwrap();
   dbg!(addrs_iter.next());
 }

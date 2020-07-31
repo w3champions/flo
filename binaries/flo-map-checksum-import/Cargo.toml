@@ -5,7 +5,8 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-flo-grpc = "0.1"
+flo-grpc = { path = "../../deps/flo-grpc" }
+
 tokio = { version = "0.2", features = ["full"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"]}

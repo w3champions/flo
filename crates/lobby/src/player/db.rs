@@ -6,11 +6,10 @@ use std::convert::TryFrom;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::player::{BNetState, Player, PlayerRef, PlayerSource, SourceState};
+use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
 use crate::schema::player;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
-  use player::dsl;
   player::table
     .find(id)
     .first::<Row>(conn)

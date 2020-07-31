@@ -44,27 +44,40 @@
     <cargoProject FILE="$PROJECT_DIR$/crates/constants/Cargo.toml" />
     <cargoProject FILE="$PROJECT_DIR$/crates/flo-constants/Cargo.toml" />
     <cargoProject FILE="$PROJECT_DIR$/binaries/flo-map-checksum-import/Cargo.toml" />
+    <cargoProject FILE="$PROJECT_DIR$/binaries/flo-cli/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/binaries/flo-map-checksum-import/Cargo.toml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/binaries/flo-map-checksum-import/src/main.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.tokeignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/binaries/flo-cli/Cargo.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/binaries/flo-cli/src/client.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/binaries/flo-cli/src/main.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/lobby/src/connect/send_buf.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/net/src/time.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/flo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/flo.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo-map-checksum-dump/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo-map-checksum-dump/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/error.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/state/platform.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/state/platform.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/net/lobby.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/net/lobby.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/handler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/ws/handler.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/message.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/ws/message.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/platform/src/war3.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/platform/src/war3.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3map/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3map/src/checksum.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/checksum.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3map/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3map/src/trigger_string.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3map/src/trigger_string.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/w3storage/src/path_tree.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/w3storage/src/path_tree.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/migrations/2020-07-27-060705_map_checksum/up.sql" beforeDir="false" afterPath="$PROJECT_DIR$/migrations/2020-07-27-060705_map_checksum/up.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/ws/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/config/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/config/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/constants/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/constants/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/connect/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/connect/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/connect/state.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/connect/state.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/types.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/grpc.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/grpc.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/map/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/map/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/types.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/state/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/state/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/connect/packets.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/connect/packets.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/packet/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/packet/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/proto/connect.proto" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/proto/connect.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/net/src/stream.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/stream.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -102,25 +115,26 @@
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$/../s2-sync" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
+    <property name="org.rust.disableDetachedFileInspectionC:/Data/Projects/flo/binaries/flo-cli/src/client.rs" value="true" />
     <property name="project.structure.last.edited" value="Modules" />
     <property name="project.structure.proportion" value="0.15" />
     <property name="project.structure.side.proportion" value="0.2" />
     <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RecentsManager">
-    <key name="MoveFile.RECENT_KEYS">
-      <recent name="C:\Users\fluxx\Projects\flo\crates\lobby\src\state" />
-      <recent name="C:\Users\fluxx\Projects\flo" />
-      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
-      <recent name="C:\Data\Projects\flo\crates\net\src" />
-      <recent name="C:\Data\Projects\flo\crates\net\src\packet" />
-    </key>
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Data\Projects\flo\crates\lobby\src" />
       <recent name="C:\Data\Projects\flo\binaries\flo\src" />
       <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
       <recent name="C:\Data\Projects\flo\crates\lan\src\bin" />
       <recent name="C:\Data\Projects\flo\deps\wc3-samples\replay" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
+      <recent name="C:\Data\Projects\flo\crates\net\src\packet" />
+      <recent name="C:\Users\fluxx\Projects\flo\crates\lobby\src\state" />
+      <recent name="C:\Users\fluxx\Projects\flo" />
+      <recent name="C:\Data\Projects\flo\crates\net\src" />
     </key>
   </component>
   <component name="RunAnythingCache">
@@ -130,44 +144,24 @@
       <command value="Test game_info::test_decode_gamedata" />
       <command value="cargo test --all" />
       <command value="cargo update" />
-      <command value="cargo check --all --tests" />
       <command value="Run fake_game" />
       <command value="cargo test -p w3gs" />
       <command value="cargo test -p flo-w3gs" />
       <command value="cargo test -p flo-w3map" />
       <command value="cargo clean" />
       <command value="cargo build --release -p flo" />
-      <command value="cargo doc --open --no-deps -p flo-net" />
       <command value="flo_constants" />
       <command value="cargo check -p flo-w3map" />
+      <command value="cargo check -p flo-net" />
+      <command value="cargo check --all --tests" />
+      <command value="cargo fix" />
+      <command value="cargo doc --open --no-deps -p flo-grpc" />
+      <command value="cargo doc --open --no-deps -p flo-net" />
+      <command value="cargo doc --no-deps -p flo-net" />
       <command value="cargo check" />
     </option>
   </component>
   <component name="RunManager" selected="Cargo Command.check [flo]">
-    <configuration name="Expand flo_w3storage::path_tree [constants]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="channel" value="DEFAULT" />
-      <option name="command" value="expand --lib --color=always --theme=GitHub --tests path_tree" />
-      <option name="allFeatures" value="false" />
-      <option name="emulateTerminal" value="false" />
-      <option name="backtrace" value="SHORT" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$/crates/w3storage" />
-      <envs />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="Test path_tree::test_path_tree" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="channel" value="DEFAULT" />
-      <option name="command" value="test --package flo-w3storage --lib path_tree::test_path_tree -- --exact" />
-      <option name="allFeatures" value="false" />
-      <option name="emulateTerminal" value="false" />
-      <option name="backtrace" value="SHORT" />
-      <option name="workingDirectory" value="file://$PROJECT_DIR$/crates/constants" />
-      <envs />
-      <method v="2">
-        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="Test test_open_storage" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
       <option name="command" value="test --package flo-w3map --lib test_open_storage -- --exact" />
@@ -175,6 +169,18 @@
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$/crates/constants" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test windows_bindings::test_get_version" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="test --package flo-platform --lib windows_bindings::test_get_version -- --exact" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$/binaries/flo-map-checksum-import" />
       <envs />
       <method v="2">
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
@@ -194,7 +200,19 @@
     </configuration>
     <configuration name="doc [flo]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="channel" value="DEFAULT" />
-      <option name="command" value="doc --open --no-deps -p flo-net" />
+      <option name="command" value="doc --no-deps -p flo-net" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="fix [flo]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="fix" />
       <option name="allFeatures" value="false" />
       <option name="emulateTerminal" value="false" />
       <option name="backtrace" value="SHORT" />
@@ -206,10 +224,10 @@
     </configuration>
     <list>
       <item itemvalue="Cargo Command.check [flo]" />
-      <item itemvalue="Cargo Command.doc [flo]" />
-      <item itemvalue="Cargo Command.Expand flo_w3storage::path_tree [constants]" />
-      <item itemvalue="Cargo Command.Test path_tree::test_path_tree" />
       <item itemvalue="Cargo Command.Test test_open_storage" />
+      <item itemvalue="Cargo Command.fix [flo]" />
+      <item itemvalue="Cargo Command.Test windows_bindings::test_get_version" />
+      <item itemvalue="Cargo Command.doc [flo]" />
     </list>
     <recent_temporary>
       <list>
@@ -427,7 +445,35 @@
       <option name="project" value="LOCAL" />
       <updated>1595935370296</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="wip">
+      <created>1596307772359</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1596307772359</updated>
+    </task>
+    <task id="LOCAL-00029" summary="fix: Fix compile.">
+      <created>1596307838501</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1596307838501</updated>
+    </task>
+    <task id="LOCAL-00030" summary="fix: Fix compile.">
+      <created>1596307982424</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1596307982424</updated>
+    </task>
+    <task id="LOCAL-00031" summary="fix: fix warning">
+      <created>1596308059413</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1596308059413</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -502,13 +548,19 @@
     <MESSAGE value="feat: impl wip" />
     <MESSAGE value="feat: wip" />
     <MESSAGE value="wip" />
-    <option name="LAST_COMMIT_MESSAGE" value="wip" />
+    <MESSAGE value="fix: Fix compile." />
+    <MESSAGE value="fix: fix warning" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: fix warning" />
   </component>
   <component name="WindowStateProjectService">
     <state x="724" y="276" key="#Inspections" timestamp="1593760914337">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="724" y="276" key="#Inspections/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593760914337" />
+    <state x="849" y="421" key="#Notifications" timestamp="1596324899085">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="849" y="421" key="#Notifications/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596324899085" />
     <state x="690" y="238" key="#Plugins" timestamp="1595892267284">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
@@ -526,19 +578,20 @@
     </state>
     <state x="278" y="153" width="1994" height="994" maximized="true" key="#com.intellij.execution.junit2.states.ComparisonFailureState$DiffDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593566256363" />
     <state x="45" y="139" width="1994" height="994" key="#com.intellij.execution.junit2.states.ComparisonFailureState$DiffDialog/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445103975" />
-    <state x="978" y="468" key="#com.intellij.fileTypes.FileTypeChooser" timestamp="1595444913251">
-      <screen x="0" y="0" width="2560" height="1400" />
+    <state x="838" y="399" key="#com.intellij.fileTypes.FileTypeChooser" timestamp="1596330837396">
+      <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="978" y="468" key="#com.intellij.fileTypes.FileTypeChooser/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595444913251" />
-    <state x="838" y="399" key="#com.intellij.fileTypes.FileTypeChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593746047141" />
-    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser" timestamp="1595896780935">
+    <state x="838" y="399" key="#com.intellij.fileTypes.FileTypeChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596330837396" />
+    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser" timestamp="1596344997264">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="1054" y="367" key="#com.intellij.ide.util.MemberChooser/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595508491051" />
-    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595896780935" />
-    <state x="778" y="333" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1595994461801">
-      <screen x="0" y="0" width="2194" height="1194" />
+    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596344997264" />
+    <state x="908" y="390" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1596112337440">
+      <screen x="0" y="0" width="2560" height="1400" />
     </state>
+    <state x="908" y="390" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596112337440" />
     <state x="778" y="333" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595994461801" />
     <state x="834" y="522" key="#com.intellij.refactoring.move.MoveHandler.SelectRefactoringDialog" timestamp="1593577951587">
       <screen x="0" y="0" width="2194" height="1194" />
@@ -552,33 +605,33 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="878" y="352" key="FileChooserDialogImpl/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595828644328" />
-    <state width="2151" height="309" key="GridCell.Tab.0.bottom" timestamp="1596071567210">
+    <state width="2136" height="309" key="GridCell.Tab.0.bottom" timestamp="1596445609089">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state width="1258" height="511" key="GridCell.Tab.0.bottom/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595527530326" />
+    <state width="1258" height="511" key="GridCell.Tab.0.bottom/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.bottom/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510860" />
-    <state width="2151" height="309" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596071567210" />
+    <state width="2136" height="309" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596445609089" />
     <state width="2151" height="424" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="309" key="GridCell.Tab.0.center" timestamp="1596071567210">
+    <state width="2136" height="309" key="GridCell.Tab.0.center" timestamp="1596445609089">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state width="1258" height="511" key="GridCell.Tab.0.center/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595527530326" />
+    <state width="1258" height="511" key="GridCell.Tab.0.center/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.center/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="309" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596071567210" />
+    <state width="2136" height="309" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596445609089" />
     <state width="2151" height="424" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="309" key="GridCell.Tab.0.left" timestamp="1596071567210">
+    <state width="2136" height="309" key="GridCell.Tab.0.left" timestamp="1596445609089">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state width="1258" height="511" key="GridCell.Tab.0.left/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595527530326" />
+    <state width="1258" height="511" key="GridCell.Tab.0.left/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496637" />
     <state width="1845" height="290" key="GridCell.Tab.0.left/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510858" />
-    <state width="2151" height="309" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596071567210" />
+    <state width="2136" height="309" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596445609089" />
     <state width="2151" height="424" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="309" key="GridCell.Tab.0.right" timestamp="1596071567210">
+    <state width="2136" height="309" key="GridCell.Tab.0.right" timestamp="1596445609089">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state width="1258" height="511" key="GridCell.Tab.0.right/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595527530326" />
+    <state width="1258" height="511" key="GridCell.Tab.0.right/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.right/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="309" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596071567210" />
+    <state width="2136" height="309" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596445609089" />
     <state width="2151" height="424" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
     <state x="946" y="318" key="RollbackChangesDialog" timestamp="1594214894599">
       <screen x="0" y="0" width="2194" height="1194" />
@@ -611,25 +664,30 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="701" y="208" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593616352420" />
-    <state x="4275" y="207" width="1646" height="798" maximized="true" key="dock-window-1" timestamp="1595660918165">
+    <state x="1259" y="0" width="949" height="843" key="dock-window-1" timestamp="1596309382045">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state x="1259" y="0" width="949" height="843" key="dock-window-1/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596309382045" />
+    <state x="3900" y="106" width="949" height="843" key="dock-window-2" timestamp="1596325410052">
       <screen x="3840" y="0" width="2194" height="1194" />
     </state>
-    <state x="4275" y="207" width="1646" height="798" maximized="true" key="dock-window-1/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595660918165" />
-    <state x="751" y="182" width="696" height="831" key="find.popup" timestamp="1595703261231">
-      <screen x="0" y="0" width="2194" height="1194" />
+    <state x="3900" y="106" width="949" height="843" key="dock-window-2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596325410052" />
+    <state x="1533" y="141" width="813" height="975" key="find.popup" timestamp="1596202178437">
+      <screen x="0" y="0" width="2560" height="1400" />
     </state>
+    <state x="1533" y="141" width="813" height="975" key="find.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202178437" />
     <state x="676" y="184" width="598" height="735" key="find.popup/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593209314658" />
     <state x="751" y="182" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595703261231" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1596069735995">
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1596445608765">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="880" y="329" width="785" height="794" key="run.anything.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595527530308" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596069735995" />
+    <state x="880" y="329" width="785" height="794" key="run.anything.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202552491" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596445608765" />
     <state x="4594" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593444445589" />
-    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1595994396740">
+    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1596400851653">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="887" y="310" width="785" height="795" key="search.everywhere.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595450290005" />
-    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1595994396740" />
+    <state x="760" y="264" width="672" height="678" key="search.everywhere.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596400851653" />
   </component>
 </project>
