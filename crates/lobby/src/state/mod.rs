@@ -89,6 +89,7 @@ impl MemStorage {
 #[derive(Debug)]
 struct MemStorageState {
   players: HashMap<i32, Arc<Mutex<MemPlayerState>>>,
+  player_senders: Arc<RwLock<HashMap<i32, PlayerSenderRef>>>,
   games: HashMap<i32, Arc<Mutex<MemGameState>>>,
   game_num_players: HashMap<i32, usize>,
 }
@@ -123,6 +124,7 @@ impl MemStorageState {
 
     Self {
       players,
+      player_senders: Arc::new(RwLock::new(HashMap::new())),
       games,
       game_num_players,
     }
@@ -141,18 +143,27 @@ impl MemStorageRef {
       .insert(id, Arc::new(Mutex::new(MemGameState::new(players))));
   }
 
+  fn remove_game(&self, id: i32) {
+    self.state.write().games.remove(&id);
+    self.state.write().game_num_players.remove(&id);
+  }
+
   pub async fn lock_player_state(&self, id: i32) -> LockedPlayerState {
-    let state: Arc<Mutex<_>> = {
+    let (state, sender_map) = {
       let mut storage_lock = self.state.write();
-      storage_lock
-        .players
-        .entry(id)
-        .or_insert_with(|| Arc::new(Mutex::new(MemPlayerState::default())))
-        .clone()
+      (
+        storage_lock
+          .players
+          .entry(id)
+          .or_insert_with(|| Arc::new(Mutex::new(MemPlayerState::default())))
+          .clone(),
+        storage_lock.player_senders.clone(),
+      )
     };
     LockedPlayerState {
       id,
       guard: state.lock_owned().await,
+      sender_map,
     }
   }
 
@@ -173,20 +184,29 @@ impl MemStorageRef {
     match state {
       Some(state) => {
         let guard = state.lock_owned().await;
-        if guard.closed {
-          let mut storage_guard = self.state.write();
-          storage_guard.games.remove(&id);
-          None
-        } else {
-          Some(LockedGameState {
-            id,
-            guard,
-            parent: self.clone(),
-          })
-        }
+        Some(LockedGameState {
+          id,
+          guard,
+          parent: self.clone(),
+        })
       }
       None => None,
     }
+  }
+
+  pub fn get_player_senders(&self, ids: &[i32]) -> HashMap<i32, PlayerSenderRef> {
+    if ids.is_empty() {
+      return HashMap::default();
+    }
+    let map = self.state.read().player_senders.clone();
+    let mut found = HashMap::with_capacity(ids.len());
+    let guard = map.read();
+    for id in ids {
+      if let Some(sender) = guard.get(id).cloned() {
+        found.insert(*id, sender);
+      }
+    }
+    found
   }
 }
 
@@ -194,6 +214,7 @@ impl MemStorageRef {
 pub struct LockedPlayerState {
   id: i32,
   guard: OwnedMutexGuard<MemPlayerState>,
+  sender_map: Arc<RwLock<HashMap<i32, PlayerSenderRef>>>,
 }
 
 impl LockedPlayerState {
@@ -213,7 +234,7 @@ impl LockedPlayerState {
     self.guard.game_id = None;
   }
 
-  #[tracing::instrument(skip(self))]
+  #[tracing::instrument(skip(self, sender))]
   pub fn replace_sender(&mut self, sender: PlayerSenderRef) {
     if let Some(mut sender) = self.guard.sender.take() {
       tracing::debug!("sender replaced");
@@ -221,7 +242,8 @@ impl LockedPlayerState {
         sender.disconnect_multi().await;
       });
     }
-    self.guard.sender = Some(sender);
+    self.guard.sender = Some(sender.clone());
+    self.sender_map.write().insert(self.id, sender);
   }
 
   pub fn remove_sender(&mut self, sender: PlayerSenderRef) {
@@ -232,6 +254,16 @@ impl LockedPlayerState {
     };
     if remove {
       self.guard.sender.take();
+    }
+    {
+      let mut sender_map = self.sender_map.write();
+      if sender_map
+        .get(&self.id)
+        .map(|s| s.ptr_eq(&sender))
+        .unwrap_or_default()
+      {
+        sender_map.remove(&self.id);
+      }
     }
   }
 
@@ -287,10 +319,6 @@ impl LockedGameState {
   }
 
   pub fn close(&mut self) {
-    self.guard.closed = true;
-  }
-
-  pub fn get_senders(&self) -> Vec<PlayerSenderRef> {
-    unimplemented!()
+    self.parent.remove_game(self.id)
   }
 }

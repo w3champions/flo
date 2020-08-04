@@ -3,15 +3,12 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use flo_grpc::game::*;
 use flo_grpc::lobby::flo_lobby_server::*;
 use flo_grpc::lobby::*;
 use flo_net::proto::flo_connect;
 
 use crate::error::{Error, Result};
-use crate::game::db::LeaveGameParams;
 use crate::state::LobbyStateRef;
-use flo_net::packet::OptionalFieldExt;
 
 pub async fn serve(state: LobbyStateRef) -> Result<()> {
   let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, crate::constants::LOBBY_GRPC_PORT);
@@ -152,7 +149,7 @@ impl FloLobby for FloLobbyService {
 
       player_state.join_game(game.id);
       let update = player_state.get_session_update();
-      if let Some(mut sender) = player_state.get_sender_mut() {
+      if let Some(sender) = player_state.get_sender_mut() {
         let next_game = game.clone().into_packet();
         sender.with_buf(|buf| {
           buf.update_session(update);
@@ -171,64 +168,47 @@ impl FloLobby for FloLobbyService {
     &self,
     request: Request<JoinGameRequest>,
   ) -> Result<Response<JoinGameReply>, Status> {
-    let params =
-      crate::game::db::JoinGameParams::unpack(request.into_inner()).map_err(Error::from)?;
-    let player_id = params.player_id;
+    let params = request.into_inner();
 
-    let game = {
-      let mut player_state = self.state.mem.lock_player_state(player_id).await;
-      if player_state.joined_game_id().is_some() {
-        return Err(Error::MultiJoin.into());
-      }
+    let game = crate::game::join_game(self.state.clone(), params.game_id, params.player_id).await?;
 
-      let mut state = self
-        .state
-        .mem
-        .lock_game_state(params.game_id)
-        .await
-        .ok_or_else(|| Error::GameNotFound)?;
-      let game = self
-        .state
-        .db
-        .exec(move |conn| {
-          let id = params.game_id;
-          crate::game::db::join(conn, params)?;
-          crate::game::db::get_full(conn, id)
-        })
-        .await
-        .map_err(Error::from)?;
+    Ok(Response::new(JoinGameReply {
+      game: game.pack().map_err(Error::from)?,
+    }))
+  }
 
-      player_state.join_game(game.id);
-      state.add_player(player_id);
-      let update = player_state.get_session_update();
-      if let Some(sender) = player_state.get_sender_mut() {
-        let next_game = game.clone().into_packet();
-        sender.with_buf(move |buf| {
-          buf.update_session(update);
-          buf.set_game(next_game);
-        });
-      }
-      game
-    };
+  async fn create_join_game_token(
+    &self,
+    request: Request<CreateJoinGameTokenRequest>,
+  ) -> Result<Response<CreateJoinGameTokenReply>, Status> {
+    let params = request.into_inner();
+    let game_id = params.game_id;
 
-    // send notification to other players in this game
-    for (slot_idx, slot) in game.slots.iter().enumerate() {
-      if let Some(ref player) = slot.player {
-        if player.id != player_id {
-          let mut player_state = self.state.mem.lock_player_state(player.id).await;
-          if let Some(sender) = player_state.get_sender_mut() {
-            sender.with_buf(|buf| {
-              buf.add_player_enter(
-                game.id,
-                player.clone().into_packet(),
-                slot_idx as i32,
-                slot.settings.clone().into_packet(),
-              )
-            });
-          }
-        }
-      }
+    let game = self
+      .state
+      .db
+      .exec(move |conn| crate::game::db::get(conn, game_id))
+      .await
+      .map_err(Error::from)?;
+
+    if game.created_by != Some(params.player_id) {
+      return Err(Error::PlayerNotHost.into());
     }
+
+    let token = crate::game::token::create_join_token(params.game_id)?;
+
+    Ok(Response::new(CreateJoinGameTokenReply { token }))
+  }
+
+  async fn join_game_by_token(
+    &self,
+    request: Request<JoinGameByTokenRequest>,
+  ) -> Result<Response<JoinGameReply>, Status> {
+    let params = request.into_inner();
+    let join_token = crate::game::token::validate_join_token(&params.token)?;
+
+    let game =
+      crate::game::join_game(self.state.clone(), join_token.game_id, params.player_id).await?;
 
     Ok(Response::new(JoinGameReply {
       game: game.pack().map_err(Error::from)?,
@@ -236,81 +216,9 @@ impl FloLobby for FloLobbyService {
   }
 
   async fn leave_game(&self, request: Request<LeaveGameRequest>) -> Result<Response<()>, Status> {
-    let params =
-      crate::game::db::LeaveGameParams::unpack(request.into_inner()).map_err(Error::from)?;
-    let player_id = params.player_id;
+    let params = request.into_inner();
 
-    let mut player_state = self.state.mem.lock_player_state(player_id).await;
-
-    let player_state_game_id = if let Some(id) = player_state.joined_game_id() {
-      id
-    } else {
-      return Ok(Response::new(()));
-    };
-
-    if player_state_game_id != params.game_id {
-      tracing::warn!("player joined game id mismatch: player_id = {}, player_state_game_id = {}, params.game_id = {}", 
-        player_id,
-        player_state_game_id,
-        params.game_id
-      );
-    }
-
-    let mut state = self
-      .state
-      .mem
-      .lock_game_state(player_state_game_id)
-      .await
-      .ok_or_else(|| Error::GameNotFound)?;
-
-    let slots = self
-      .state
-      .db
-      .exec(move |conn| {
-        crate::game::db::leave(
-          conn,
-          LeaveGameParams {
-            player_id,
-            game_id: player_state_game_id,
-          },
-        )
-      })
-      .await
-      .map_err(Error::from)?;
-
-    player_state.leave_game();
-    state.remove_player(player_id);
-
-    // send to self
-    let update = player_state.get_session_update();
-    if let Some(sender) = player_state.get_sender_mut() {
-      sender.with_buf(move |buf| {
-        buf.update_session(update);
-        buf.add_player_leave(
-          player_state_game_id,
-          player_id,
-          flo_connect::PlayerLeaveReason::Left,
-        )
-      });
-    }
-
-    // send notification to other players in this game
-    for slot in &slots {
-      if let Some(ref player) = slot.player {
-        if player.id != player_id {
-          let mut player_state = self.state.mem.lock_player_state(player.id).await;
-          if let Some(sender) = player_state.get_sender_mut() {
-            sender.with_buf(|buf| {
-              buf.add_player_leave(
-                player_state_game_id,
-                player.id,
-                flo_connect::PlayerLeaveReason::Left,
-              )
-            });
-          }
-        }
-      }
-    }
+    crate::game::leave_game(self.state.clone(), params.game_id, params.player_id).await?;
 
     Ok(Response::new(()))
   }
@@ -322,23 +230,13 @@ impl FloLobby for FloLobbyService {
     let params = crate::game::db::UpdateGameSlotSettingsParams::unpack(request.into_inner())
       .map_err(Error::from)?;
 
-    let state = self
-      .state
-      .mem
-      .lock_game_state(params.game_id)
-      .await
-      .ok_or_else(|| Error::GameNotFound)?;
-
-    if !state.has_player(params.player_id) {
-      return Err(Error::PlayerNotInGame.into());
-    }
-
-    let slots = self
-      .state
-      .db
-      .exec(move |conn| crate::game::db::update_slot_settings(conn, params))
-      .await
-      .map_err(Error::from)?;
+    let slots = crate::game::update_game_slot_settings(
+      self.state.clone(),
+      params.game_id,
+      params.player_id,
+      params.settings,
+    )
+    .await?;
 
     Ok(Response::new(UpdateGameSlotSettingsReply {
       slots: slots.pack().map_err(Error::from)?,

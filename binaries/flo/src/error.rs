@@ -12,6 +12,8 @@ pub enum Error {
   UnknownWebsocketMessage,
   #[error("connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(crate::net::lobby::RejectReason),
+  #[error("server not connected")]
+  ServerNotConnected,
   #[error("json: {0}")]
   Json(#[from] serde_json::Error),
   #[error("io: {0}")]

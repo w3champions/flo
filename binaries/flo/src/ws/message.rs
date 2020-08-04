@@ -109,6 +109,7 @@ pub struct Connect {
 #[derive(Debug, Serialize)]
 pub struct Disconnect {
   pub reason: DisconnectReason,
+  pub message: String,
 }
 
 #[derive(Debug, Serialize)]

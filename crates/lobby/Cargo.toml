@@ -14,7 +14,7 @@ thiserror = "1.0.20"
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
-s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git" }
+s2-grpc-utils = "0.2"
 diesel = { version = "1.4.3", features = ["postgres", "chrono", "32-column-tables", "serde_json", "uuid", "r2d2", "numeric", "chrono"] }
 serde_json = "1"
 tonic = "0.3.0"

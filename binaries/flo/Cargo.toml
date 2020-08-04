@@ -14,7 +14,7 @@ flo-w3storage = { path = "../../crates/w3storage" }
 flo-w3map = { path = "../../crates/w3map" }
 
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
-s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git" }
+s2-grpc-utils = "0.2"
 dotenv = "0.15.0"
 tokio = { version = "0.2.22", features = ["full"] }
 async-tungstenite = { version = "0.7.1", features = ["tokio-runtime"] }

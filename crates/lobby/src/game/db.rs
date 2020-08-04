@@ -6,9 +6,7 @@ use serde_json::Value;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::game::{
-  Computer, Game, GameEntry, GameStatus, Race, Slot, SlotSettings, SlotStatus, Slots,
-};
+use crate::game::{Game, GameEntry, GameStatus, Slot, SlotSettings, Slots};
 use crate::map::Map;
 use crate::player::PlayerRef;
 use crate::schema::game;
@@ -54,6 +52,35 @@ impl Default for GameStatusFilter {
   fn default() -> Self {
     Self::All
   }
+}
+
+pub fn get_entry(conn: &DbConn, id: i32) -> Result<GameEntry> {
+  use crate::schema::player::{self};
+  use diesel::dsl::sql;
+  use game::dsl;
+
+  let q = game::table.find(id).left_outer_join(player::table).select((
+    dsl::id,
+    dsl::name,
+    dsl::map_name,
+    dsl::status,
+    dsl::is_private,
+    dsl::is_live,
+    sql::<diesel::sql_types::Integer>("0"),
+    dsl::max_players,
+    dsl::started_at,
+    dsl::ended_at,
+    dsl::created_at,
+    dsl::updated_at,
+    PlayerRef::COLUMNS.nullable(),
+  ));
+
+  let entry: GameEntry = q
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+
+  Ok(entry)
 }
 
 pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
@@ -291,6 +318,17 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
     });
   }
   Ok(games)
+}
+
+fn get_host_player(conn: &DbConn, id: i32) -> Result<Option<i32>> {
+  use game::dsl;
+  let value: Option<i32> = game::table
+    .select(dsl::created_by)
+    .find(id)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+  Ok(value)
 }
 
 fn get_slots(conn: &DbConn, id: i32) -> Result<Slots> {

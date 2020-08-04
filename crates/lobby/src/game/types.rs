@@ -14,6 +14,7 @@ use crate::player::PlayerRef;
 pub struct Game {
   pub id: i32,
   pub name: String,
+  #[s2_grpc(proto_enum)]
   pub status: GameStatus,
   pub map: Map,
   pub slots: Vec<Slot>,
@@ -30,12 +31,52 @@ pub struct Game {
   pub updated_at: DateTime<Utc>,
 }
 
+impl Game {
+  pub fn get_player_ids(&self) -> Vec<i32> {
+    self
+      .slots
+      .iter()
+      .filter_map(|slot| slot.player.as_ref().map(|p| p.id))
+      .collect()
+  }
+
+  pub fn find_player_slot_index(&self, player_id: i32) -> Option<usize> {
+    self.slots.iter().position(|slot| {
+      slot
+        .player
+        .as_ref()
+        .map(|p| p.id == player_id)
+        .unwrap_or_default()
+    })
+  }
+
+  pub fn get_player_slot_info(&self, player_id: i32) -> Option<PlayerSlotInfo> {
+    let slot_index = self.find_player_slot_index(player_id)?;
+
+    let slot = &self.slots[slot_index];
+
+    Some(PlayerSlotInfo {
+      slot_index,
+      slot,
+      player: slot.player.as_ref().expect("player slot at index"),
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct PlayerSlotInfo<'a> {
+  pub slot_index: usize,
+  pub slot: &'a Slot,
+  pub player: &'a PlayerRef,
+}
+
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Queryable)]
 #[s2_grpc(message_type = "flo_grpc::game::GameEntry")]
 pub struct GameEntry {
   pub id: i32,
   pub name: String,
   pub map_name: String,
+  #[s2_grpc(proto_enum)]
   pub status: GameStatus,
   pub is_private: bool,
   pub is_live: bool,
@@ -50,7 +91,7 @@ pub struct GameEntry {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, BSDieselEnum, S2ProtoEnum)]
 #[repr(i32)]
-#[s2_grpc(proto_enum_type = "flo_grpc::game::GameStatus")]
+#[s2_grpc(proto_enum_type(flo_grpc::game::GameStatus, flo_net::proto::flo_connect::GameStatus))]
 pub enum GameStatus {
   Preparing = 0,
   Playing = 1,
@@ -59,7 +100,7 @@ pub enum GameStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
-#[s2_grpc(message_type = "flo_grpc::game::Slot")]
+#[s2_grpc(message_type(flo_grpc::game::Slot, flo_net::proto::flo_connect::Slot))]
 pub struct Slot {
   pub player: Option<PlayerRef>,
   pub settings: SlotSettings,
@@ -75,13 +116,19 @@ impl Default for Slot {
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
-#[s2_grpc(message_type = "flo_grpc::game::SlotSettings")]
+#[s2_grpc(message_type(
+  flo_grpc::game::SlotSettings,
+  flo_net::proto::flo_connect::SlotSettings
+))]
 pub struct SlotSettings {
   pub team: u32,
   pub color: u32,
+  #[s2_grpc(proto_enum)]
   pub computer: Computer,
   pub handicap: u32,
+  #[s2_grpc(proto_enum)]
   pub status: SlotStatus,
+  #[s2_grpc(proto_enum)]
   pub race: Race,
 }
 
@@ -100,7 +147,7 @@ impl Default for SlotSettings {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]
 #[repr(i32)]
-#[s2_grpc(proto_enum_type = "flo_grpc::game::SlotStatus")]
+#[s2_grpc(proto_enum_type(flo_grpc::game::SlotStatus, flo_net::proto::flo_connect::SlotStatus))]
 pub enum SlotStatus {
   Open = 0,
   Closed = 1,
@@ -109,7 +156,7 @@ pub enum SlotStatus {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]
 #[repr(i32)]
-#[s2_grpc(proto_enum_type = "flo_grpc::game::Race")]
+#[s2_grpc(proto_enum_type(flo_grpc::game::Race, flo_net::proto::flo_connect::Race))]
 pub enum Race {
   Human = 0,
   Orc = 1,
@@ -120,7 +167,7 @@ pub enum Race {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]
 #[repr(i32)]
-#[s2_grpc(proto_enum_type = "flo_grpc::game::Computer")]
+#[s2_grpc(proto_enum_type(flo_grpc::game::Computer, flo_net::proto::flo_connect::Computer))]
 pub enum Computer {
   Easy = 0,
   Normal = 1,
@@ -148,14 +195,16 @@ impl Game {
         .slots
         .into_iter()
         .map(|slot| packet::Slot {
-          player: slot.player.map(|player| player.into_packet()),
+          player: slot.player.map(|player| player.pack().unwrap_or_default()),
           settings: slot.settings.into_packet().into(),
         })
         .collect(),
       node: self.node.map(|node| node.into_packet()),
       is_private: self.is_private,
       is_live: self.is_live,
-      created_by: self.created_by.map(|player| player.into_packet()),
+      created_by: self
+        .created_by
+        .map(|player| player.pack().unwrap_or_default()),
     }
   }
 }

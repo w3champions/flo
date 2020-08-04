@@ -1,5 +1,3 @@
-
-
 use crate::game::{Computer, Race, Slot, SlotSettings, SlotStatus};
 use crate::player::PlayerRef;
 
@@ -60,6 +58,14 @@ impl std::ops::Deref for Slots {
 }
 
 impl Slots {
+  pub fn get_player_ids(&self) -> Vec<i32> {
+    self
+      .inner
+      .iter()
+      .filter_map(|slot| slot.player.as_ref().map(|p| p.id))
+      .collect()
+  }
+
   pub fn is_full(&self) -> bool {
     !self
       .inner
@@ -107,7 +113,7 @@ impl Slots {
 
     if let Some(idx) = open_slot_idx {
       let slot = &mut self.inner[idx];
-      slot.settings.team = 1;
+      slot.settings.team = 0;
       slot.settings.color = color as u32;
       slot.settings.status = SlotStatus::Occupied;
       Some(slot)
@@ -118,10 +124,12 @@ impl Slots {
 
   /// Remove a players and reset the slot
   pub fn release_player_slot(&mut self, player_id: i32) -> bool {
-    let slot = self
-      .inner
-      .iter_mut()
-      .find(|s| s.player.as_ref().map(|p| p.id == player_id).is_some());
+    let slot = self.inner.iter_mut().find(|s| {
+      s.player
+        .as_ref()
+        .map(|p| p.id == player_id)
+        .unwrap_or_default()
+    });
     match slot {
       Some(slot) => {
         *slot = Default::default();
@@ -135,10 +143,12 @@ impl Slots {
   pub fn update_player_slot(&mut self, player_id: i32, settings: &SlotSettings) -> bool {
     let color_set = self.get_color_set();
 
-    let slot = self
-      .inner
-      .iter_mut()
-      .find(|s| s.player.as_ref().map(|p| p.id == player_id).is_some());
+    let slot = self.inner.iter_mut().find(|s| {
+      s.player
+        .as_ref()
+        .map(|p| p.id == player_id)
+        .unwrap_or_default()
+    });
 
     match slot {
       Some(slot) => {

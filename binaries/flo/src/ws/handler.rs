@@ -5,6 +5,7 @@ use futures::{SinkExt, TryStreamExt};
 use parking_lot::RwLock;
 
 use std::sync::Arc;
+use tokio::sync::oneshot;
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
@@ -31,6 +32,8 @@ impl WsHandler {
       async move {
         if let Err(e) = state.serve_stream(stream).await {
           tracing::error!("websocket stream: {}", e);
+        } else {
+          tracing::debug!("exiting");
         }
       }
       .instrument(tracing::debug_span!("worker")),
@@ -54,11 +57,11 @@ impl StateRef {
     let (tx, mut rx) = stream.split();
     tx.send(self.get_client_info_message()).await?;
 
-    let broken_notify = Arc::new(Notify::new());
+    let err_notify = Arc::new(Notify::new());
 
     loop {
       tokio::select! {
-        _ = broken_notify.notified() => {
+        _ = err_notify.notified() => {
           break;
         }
         next = rx.try_next() => {
@@ -71,7 +74,7 @@ impl StateRef {
           if let WsMessage::Close(_) = msg {
             break;
           } else {
-            self.handle_message(broken_notify.clone(), tx.clone(), msg);
+            self.handle_message(err_notify.clone(), tx.clone(), msg);
           }
         }
       }
@@ -80,7 +83,7 @@ impl StateRef {
     Ok(())
   }
 
-  fn handle_message(&self, broken_notify: Arc<Notify>, tx: WsSenderRef, msg: WsMessage) {
+  fn handle_message(&self, err_notify: Arc<Notify>, tx: WsSenderRef, msg: WsMessage) {
     let msg = match msg {
       WsMessage::Text(text) => match serde_json::from_str::<IncomingMessage>(&text) {
         Ok(msg) => Some(msg),
@@ -110,31 +113,29 @@ impl StateRef {
       match msg {
         IncomingMessage::ReloadClientInfo => {
           Self::spawn_handler(
-            broken_notify.clone(),
+            err_notify.clone(),
             self.clone().handle_reload_client_info(tx.clone()),
           );
         }
         IncomingMessage::Connect(connect) => Self::spawn_handler(
-          broken_notify.clone(),
+          err_notify.clone(),
           self.clone().handle_connect(tx.clone(), connect.token),
         ),
-        IncomingMessage::ListMaps => Self::spawn_handler(
-          broken_notify.clone(),
-          self.clone().handle_map_list(tx.clone()),
-        ),
+        IncomingMessage::ListMaps => {
+          Self::spawn_handler(err_notify.clone(), self.clone().handle_map_list(tx.clone()))
+        }
         IncomingMessage::GetMapDetail(payload) => Self::spawn_handler(
-          broken_notify.clone(),
+          err_notify.clone(),
           self.clone().handle_get_map_detail(tx.clone(), payload),
         ),
-        IncomingMessage::GameSlotUpdateRequest(req) => Self::spawn_handler(
-          broken_notify.clone(),
-          self.clone().handle_slot_update(tx.clone(), req),
-        ),
+        IncomingMessage::GameSlotUpdateRequest(req) => {
+          Self::spawn_handler(err_notify.clone(), self.clone().handle_slot_update(req))
+        }
       }
     }
   }
 
-  fn spawn_handler<F>(broken_notify: Arc<Notify>, f: F)
+  fn spawn_handler<F>(err_notify: Arc<Notify>, f: F)
   where
     F: std::future::Future<Output = Result<()>> + Send + 'static,
   {
@@ -143,7 +144,7 @@ impl StateRef {
         Ok(_) => {}
         Err(e) => {
           tracing::error!("handler: {}", e);
-          broken_notify.notify();
+          err_notify.notify();
         }
       }
     });
@@ -170,11 +171,11 @@ impl StateRef {
     Ok(())
   }
 
-  async fn handle_ping(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
+  async fn _handle_ping(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
     Ok(())
   }
 
-  async fn handle_pong(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
+  async fn _handle_pong(_tx: WsSenderRef, _data: Vec<u8>) -> Result<()> {
     Ok(())
   }
 
@@ -257,11 +258,8 @@ impl StateRef {
     Ok(())
   }
 
-  async fn handle_slot_update(
-    self,
-    tx: WsSenderRef,
-    req: PacketGameSlotUpdateRequest,
-  ) -> Result<()> {
+  async fn handle_slot_update(self, req: PacketGameSlotUpdateRequest) -> Result<()> {
+    self.get_flo_state().net.lobby_send(req).await?;
     Ok(())
   }
 
@@ -274,11 +272,6 @@ impl StateRef {
       version: crate::version::FLO_VERSION_STRING.into(),
       war3_info: self.0.read().g.get_war3_info(),
     })
-  }
-
-  fn get_port(&self) -> u16 {
-    let state = self.0.read();
-    state.g.config.local_port.clone()
   }
 }
 

@@ -6,6 +6,10 @@ use tonic::Status;
 pub enum Error {
   #[error("player token expired")]
   PlayerTokenExpired,
+  #[error("join link expired")]
+  JoinTokenExpired,
+  #[error("you are not the host player")]
+  PlayerNotHost,
   #[error("player not found")]
   PlayerNotFound,
   #[error("game not found")]
@@ -22,6 +26,8 @@ pub enum Error {
   MultiJoin,
   #[error("player not in game")]
   PlayerNotInGame,
+  #[error("player slot not found")]
+  PlayerSlotNotFound,
   #[error("send to player channel timeout")]
   PlayerChannelSendTimeout,
   #[error("player channel closed")]
@@ -66,7 +72,8 @@ impl From<Error> for Status {
       | e @ Error::MapHasNoPlayer
       | e @ Error::GameFull
       | e @ Error::GameNotDeletable
-      | e @ Error::MultiJoin => Status::invalid_argument(e.to_string()),
+      | e @ Error::MultiJoin
+      | e @ Error::JoinTokenExpired => Status::invalid_argument(e.to_string()),
       e @ Error::PlayerTokenExpired => Status::unauthenticated(e.to_string()),
       Error::JsonWebToken(e) => Status::unauthenticated(e.to_string()),
       e => Status::internal(e.to_string()),

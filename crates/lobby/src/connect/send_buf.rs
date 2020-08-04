@@ -261,10 +261,6 @@ struct Fragments {
 }
 
 impl Fragments {
-  fn is_empty(&self) -> bool {
-    self.player_enter.is_empty() && self.player_leave.is_empty() && self.slot_updates.is_empty()
-  }
-
   fn len(&self) -> usize {
     self.player_enter.len() + self.player_leave.len() + self.slot_updates.len()
   }

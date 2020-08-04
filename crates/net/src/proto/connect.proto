@@ -59,7 +59,6 @@ message PacketGamePlayerLeave {
 
 message PacketGameSlotUpdateRequest {
   int32 game_id = 1;
-  int32 player_id = 2;
   SlotSettings slot_settings = 3;
 }
 
@@ -78,6 +77,7 @@ message PlayerInfo {
   int32 id = 1;
   string name = 2;
   PlayerSource source = 3;
+  google.protobuf.StringValue realm = 4;
 }
 
 enum PlayerStatus {

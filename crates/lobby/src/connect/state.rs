@@ -1,22 +1,19 @@
 use futures::future::FutureExt;
 use futures::future::{abortable, AbortHandle};
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::Notify;
 use tokio::time::timeout;
-use tonic::Status;
 use tracing_futures::Instrument;
 
 use flo_net::packet::*;
 use flo_net::proto::flo_connect::*;
 
 use crate::connect::send_buf::PlayerSendBuf;
-use crate::error::{Error, Result};
+use crate::error::*;
 use crate::game::Game;
-use crate::state::MemStorageRef;
 
 const SEND_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -83,7 +80,7 @@ impl PlayerSenderRef {
           if let Some(frames) = frames {
             match tx.send(Message::Frames(frames)).await {
               Ok(_) => {}
-              Err(e) => {
+              Err(_) => {
                 tracing::debug!("rx closed");
                 break;
               }

@@ -13,6 +13,8 @@ use flo_net::stream::FloStream;
 use crate::error::{Error, Result};
 use crate::ws::{message, OutgoingMessage, WsSenderRef};
 
+pub type LobbyStreamSender = mpsc::Sender<Frame>;
+
 #[derive(Debug)]
 pub struct LobbyStream {
   frame_sender: mpsc::Sender<Frame>,
@@ -90,9 +92,11 @@ impl LobbyStream {
                     Ok(_) => {},
                     Err(e) => {
                       tracing::debug!("exiting: dispatch: {}", e);
-                      match Self::send_message(&ws_sender, OutgoingMessage::Disconnect(message::Disconnect {
-                    reason: DisconnectReason::Unknown
-                  })).await {
+                      let r =  Self::send_message(&ws_sender, OutgoingMessage::Disconnect(message::Disconnect {
+                        reason: DisconnectReason::Unknown,
+                        message: format!("dispatch: {}", e)
+                      })).await;
+                      match r {
                         Ok(_) => {},
                         Err(e) => {
                           tracing::debug!("exiting: send disconnect: {}", e);
@@ -105,7 +109,8 @@ impl LobbyStream {
                 Err(e) => {
                   tracing::debug!("exiting: recv: {}", e);
                   match Self::send_message(&ws_sender, OutgoingMessage::Disconnect(message::Disconnect {
-                    reason: DisconnectReason::Unknown
+                    reason: DisconnectReason::Unknown,
+                    message: format!("recv: {}", e),
                   })).await {
                     Ok(_) => {},
                     Err(e) => {
@@ -129,12 +134,19 @@ impl LobbyStream {
     })
   }
 
+  pub fn get_sender_cloned(&self) -> mpsc::Sender<Frame> {
+    self.frame_sender.clone()
+  }
+
   // forward server packets to the websocket connection
   async fn dispatch(sender: &WsSenderRef, frame: Frame) -> Result<()> {
     let msg = flo_net::frame_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
-          OutgoingMessage::Disconnect(message::Disconnect { reason: S2ProtoUnpack::unpack(p.reason)? })
+          OutgoingMessage::Disconnect(message::Disconnect {
+            reason: S2ProtoEnum::unpack_i32(p.reason)?,
+            message: "Server closed the connection".to_string()
+          })
         },
         p = PacketGameInfo => {
           OutgoingMessage::CurrentGameInfo(p.game.extract()?)

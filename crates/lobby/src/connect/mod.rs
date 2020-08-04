@@ -1,21 +1,24 @@
-use futures::future::{abortable, AbortHandle};
+use futures::future::abortable;
+use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
 
 use flo_net::connect;
 use flo_net::listener::FloListener;
-use flo_net::packet::{FloPacket, PacketTypeId};
+use flo_net::packet::FloPacket;
+use flo_net::packet::OptionalFieldExt;
 use flo_net::proto;
 use flo_net::stream::FloStream;
 use flo_net::time::StopWatch;
 
-use crate::error::Result;
+use crate::error::*;
 use crate::state::{LobbyStateRef, LockedPlayerState};
 
 mod handshake;
 mod send_buf;
 mod state;
+use crate::game::SlotSettings;
 pub use state::{Message as PlayerSenderMessage, PlayerReceiver, PlayerSenderRef};
 use tokio::stream::StreamExt;
 use tokio::time::delay_for;
@@ -80,8 +83,8 @@ async fn handle_stream(
   send_initial_state(state.clone(), &mut stream, player_id).await?;
 
   let stop_watch = StopWatch::new();
-  let mut ping_timeout_notify = Arc::new(Notify::new());
-  let mut ping_timout_abort = None;
+  let ping_timeout_notify = Arc::new(Notify::new());
+  let mut ping_timeout_abort = None;
 
   loop {
     let mut next_ping = delay_for(PING_INTERVAL);
@@ -97,7 +100,7 @@ async fn handle_stream(
           delay_for(PING_TIMEOUT).await;
           notify.notify();
         });
-        ping_timout_abort = Some(abort);
+        ping_timeout_abort = Some(abort);
         tokio::spawn(set_ping_timeout);
       }
       _ = ping_timeout_notify.notified() => {
@@ -127,7 +130,7 @@ async fn handle_stream(
         }
       }
       incoming = stream.recv_frame() => {
-        if let Some(abort) = ping_timout_abort.take() {
+        if let Some(abort) = ping_timeout_abort.take() {
           abort.abort();
         }
 
@@ -137,6 +140,9 @@ async fn handle_stream(
           frame => {
             packet = proto::flo_common::PacketPong => {
               tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
+            },
+            packet = proto::flo_connect::PacketGameSlotUpdateRequest => {
+              handle_game_slot_update_request(state.clone(), player_id, packet).await?;
             }
           }
         }
@@ -167,11 +173,7 @@ async fn send_initial_state(
     session: Some({
       use proto::flo_connect::*;
       Session {
-        player: Some(PlayerInfo {
-          id: player.id,
-          name: player.name,
-          source: player.source as i32,
-        }),
+        player: player.pack()?,
         status: if game_id.is_some() {
           PlayerStatus::InGame.into()
         } else {
@@ -210,4 +212,20 @@ impl LockedPlayerState {
       game_id,
     }
   }
+}
+
+async fn handle_game_slot_update_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  packet: proto::flo_connect::PacketGameSlotUpdateRequest,
+) -> Result<()> {
+  crate::game::update_game_slot_settings(
+    state,
+    packet.game_id,
+    player_id,
+    SlotSettings::unpack(packet.slot_settings.extract()?)?,
+  )
+  .await?;
+
+  Ok(())
 }

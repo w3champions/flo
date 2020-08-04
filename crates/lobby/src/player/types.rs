@@ -4,8 +4,6 @@ use s2_grpc_utils::result::Error as ProtoError;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
-use flo_net::proto::flo_connect as packet;
-
 use crate::schema::player;
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
@@ -13,6 +11,7 @@ use crate::schema::player;
 pub struct Player {
   pub id: i32,
   pub name: String,
+  #[s2_grpc(proto_enum)]
   pub source: PlayerSource,
   pub source_id: String,
   pub source_state: Option<SourceState>,
@@ -23,17 +22,21 @@ pub struct Player {
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, BSDieselEnum, S2ProtoEnum)]
 #[repr(i32)]
-#[s2_grpc(proto_enum_type = "flo_grpc::player::PlayerSource")]
+#[s2_grpc(proto_enum_type(
+  flo_grpc::player::PlayerSource,
+  flo_net::proto::flo_connect::PlayerSource
+))]
 pub enum PlayerSource {
   Test = 0,
   BNet = 1,
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone, Queryable)]
-#[s2_grpc(message_type = "flo_grpc::player::PlayerRef")]
+#[s2_grpc(message_type(flo_grpc::player::PlayerRef, flo_net::proto::flo_connect::PlayerInfo))]
 pub struct PlayerRef {
   pub id: i32,
   pub name: String,
+  #[s2_grpc(proto_enum)]
   pub source: PlayerSource,
   pub realm: Option<String>,
 }
@@ -90,18 +93,4 @@ pub struct BNetState {
   pub account_id: u64,
   pub access_token: String,
   pub access_token_exp: u64,
-}
-
-impl PlayerRef {
-  pub fn into_packet(self) -> packet::PlayerInfo {
-    packet::PlayerInfo {
-      id: self.id,
-      name: self.name,
-      source: match self.source {
-        PlayerSource::Test => packet::PlayerSource::Test,
-        PlayerSource::BNet => packet::PlayerSource::BNet,
-      }
-      .into(),
-    }
-  }
 }

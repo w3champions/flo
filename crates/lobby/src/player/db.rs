@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use s2_grpc_utils::S2ProtoEnum;
 use s2_grpc_utils::S2ProtoUnpack;
 use serde_json::Value;
 use std::convert::TryFrom;
@@ -64,8 +65,8 @@ impl TryFrom<flo_grpc::lobby::UpdateAndGetPlayerRequest> for UpsertPlayer {
 
   fn try_from(value: flo_grpc::lobby::UpdateAndGetPlayerRequest) -> Result<Self, Self::Error> {
     Ok(UpsertPlayer {
+      source: PlayerSource::unpack_enum(value.source()),
       name: value.name,
-      source: S2ProtoUnpack::unpack(value.source)?,
       source_id: value.source_id,
       source_state: {
         let state = value
