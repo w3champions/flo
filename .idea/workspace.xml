@@ -57,7 +57,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/build/Dockerfile" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/build/flo-node-service" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo-node-service/Dockerfile" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -113,19 +116,19 @@
     <property name="settings.editor.selected.configurable" value="preferences.keymap" />
   </component>
   <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Data\Projects\flo\build" />
+      <recent name="C:\Data\Projects\flo\binaries\flo-node-service" />
+      <recent name="C:\Data\Projects\flo" />
+      <recent name="C:\Data\Projects\flo\binaries\flo\src\net\node" />
+      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
+    </key>
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Data\Projects\flo\binaries\flo\src\net\node" />
       <recent name="C:\Data\Projects\flo\crates\node\src" />
       <recent name="C:\Data\Projects\flo\crates\lobby\src\game" />
       <recent name="C:\Data\Projects\flo\crates\lobby\src" />
       <recent name="C:\Data\Projects\flo\binaries\flo\src" />
-    </key>
-    <key name="MoveFile.RECENT_KEYS">
-      <recent name="C:\Data\Projects\flo\binaries\flo-node-service" />
-      <recent name="C:\Data\Projects\flo" />
-      <recent name="C:\Data\Projects\flo\binaries\flo\src\net\node" />
-      <recent name="C:\Data\Projects\flo\crates\lobby\src\connect" />
-      <recent name="C:\Data\Projects\flo\crates\net\src\packet" />
     </key>
   </component>
   <component name="RunAnythingCache">
@@ -215,6 +218,11 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <list>
       <item itemvalue="Cargo Command.check [flo]" />
       <item itemvalue="Cargo Command.doc [flo]" />
@@ -251,6 +259,7 @@
       <workItem from="1596896995911" duration="323000" />
       <workItem from="1596897350925" duration="2130000" />
       <workItem from="1596915266816" duration="38521000" />
+      <workItem from="1596982892811" duration="3883000" />
     </task>
     <task id="LOCAL-00001" summary="refactor: Improve tests.">
       <created>1593404058061</created>
@@ -504,7 +513,14 @@
       <option name="project" value="LOCAL" />
       <updated>1596981011781</updated>
     </task>
-    <option name="localTasksCounter" value="37" />
+    <task id="LOCAL-00037" summary="ci: checkout submodules">
+      <created>1596983583866</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1596983583866</updated>
+    </task>
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -561,7 +577,6 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
-    <MESSAGE value="feat: Custom game name" />
     <MESSAGE value="feat: Config, Platform and W3Storage" />
     <MESSAGE value="feat: Action packets" />
     <MESSAGE value="feat: Actions works" />
@@ -586,7 +601,8 @@
     <MESSAGE value="feat: game lobby." />
     <MESSAGE value="feat: add Node.country_id" />
     <MESSAGE value="feat: Node ping" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: Node ping" />
+    <MESSAGE value="ci: checkout submodules" />
+    <option name="LAST_COMMIT_MESSAGE" value="ci: checkout submodules" />
   </component>
   <component name="WindowStateProjectService">
     <state x="724" y="276" key="#Inspections" timestamp="1593760914337">
@@ -719,11 +735,11 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="882" y="310" key="git4idea.branch.GitSmartOperationDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596516714253" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1596980063607">
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1596982959941">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="880" y="329" width="785" height="794" key="run.anything.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202552491" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596980063607" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596982959941" />
     <state x="4594" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593444445589" />
     <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1596980968307">
       <screen x="0" y="0" width="2194" height="1194" />
