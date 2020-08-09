@@ -115,10 +115,16 @@ pub enum PacketTypeId {
   GamePlayerLeave,
   #[bin(value = 0x10)]
   GameSlotUpdate,
-  #[bin(value = 0x11)]
+  #[bin(value = 0x1A)]
   GameSlotUpdateRequest,
-  #[bin(value = 0x12)]
+  #[bin(value = 0x1B)]
   PlayerSessionUpdate,
+  #[bin(value = 0x1C)]
+  ListNodesRequest,
+  #[bin(value = 0x1D)]
+  ListNodes,
+  #[bin(value = 0x1E)]
+  GameSelectedNodeUpdate,
   UnknownValue(u8),
 }
 

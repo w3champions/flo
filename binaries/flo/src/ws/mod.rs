@@ -3,7 +3,6 @@ pub(crate) mod message;
 mod stream;
 
 use futures::stream::TryStreamExt;
-use futures::TryFutureExt;
 use http::{Request, Response};
 use parking_lot::RwLock;
 

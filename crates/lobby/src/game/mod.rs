@@ -8,7 +8,7 @@ use s2_grpc_utils::S2ProtoPack;
 use flo_net::proto;
 
 use crate::error::*;
-use crate::game::db::{LeaveGameParams, UpdateGameSlotSettingsParams};
+use crate::game::db::{Leave, LeaveGameParams, UpdateGameSlotSettingsParams};
 use crate::state::LobbyStateRef;
 pub use slots::Slots;
 pub use types::*;
@@ -101,7 +101,7 @@ pub async fn leave_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     .await
     .ok_or_else(|| Error::GameNotFound)?;
 
-  let slots = state
+  let leave = state
     .db
     .exec(move |conn| {
       crate::game::db::leave(
@@ -114,32 +114,63 @@ pub async fn leave_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     })
     .await?;
 
-  player_guard.leave_game();
-  game_guard.remove_player(player_id);
+  match leave {
+    // remove all players, kick all players
+    Leave::Host(_, players) => {
+      for removed_player_id in players {
+        game_guard.remove_player(player_id);
+        if removed_player_id == player_id {
+          player_guard.leave_game();
+          // send to self
+          let update = player_guard.get_session_update();
+          if let Some(sender) = player_guard.get_sender_mut() {
+            sender.with_buf(move |buf| {
+              buf.update_session(update);
+            });
+          }
+        } else {
+          let mut other_player_guard = state.mem.lock_player_state(removed_player_id).await;
+          other_player_guard.leave_game();
+          // kick self
+          let update = other_player_guard.get_session_update();
+          if let Some(sender) = other_player_guard.get_sender_mut() {
+            sender.with_buf(move |buf| {
+              buf.update_session(update);
+            });
+          }
+        }
+      }
+    }
+    // remove self, notify other players
+    Leave::Player(slots) => {
+      player_guard.leave_game();
+      game_guard.remove_player(player_id);
 
-  // send to self
-  let update = player_guard.get_session_update();
-  if let Some(sender) = player_guard.get_sender_mut() {
-    sender.with_buf(move |buf| {
-      buf.update_session(update);
-    });
-  }
+      // send to self
+      let update = player_guard.get_session_update();
+      if let Some(sender) = player_guard.get_sender_mut() {
+        sender.with_buf(move |buf| {
+          buf.update_session(update);
+        });
+      }
 
-  let player_ids: Vec<i32> = slots
-    .iter()
-    .filter_map(|s| s.player.as_ref().map(|p| p.id))
-    .collect();
+      let player_ids: Vec<i32> = slots
+        .iter()
+        .filter_map(|s| s.player.as_ref().map(|p| p.id))
+        .collect();
 
-  let mut senders = state.mem.get_player_senders(&player_ids);
+      let mut senders = state.mem.get_player_senders(&player_ids);
 
-  for sender in senders.values_mut() {
-    sender.with_buf(|buf| {
-      buf.add_player_leave(
-        player_state_game_id,
-        player_id,
-        proto::flo_connect::PlayerLeaveReason::Left,
-      )
-    });
+      for sender in senders.values_mut() {
+        sender.with_buf(|buf| {
+          buf.add_player_leave(
+            player_state_game_id,
+            player_id,
+            proto::flo_connect::PlayerLeaveReason::Left,
+          )
+        });
+      }
+    }
   }
 
   Ok(())

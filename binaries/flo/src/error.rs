@@ -2,14 +2,22 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("set ping interval failed")]
+  SetPingIntervalFailed,
+  #[error("invalid selected node id: {0}")]
+  InvalidSelectedNodeId(i32),
+  #[error("custom node support is currently not implemented")]
+  CustomNodeUnimplemented,
+  #[error("broadcast nodes config failed")]
+  BroadcastNodesConfigFailed,
+  #[error("ping node timeout")]
+  PingNodeTimeout,
+  #[error("invalid ping node reply")]
+  InvalidPingNodeReply,
   #[error("Warcraft ||| not located")]
   War3NotLocated,
-  #[error("websocket connection closed unexpectedly")]
-  WebsocketClosed,
   #[error("task failed to execute to completion: {0}")]
   TaskJoinError(#[from] tokio::task::JoinError),
-  #[error("unknown websocket message")]
-  UnknownWebsocketMessage,
   #[error("connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(crate::net::lobby::RejectReason),
   #[error("server not connected")]

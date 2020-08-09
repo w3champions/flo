@@ -7,10 +7,10 @@ use tracing_futures::Instrument;
 
 pub use flo_net::connect::*;
 use flo_net::packet::*;
-use flo_net::proto::flo_connect::GameInfo;
 use flo_net::stream::FloStream;
 
 use crate::error::{Error, Result};
+use crate::net::node::NodeRegistryRef;
 use crate::ws::{message, OutgoingMessage, WsSenderRef};
 
 pub type LobbyStreamSender = mpsc::Sender<Frame>;
@@ -22,7 +22,12 @@ pub struct LobbyStream {
 }
 
 impl LobbyStream {
-  pub async fn connect(domain: &str, ws_sender: WsSenderRef, token: String) -> Result<Self> {
+  pub async fn connect(
+    domain: &str,
+    ws_sender: WsSenderRef,
+    nodes: NodeRegistryRef,
+    token: String,
+  ) -> Result<Self> {
     let addr = format!("{}:{}", domain, flo_constants::LOBBY_SOCKET_PORT);
 
     tracing::debug!("connect addr: {}", addr);
@@ -88,7 +93,7 @@ impl LobbyStream {
                     }
                   }
 
-                  match Self::dispatch(&ws_sender, frame).await {
+                  match Self::dispatch(&ws_sender, &nodes, frame).await {
                     Ok(_) => {},
                     Err(e) => {
                       tracing::debug!("exiting: dispatch: {}", e);
@@ -139,7 +144,7 @@ impl LobbyStream {
   }
 
   // forward server packets to the websocket connection
-  async fn dispatch(sender: &WsSenderRef, frame: Frame) -> Result<()> {
+  async fn dispatch(sender: &WsSenderRef, nodes: &NodeRegistryRef, frame: Frame) -> Result<()> {
     let msg = flo_net::frame_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
@@ -149,6 +154,7 @@ impl LobbyStream {
           })
         },
         p = PacketGameInfo => {
+          nodes.set_selected_node(p.game.as_ref().and_then(|g| g.node.clone()))?;
           OutgoingMessage::CurrentGameInfo(p.game.extract()?)
         },
         p = PacketGamePlayerEnter => {
@@ -161,7 +167,18 @@ impl LobbyStream {
           OutgoingMessage::GameSlotUpdate(p)
         },
         p = PacketPlayerSessionUpdate => {
+          if p.game_id.is_none() {
+            nodes.set_selected_node(None)?;
+          }
           OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
+        },
+        p = PacketListNodes => {
+          nodes.update_nodes(p.nodes.clone())?;
+          OutgoingMessage::ListNodes(p)
+        },
+        p = PacketGameSelectedNodeUpdate => {
+          nodes.set_selected_node(p.node.clone())?;
+          OutgoingMessage::GameSelectedNodeUpdate(p)
         }
       }
     };

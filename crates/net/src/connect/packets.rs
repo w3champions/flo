@@ -10,3 +10,6 @@ packet_type!(GamePlayerLeave, PacketGamePlayerLeave);
 packet_type!(GameSlotUpdate, PacketGameSlotUpdate);
 packet_type!(GameSlotUpdateRequest, PacketGameSlotUpdateRequest);
 packet_type!(PlayerSessionUpdate, PacketPlayerSessionUpdate);
+packet_type!(ListNodesRequest, PacketListNodesRequest);
+packet_type!(ListNodes, PacketListNodes);
+packet_type!(GameSelectedNodeUpdate, PacketGameSelectedNodeUpdate);

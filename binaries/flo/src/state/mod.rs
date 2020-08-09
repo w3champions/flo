@@ -8,6 +8,7 @@ use flo_config::ClientConfig;
 
 use crate::error::Result;
 use net::NetState;
+pub use net::NodesConfigSenderRef;
 use platform::PlatformState;
 pub use platform::PlatformStateError;
 

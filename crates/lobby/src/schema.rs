@@ -45,6 +45,7 @@ table! {
         ip_addr -> Text,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        country_id -> Text,
     }
 }
 

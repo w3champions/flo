@@ -10,6 +10,7 @@ pub struct PlayerSendBuf {
   player_id: i32,
   session_update: Option<PacketPlayerSessionUpdate>,
   game: GameData,
+  list_nodes: Option<PacketListNodes>,
 }
 
 impl PlayerSendBuf {
@@ -18,6 +19,7 @@ impl PlayerSendBuf {
       player_id,
       session_update: None,
       game: GameData::new(current_game),
+      list_nodes: None,
     }
   }
 
@@ -27,6 +29,10 @@ impl PlayerSendBuf {
 
   pub fn update_session(&mut self, update: PacketPlayerSessionUpdate) {
     self.session_update = Some(update)
+  }
+
+  pub fn list_nodes(&mut self, packet: PacketListNodes) {
+    self.list_nodes = Some(packet)
   }
 
   pub fn set_game(&mut self, next_game: GameInfo) {
@@ -207,6 +213,10 @@ impl PlayerSendBuf {
       frames.push(update.encode_as_frame()?);
     }
 
+    if let Some(packet) = self.list_nodes.take() {
+      frames.push(packet.encode_as_frame()?);
+    }
+
     if let Some(game) = self.game.full_game.take() {
       frames.push(game.encode_as_frame()?);
     }
@@ -228,7 +238,9 @@ impl PlayerSendBuf {
   }
 
   fn len(&self) -> usize {
-    (if self.session_update.is_some() { 1 } else { 0 }) + self.game.len()
+    (if self.session_update.is_some() { 1 } else { 0 })
+      + (if self.list_nodes.is_some() { 1 } else { 0 })
+      + self.game.len()
   }
 }
 

@@ -139,6 +139,18 @@ impl Slots {
     }
   }
 
+  /// Remove all players, return removed player ids
+  pub fn release_all_player_slots(&mut self) -> Vec<i32> {
+    let mut player_ids = vec![];
+    for slot in &mut self.inner {
+      if let Some(id) = slot.player.as_ref().map(|p| p.id) {
+        player_ids.push(id);
+        *slot = Default::default();
+      }
+    }
+    player_ids
+  }
+
   /// Find a player's slot, do some validation and update it
   pub fn update_player_slot(&mut self, player_id: i32, settings: &SlotSettings) -> bool {
     let color_set = self.get_color_set();

@@ -143,6 +143,9 @@ async fn handle_stream(
             },
             packet = proto::flo_connect::PacketGameSlotUpdateRequest => {
               handle_game_slot_update_request(state.clone(), player_id, packet).await?;
+            },
+            _packet = proto::flo_connect::PacketListNodesRequest => {
+              handle_list_nodes_request(state.clone(), player_id).await?;
             }
           }
         }
@@ -168,22 +171,28 @@ async fn send_initial_state(
     player.joined_game_id()
   };
 
-  let mut frames = vec![connect::PacketConnectLobbyAccept {
-    lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
-    session: Some({
-      use proto::flo_connect::*;
-      Session {
-        player: player.pack()?,
-        status: if game_id.is_some() {
-          PlayerStatus::InGame.into()
-        } else {
-          PlayerStatus::Idle.into()
-        },
-        game_id: game_id.clone(),
-      }
-    }),
-  }
-  .encode_as_frame()?];
+  let mut frames = vec![
+    connect::PacketConnectLobbyAccept {
+      lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
+      session: Some({
+        use proto::flo_connect::*;
+        Session {
+          player: player.pack()?,
+          status: if game_id.is_some() {
+            PlayerStatus::InGame.into()
+          } else {
+            PlayerStatus::Idle.into()
+          },
+          game_id: game_id.clone(),
+        }
+      }),
+    }
+    .encode_as_frame()?,
+    connect::PacketListNodes {
+      nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
+    }
+    .encode_as_frame()?,
+  ];
 
   if let Some(game_id) = game_id {
     let game = state
@@ -227,5 +236,16 @@ async fn handle_game_slot_update_request(
   )
   .await?;
 
+  Ok(())
+}
+
+async fn handle_list_nodes_request(state: LobbyStateRef, player_id: i32) -> Result<()> {
+  if let Some(mut sender) = state.mem.get_player_sender(player_id) {
+    let nodes = state.config.with_nodes(|nodes| nodes.to_vec());
+    let packet = proto::flo_connect::PacketListNodes {
+      nodes: nodes.pack()?,
+    };
+    sender.with_buf(move |buf| buf.list_nodes(packet));
+  }
   Ok(())
 }

@@ -7,6 +7,14 @@ edition = "2018"
 [dependencies]
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
-flo-grpc = { path = "../../deps/flo-grpc" }
+flo-net = { path = "../net" }
+flo-constants = { path = "../constants" }
 
+thiserror = "1.0.20"
 bytes = "0.5.6"
+futures = "0.3.5"
+tokio = { version = "0.2.22", features = ["time", "sync", "stream", "macros", "blocking"] }
+tracing = "0.1"
+tracing-futures = "0.2.4"
+parking_lot = "0.11.0"
+dashmap = "3.11.7"

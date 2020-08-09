@@ -11,26 +11,26 @@ use crate::game::{
   GameEntry,
 };
 
-mod api_client;
-use api_client::ApiClientStorage;
-pub use api_client::ApiClientStorageRef;
+mod config;
+pub use config::ConfigClientStorageRef;
+use config::ConfigStorage;
 
 #[derive(Clone)]
 pub struct LobbyStateRef {
   pub db: ExecutorRef,
   pub mem: MemStorageRef,
-  pub api_client: ApiClientStorageRef,
+  pub config: ConfigClientStorageRef,
 }
 
 impl LobbyStateRef {
   pub async fn init() -> Result<Self> {
     let db = Executor::env().into_ref();
     let mem = MemStorage::init(db.clone()).await?.into_ref();
-    let api_client = ApiClientStorage::init(db.clone()).await?.into_ref();
+    let api_client = ConfigStorage::init(db.clone()).await?.into_ref();
     Ok(LobbyStateRef {
       db,
       mem,
-      api_client,
+      config: api_client,
     })
   }
 }
@@ -192,6 +192,10 @@ impl MemStorageRef {
       }
       None => None,
     }
+  }
+
+  pub fn get_player_sender(&self, id: i32) -> Option<PlayerSenderRef> {
+    self.state.read().player_senders.read().get(&id).cloned()
   }
 
   pub fn get_player_senders(&self, ids: &[i32]) -> HashMap<i32, PlayerSenderRef> {

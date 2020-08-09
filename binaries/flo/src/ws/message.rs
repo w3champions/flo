@@ -4,13 +4,14 @@ use std::borrow::Cow;
 use std::str::FromStr;
 
 use flo_net::proto::flo_connect::{
-  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGameSlotUpdate,
-  PacketGameSlotUpdateRequest,
+  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGameSelectedNodeUpdate,
+  PacketGameSlotUpdate, PacketGameSlotUpdateRequest, PacketListNodes,
 };
 
 use crate::error::{Error, Result};
 
 pub use crate::net::lobby::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
+use crate::net::node::PingUpdate;
 use crate::state::FloState;
 use crate::state::PlatformStateError;
 
@@ -22,6 +23,7 @@ pub enum IncomingMessage {
   ListMaps,
   GetMapDetail(MapPath),
   GameSlotUpdateRequest(PacketGameSlotUpdateRequest),
+  ListNodesRequest,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +43,9 @@ pub enum OutgoingMessage {
   GamePlayerLeave(PacketGamePlayerLeave),
   GameSlotUpdate(PacketGameSlotUpdate),
   PlayerSessionUpdate(PlayerSessionUpdate),
+  ListNodes(PacketListNodes),
+  PingUpdate(PingUpdate),
+  GameSelectedNodeUpdate(PacketGameSelectedNodeUpdate),
 }
 
 impl FromStr for IncomingMessage {

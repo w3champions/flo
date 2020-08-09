@@ -227,7 +227,7 @@ pub struct JoinGameParams {
 
 /// Adds a player into a game
 pub fn join(conn: &DbConn, params: JoinGameParams) -> Result<Vec<Slot>> {
-  let mut slots = get_slots(conn, params.game_id)?;
+  let mut slots = get_slots(conn, params.game_id)?.slots;
 
   if slots.is_full() {
     return Err(Error::GameFull);
@@ -248,17 +248,34 @@ pub struct LeaveGameParams {
   pub player_id: i32,
 }
 
+#[derive(Debug)]
+pub enum Leave {
+  // host left, return updated slots and removed player ids
+  Host(Vec<Slot>, Vec<i32>),
+  // player left, return updated slots
+  Player(Vec<Slot>),
+}
+
 /// Removes a player from a game
-pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<Vec<Slot>> {
-  let mut slots = get_slots(conn, params.game_id)?;
-  if slots.release_player_slot(params.player_id) {
-    if slots.is_empty() {
-      end_game(conn, params.game_id)?;
-    } else {
-      update_slots(conn, params.game_id, &slots)?;
+pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<Leave> {
+  let GetSlots {
+    mut slots,
+    host_player_id,
+  } = get_slots(conn, params.game_id)?;
+
+  if Some(params.player_id) == host_player_id {
+    let removed = slots.release_all_player_slots();
+    Ok(Leave::Host(slots.into_inner(), removed))
+  } else {
+    if slots.release_player_slot(params.player_id) {
+      if slots.is_empty() {
+        end_game(conn, params.game_id)?;
+      } else {
+        update_slots(conn, params.game_id, &slots)?;
+      }
     }
+    Ok(Leave::Player(slots.into_inner()))
   }
-  Ok(slots.into_inner())
 }
 
 #[derive(Debug, Deserialize, S2ProtoUnpack)]
@@ -273,7 +290,7 @@ pub fn update_slot_settings(
   conn: &DbConn,
   params: UpdateGameSlotSettingsParams,
 ) -> Result<Vec<Slot>> {
-  let mut slots = get_slots(conn, params.game_id)?;
+  let mut slots = get_slots(conn, params.game_id)?.slots;
   if slots.update_player_slot(params.player_id, &params.settings) {
     update_slots(conn, params.game_id, &slots)?
   }
@@ -320,26 +337,25 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
   Ok(games)
 }
 
-fn get_host_player(conn: &DbConn, id: i32) -> Result<Option<i32>> {
-  use game::dsl;
-  let value: Option<i32> = game::table
-    .select(dsl::created_by)
-    .find(id)
-    .first(conn)
-    .optional()?
-    .ok_or_else(|| Error::GameNotFound)?;
-  Ok(value)
+#[derive(Debug)]
+struct GetSlots {
+  host_player_id: Option<i32>,
+  slots: Slots,
 }
 
-fn get_slots(conn: &DbConn, id: i32) -> Result<Slots> {
+fn get_slots(conn: &DbConn, id: i32) -> Result<GetSlots> {
   use game::dsl;
-  let value: Value = game::table
-    .select(dsl::slots)
+  let (value, host_player_id): (Value, Option<i32>) = game::table
+    .select((dsl::slots, dsl::created_by))
     .find(id)
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
-  Ok(Slots::from_vec(serde_json::from_value(value)?))
+  let slots = Slots::from_vec(serde_json::from_value(value)?);
+  Ok(GetSlots {
+    host_player_id,
+    slots,
+  })
 }
 
 fn update_slots(conn: &DbConn, id: i32, slots: &[Slot]) -> Result<()> {

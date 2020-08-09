@@ -1,11 +1,10 @@
 use async_tungstenite::tungstenite::Message as WsMessage;
 
 use futures::future::{abortable, AbortHandle};
-use futures::{SinkExt, TryStreamExt};
+use futures::TryStreamExt;
 use parking_lot::RwLock;
 
 use std::sync::Arc;
-use tokio::sync::oneshot;
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
@@ -18,7 +17,7 @@ use crate::ws::message::{
 };
 use crate::ws::stream::{WsSenderRef, WsStream, WsStreamExt};
 
-use flo_net::proto::flo_connect::PacketGameSlotUpdateRequest;
+use flo_net::proto::flo_connect::{PacketGameSlotUpdateRequest, PacketListNodesRequest};
 
 #[derive(Debug)]
 pub struct WsHandler {
@@ -130,6 +129,9 @@ impl StateRef {
         ),
         IncomingMessage::GameSlotUpdateRequest(req) => {
           Self::spawn_handler(err_notify.clone(), self.clone().handle_slot_update(req))
+        }
+        IncomingMessage::ListNodesRequest => {
+          Self::spawn_handler(err_notify.clone(), self.clone().handle_list_nodes_request())
         }
       }
     }
@@ -260,6 +262,15 @@ impl StateRef {
 
   async fn handle_slot_update(self, req: PacketGameSlotUpdateRequest) -> Result<()> {
     self.get_flo_state().net.lobby_send(req).await?;
+    Ok(())
+  }
+
+  async fn handle_list_nodes_request(self) -> Result<()> {
+    self
+      .get_flo_state()
+      .net
+      .lobby_send(PacketListNodesRequest {})
+      .await?;
     Ok(())
   }
 

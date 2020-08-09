@@ -13,7 +13,7 @@ use crate::state::LobbyStateRef;
 pub async fn serve(state: LobbyStateRef) -> Result<()> {
   let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, crate::constants::LOBBY_GRPC_PORT);
   let server_impl = FloLobbyService::new(state.clone());
-  let server = FloLobbyServer::with_interceptor(server_impl, state.api_client.into_interceptor());
+  let server = FloLobbyServer::with_interceptor(server_impl, state.config.into_interceptor());
   let server = Server::builder().add_service(server);
   server.serve(addr.into()).await?;
   Ok(())
@@ -85,25 +85,10 @@ impl FloLobby for FloLobbyService {
   }
 
   async fn list_nodes(&self, _request: Request<()>) -> Result<Response<ListNodesReply>, Status> {
-    use std::iter::FromIterator;
-
-    let nodes = self
-      .state
-      .db
-      .exec(move |conn| crate::node::db::get_all_nodes(conn))
-      .await
-      .map_err(|e| Status::internal(e.to_string()))?;
-    let nodes: Vec<_> = Result::<_, Status>::from_iter(nodes.into_iter().map(|node| {
-      Ok(Node {
-        id: node.id,
-        name: node.name,
-        location: node.location,
-        ip_addr: node.ip_addr,
-        created_at: node.created_at.pack().map_err(Status::internal)?,
-        updated_at: node.updated_at.pack().map_err(Status::internal)?,
-      })
-    }))?;
-    Ok(Response::new(ListNodesReply { nodes }))
+    let nodes = self.state.config.with_nodes(|nodes| nodes.to_vec());
+    Ok(Response::new(ListNodesReply {
+      nodes: nodes.pack().map_err(Error::from)?,
+    }))
   }
 
   async fn list_games(

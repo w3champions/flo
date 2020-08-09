@@ -20,6 +20,7 @@ members = [
   "binaries/flo",
   "binaries/flo-cli",
   "binaries/flo-lobby-service",
+  "binaries/flo-node-service",
   "binaries/flo-map-checksum-dump",
   "binaries/flo-map-checksum-import",
 
