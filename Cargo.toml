@@ -28,11 +28,13 @@ members = [
 ]
 
 [patch.crates-io]
-stormlib = { path = "../stormlib-rs/crates/stormlib" }
-stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
+#stormlib = { path = "../stormlib-rs/crates/stormlib" }
+#stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
+stormlib = { git = "https://github.com/wc3tools/stormlib-rs.git" }
+stormlib-sys = { git = "https://github.com/wc3tools/stormlib-rs.git" }
 trust-dns-proto = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
 trust-dns-client = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
 casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
-#s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
-s2-grpc-utils = { path = "../s2-grpc-utils" }
+#s2-grpc-utils = { path = "../s2-grpc-utils" }
+s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
