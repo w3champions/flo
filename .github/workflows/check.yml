@@ -16,5 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Build
+      with:
+        token: ${{secrets.PAT_MY_TOKEN}}
+        submodules: recursive
+    - name: Check
       run: cargo check --all
