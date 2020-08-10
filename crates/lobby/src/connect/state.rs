@@ -153,6 +153,15 @@ impl PlayerSenderRef {
     Ok(())
   }
 
+  pub async fn send<T: FloPacket>(&mut self, packet: T) -> Result<()> {
+    self
+      .tx
+      .send(Message::Frame(packet.encode_as_frame()?))
+      .await
+      .map_err(|_| Error::PlayerStreamClosed)?;
+    Ok(())
+  }
+
   pub fn ptr_eq(&self, other: &Self) -> bool {
     Arc::ptr_eq(&self.state, &other.state)
   }

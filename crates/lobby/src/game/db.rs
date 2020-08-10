@@ -8,6 +8,7 @@ use crate::db::DbConn;
 use crate::error::*;
 use crate::game::{Game, GameEntry, GameStatus, Slot, SlotSettings, Slots};
 use crate::map::Map;
+use crate::node::NodeRef;
 use crate::player::PlayerRef;
 use crate::schema::game;
 
@@ -249,32 +250,45 @@ pub struct LeaveGameParams {
 }
 
 #[derive(Debug)]
-pub enum Leave {
-  // host left, return updated slots and removed player ids
-  Host(Vec<Slot>, Vec<i32>),
-  // player left, return updated slots
-  Player(Vec<Slot>),
+pub struct LeaveGame {
+  pub game_ended: bool,
+  pub removed_players: Vec<i32>,
+  pub slots: Vec<Slot>,
 }
 
 /// Removes a player from a game
-pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<Leave> {
+pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
   let GetSlots {
     mut slots,
     host_player_id,
   } = get_slots(conn, params.game_id)?;
 
+  // host left, kick all players
   if Some(params.player_id) == host_player_id {
     let removed = slots.release_all_player_slots();
-    Ok(Leave::Host(slots.into_inner(), removed))
+    update_slots(conn, params.game_id, &slots)?;
+    end_game(conn, params.game_id)?;
+    Ok(LeaveGame {
+      game_ended: true,
+      removed_players: removed,
+      slots: slots.into_inner(),
+    })
   } else {
+    let mut ended = false;
+    let mut removed_players = Vec::with_capacity(1);
     if slots.release_player_slot(params.player_id) {
+      removed_players.push(params.player_id);
+      update_slots(conn, params.game_id, &slots)?;
       if slots.is_empty() {
+        ended = true;
         end_game(conn, params.game_id)?;
-      } else {
-        update_slots(conn, params.game_id, &slots)?;
       }
     }
-    Ok(Leave::Player(slots.into_inner()))
+    Ok(LeaveGame {
+      game_ended: ended,
+      removed_players,
+      slots: slots.into_inner(),
+    })
   }
 }
 
@@ -312,6 +326,8 @@ pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
 pub struct GameStateFromDb {
   pub id: i32,
   pub players: Vec<i32>,
+  pub node: Option<NodeRef>,
+  pub created_by: Option<i32>,
 }
 
 /// Loads game players info from database
@@ -319,12 +335,13 @@ pub struct GameStateFromDb {
 pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> {
   use game::dsl;
 
-  let rows: Vec<(i32, Value)> = game::table
+  let rows: Vec<(i32, Option<Value>, Value, Option<i32>)> = game::table
     .filter(dsl::status.eq_any(&[GameStatus::Preparing, GameStatus::Playing]))
-    .select((dsl::id, dsl::slots))
+    .select((dsl::id, dsl::node, dsl::slots, dsl::created_by))
     .load(conn)?;
   let mut games = Vec::with_capacity(rows.len());
-  for (id, slots) in rows {
+  for (id, node, slots, created_by) in rows {
+    let node = node.map(serde_json::from_value).transpose()?;
     let slots: Vec<Slot> = serde_json::from_value(slots)?;
     games.push(GameStateFromDb {
       id,
@@ -332,6 +349,8 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
         .into_iter()
         .filter_map(|s| s.player.map(|p| p.id))
         .collect(),
+      node,
+      created_by,
     });
   }
   Ok(games)
@@ -361,7 +380,25 @@ fn get_slots(conn: &DbConn, id: i32) -> Result<GetSlots> {
 fn update_slots(conn: &DbConn, id: i32, slots: &[Slot]) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
+    .filter(dsl::status.ne(GameStatus::Preparing))
     .set(dsl::slots.eq(serde_json::to_value(slots)?))
+    .execute(conn)?;
+  Ok(())
+}
+
+pub fn select_node(conn: &DbConn, id: i32, node_id: Option<i32>) -> Result<()> {
+  use game::dsl;
+
+  let node = if let Some(id) = node_id {
+    let node = crate::node::db::get_node(conn, id)?;
+    Some(serde_json::to_value(&crate::node::NodeRef::from(node))?)
+  } else {
+    None
+  };
+
+  diesel::update(game::table.find(id))
+    .filter(dsl::status.ne(GameStatus::Preparing))
+    .set(dsl::node.eq(node))
     .execute(conn)?;
   Ok(())
 }
@@ -370,6 +407,7 @@ fn end_game(conn: &DbConn, id: i32) -> Result<()> {
   use diesel::dsl::sql;
   use game::dsl;
   diesel::update(game::table.find(id))
+    .filter(dsl::status.ne(GameStatus::Ended))
     .set((
       dsl::status.eq(GameStatus::Ended),
       dsl::ended_at.eq(sql("now()")),

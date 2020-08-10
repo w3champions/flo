@@ -16,12 +16,14 @@ use crate::error::*;
 use crate::net::node::PingUpdate;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
+const PACKETS: usize = 1;
 
 #[derive(Debug)]
 pub struct Pinger {
   interval_sender: Sender<PingIntervalUpdate>,
   current_interval: RwLock<Duration>,
   shutdown: Arc<Notify>,
+  current_ping: Arc<RwLock<Option<u32>>>,
 }
 
 impl Pinger {
@@ -39,10 +41,12 @@ impl Pinger {
       value: interval,
       immediate: true,
     });
+    let current_ping = Arc::new(RwLock::new(None));
 
     tokio::spawn(
       {
         let shutdown = shutdown.clone();
+        let current_ping = current_ping.clone();
         async move {
           let mut sleep: Option<Duration> = None;
           interval_receiver.next().await; // consume the initial value
@@ -80,6 +84,7 @@ impl Pinger {
               rtt = Self::ping_limited(limiter.clone(), ip.clone(), port) => {
                 match rtt {
                   Ok(rtt) => {
+                    *current_ping.write() = Some(rtt);
                     if let Err(_) = update_sender.send(PingUpdate {
                       node_id,
                       ping: Some(rtt)
@@ -89,6 +94,7 @@ impl Pinger {
                     }
                   },
                   Err(_) => {
+                    current_ping.write().take();
                     if let Err(_) = update_sender.send(PingUpdate {
                       node_id,
                       ping: None
@@ -112,6 +118,7 @@ impl Pinger {
       interval_sender,
       current_interval: RwLock::new(interval),
       shutdown,
+      current_ping,
     }
   }
 
@@ -126,6 +133,10 @@ impl Pinger {
 
   pub fn current_interval(&self) -> Duration {
     self.current_interval.read().clone()
+  }
+
+  pub fn current_ping(&self) -> Option<u32> {
+    self.current_ping.read().clone()
   }
 
   async fn ping_limited(limiter: Arc<Semaphore>, ip: Ipv4Addr, port: u16) -> Result<u32> {
@@ -160,7 +171,7 @@ async fn ping(ip: Ipv4Addr, port: Option<u16>) -> Result<u32> {
 
   let mut buf = [0_u8; 4];
 
-  for _ in 0..3 {
+  for _ in 0..PACKETS {
     let t = sw.elapsed_ms();
     buf.copy_from_slice(&t.to_le_bytes());
     timeout(TIMEOUT, socket.send(&buf))
@@ -170,7 +181,7 @@ async fn ping(ip: Ipv4Addr, port: Option<u16>) -> Result<u32> {
 
   let mut total_rtt: u32 = 0;
 
-  for _ in 0..3 {
+  for _ in 0..PACKETS {
     let size = timeout(TIMEOUT, socket.recv(&mut buf))
       .await
       .map_err(|_| Error::PingNodeTimeout)??;
@@ -185,7 +196,7 @@ async fn ping(ip: Ipv4Addr, port: Option<u16>) -> Result<u32> {
     total_rtt = total_rtt.saturating_add(rtt);
   }
 
-  Ok(total_rtt / 3)
+  Ok(total_rtt / PACKETS as u32)
 }
 
 #[tokio::test]

@@ -1,4 +1,5 @@
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing_futures::Instrument;
@@ -25,7 +26,7 @@ impl NetState {
     let nodes = NodeRegistry::new(ping_sender).into_ref();
 
     Ok(Self {
-      lobby: LobbyState::new(&config.lobby_domain, ping_receiver),
+      lobby: LobbyState::new(&config.lobby_domain, ping_receiver, nodes.clone()),
       nodes,
     })
   }
@@ -66,22 +67,65 @@ struct LobbyState {
 struct LobbyConn {
   stream: LobbyStream,
   ws_sender: WsSenderRef,
+  nodes: NodeRegistryRef,
 }
 
 impl LobbyState {
-  pub fn new(domain: &str, mut ping_receiver: mpsc::Receiver<PingUpdate>) -> Self {
+  pub fn new(
+    domain: &str,
+    mut ping_receiver: mpsc::Receiver<PingUpdate>,
+    nodes: NodeRegistryRef,
+  ) -> Self {
     let conn = Arc::new(RwLock::new(None::<LobbyConn>));
 
+    // forward ping updates
     tokio::spawn({
       let conn = conn.clone();
       async move {
         loop {
           while let Some(update) = ping_receiver.recv().await {
-            let sender: Option<WsSenderRef> = { conn.read().as_ref().map(|c| c.ws_sender.clone()) };
-            if let Some(sender) = sender {
+            let state: Option<_> = {
+              conn.read().as_ref().map(|c| {
+                (
+                  c.ws_sender.clone(),
+                  c.stream.current_game_id(),
+                  c.stream.get_sender_cloned(),
+                )
+              })
+            };
+            if let Some((sender, game_id, mut frame_sender)) = state {
+              let node_id = update.node_id;
+              let ping = update.ping.clone();
+
               let r = sender.send(OutgoingMessage::PingUpdate(update)).await;
               if let Err(e) = r {
-                tracing::debug!("send ping update: {}", e);
+                tracing::debug!("send ws ping update: {}", e);
+              }
+
+              // we assume failed pings are all temporary
+              // only upload succeed pings
+              if let Some(ping) = ping {
+                // upload ping update if joined a game
+                if let Some(game_id) = game_id {
+                  use flo_net::proto::flo_connect::PacketGamePlayerPingMapUpdateRequest;
+                  if let Some(frame) = (PacketGamePlayerPingMapUpdateRequest {
+                    game_id,
+                    ping_map: {
+                      let mut map = HashMap::new();
+                      map.insert(node_id, ping);
+                      map
+                    },
+                  })
+                  .encode_as_frame()
+                  .ok()
+                  {
+                    let r = frame_sender.send(frame).await;
+                    if let Err(_) = r {
+                      tracing::debug!("conn frame sender dropped");
+                      conn.write().take();
+                    }
+                  }
+                }
               }
             }
           }
@@ -103,10 +147,15 @@ impl LobbyState {
     nodes: NodeRegistryRef,
     token: String,
   ) -> Result<()> {
-    let stream = LobbyStream::connect(&self.domain, ws_sender.clone(), nodes, token).await?;
+    let stream =
+      LobbyStream::connect(&self.domain, ws_sender.clone(), nodes.clone(), token).await?;
 
     {
-      *self.conn.write() = Some(LobbyConn { stream, ws_sender })
+      *self.conn.write() = Some(LobbyConn {
+        stream,
+        ws_sender,
+        nodes,
+      })
     }
 
     Ok(())

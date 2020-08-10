@@ -113,18 +113,28 @@ pub enum PacketTypeId {
   GamePlayerEnter,
   #[bin(value = 0x09)]
   GamePlayerLeave,
-  #[bin(value = 0x10)]
+  #[bin(value = 0x0A)]
   GameSlotUpdate,
-  #[bin(value = 0x1A)]
+  #[bin(value = 0x0B)]
   GameSlotUpdateRequest,
-  #[bin(value = 0x1B)]
+  #[bin(value = 0x0C)]
   PlayerSessionUpdate,
-  #[bin(value = 0x1C)]
+  #[bin(value = 0x0D)]
   ListNodesRequest,
-  #[bin(value = 0x1D)]
+  #[bin(value = 0x0E)]
   ListNodes,
-  #[bin(value = 0x1E)]
-  GameSelectedNodeUpdate,
+  #[bin(value = 0x0F)]
+  GameSelectNodeRequest,
+  #[bin(value = 0x10)]
+  GameSelectNode,
+  #[bin(value = 0x11)]
+  GamePlayerPingMapUpdateRequest,
+  #[bin(value = 0x12)]
+  GamePlayerPingMapUpdate,
+  #[bin(value = 0x13)]
+  GamePlayerPingMapSnapshotRequest,
+  #[bin(value = 0x14)]
+  GamePlayerPingMapSnapshot,
   UnknownValue(u8),
 }
 

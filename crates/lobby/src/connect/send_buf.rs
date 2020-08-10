@@ -1,9 +1,9 @@
+use std::collections::HashMap;
+
 use flo_net::packet::*;
 use flo_net::proto::flo_connect::*;
 
 use crate::error::Result;
-
-const MAX_PACKET_LEN: usize = 32;
 
 #[derive(Debug)]
 pub struct PlayerSendBuf {
@@ -23,11 +23,10 @@ impl PlayerSendBuf {
     }
   }
 
-  pub fn is_full(&self) -> bool {
-    self.game.len() >= MAX_PACKET_LEN
-  }
-
   pub fn update_session(&mut self, update: PacketPlayerSessionUpdate) {
+    if update.game_id.is_none() {
+      self.game.ping_update.take();
+    }
     self.session_update = Some(update)
   }
 
@@ -144,6 +143,8 @@ impl PlayerSendBuf {
     if leave_player_id == self.player_id {
       self.game.full_game.take();
       self.game.fragments.clear();
+      self.game.ping_update.take();
+      self.game.node_update.take();
     } else {
       self
         .game
@@ -200,6 +201,60 @@ impl PlayerSendBuf {
     })
   }
 
+  pub fn add_ping_update(
+    &mut self,
+    update_game_id: i32,
+    update_player_id: i32,
+    ping_map: HashMap<i32, u32>,
+  ) {
+    let span = tracing::warn_span!("add_ping_update", update_player_id, update_game_id,);
+    let _enter = span.enter();
+
+    if let Some(current_game_id) = self.game.current_game_id.clone() {
+      if update_game_id != current_game_id {
+        tracing::warn!(
+          current_game_id,
+          update_game_id,
+          "update_game_id != current_game_id"
+        );
+        return;
+      }
+    }
+
+    if self.game.ping_update.is_none() {
+      self.game.ping_update = Some(PacketGamePlayerPingMapUpdate {
+        game_id: update_game_id,
+        player_id: update_player_id,
+        ping_map,
+      });
+    } else {
+      if let Some(packet) = self.game.ping_update.as_mut() {
+        packet.ping_map.extend(ping_map);
+      }
+    }
+  }
+
+  pub fn set_node_update(&mut self, update_game_id: i32, node_id: Option<i32>) {
+    let span = tracing::warn_span!("set_node_update", update_game_id);
+    let _enter = span.enter();
+
+    if let Some(current_game_id) = self.game.current_game_id.clone() {
+      if update_game_id != current_game_id {
+        tracing::warn!(
+          current_game_id,
+          update_game_id,
+          "update_game_id != current_game_id"
+        );
+        return;
+      }
+    }
+
+    self.game.node_update = Some(PacketGameSelectNode {
+      game_id: update_game_id,
+      node_id,
+    });
+  }
+
   pub fn take_frames(&mut self) -> Result<Option<Vec<Frame>>> {
     let len = self.len();
     if len == 0 {
@@ -234,6 +289,15 @@ impl PlayerSendBuf {
     }
 
     self.game.fragments.clear();
+
+    if let Some(packet) = self.game.ping_update.take() {
+      frames.push(packet.encode_as_frame()?);
+    }
+
+    if let Some(packet) = self.game.node_update.take() {
+      frames.push(packet.encode_as_frame()?);
+    }
+
     Ok(Some(frames))
   }
 
@@ -249,6 +313,8 @@ struct GameData {
   current_game_id: Option<i32>,
   full_game: Option<PacketGameInfo>,
   fragments: Fragments,
+  ping_update: Option<PacketGamePlayerPingMapUpdate>,
+  node_update: Option<PacketGameSelectNode>,
 }
 
 impl GameData {
@@ -257,11 +323,16 @@ impl GameData {
       current_game_id: current_game.as_ref().map(|g| g.id),
       full_game: current_game.map(|game| PacketGameInfo { game: Some(game) }),
       fragments: Default::default(),
+      ping_update: None,
+      node_update: None,
     }
   }
 
   fn len(&self) -> usize {
-    (if self.full_game.is_some() { 1 } else { 0 }) + self.fragments.len()
+    (if self.full_game.is_some() { 1 } else { 0 })
+      + self.fragments.len()
+      + (if self.ping_update.is_some() { 1 } else { 0 })
+      + (if self.node_update.is_some() { 1 } else { 0 })
   }
 }
 

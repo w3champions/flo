@@ -6,8 +6,6 @@ pub enum Error {
   SetPingIntervalFailed,
   #[error("invalid selected node id: {0}")]
   InvalidSelectedNodeId(i32),
-  #[error("custom node support is currently not implemented")]
-  CustomNodeUnimplemented,
   #[error("broadcast nodes config failed")]
   BroadcastNodesConfigFailed,
   #[error("ping node timeout")]

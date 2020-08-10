@@ -1,8 +1,11 @@
 use futures::future::abortable;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::stream::StreamExt;
 use tokio::sync::Notify;
+use tokio::time::delay_for;
 
 use flo_net::connect;
 use flo_net::listener::FloListener;
@@ -20,8 +23,6 @@ mod send_buf;
 mod state;
 use crate::game::SlotSettings;
 pub use state::{Message as PlayerSenderMessage, PlayerReceiver, PlayerSenderRef};
-use tokio::stream::StreamExt;
-use tokio::time::delay_for;
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
@@ -139,13 +140,22 @@ async fn handle_stream(
         flo_net::frame_packet! {
           frame => {
             packet = proto::flo_common::PacketPong => {
-              tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
+              // tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
             },
             packet = proto::flo_connect::PacketGameSlotUpdateRequest => {
               handle_game_slot_update_request(state.clone(), player_id, packet).await?;
             },
             _packet = proto::flo_connect::PacketListNodesRequest => {
               handle_list_nodes_request(state.clone(), player_id).await?;
+            },
+            packet = proto::flo_connect::PacketGamePlayerPingMapUpdateRequest => {
+              handle_game_player_ping_map_update_request(state.clone(), player_id, packet).await?;
+            },
+            packet = proto::flo_connect::PacketGamePlayerPingMapSnapshotRequest => {
+              handle_game_player_ping_map_snapshot_request(state.clone(), player_id, packet.game_id).await?;
+            },
+            packet = proto::flo_connect::PacketGameSelectNodeRequest => {
+              handle_game_select_node_request(state.clone(), player_id, packet).await?;
             }
           }
         }
@@ -247,5 +257,88 @@ async fn handle_list_nodes_request(state: LobbyStateRef, player_id: i32) -> Resu
     };
     sender.with_buf(move |buf| buf.list_nodes(packet));
   }
+  Ok(())
+}
+
+async fn handle_game_player_ping_map_update_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  packet: proto::flo_connect::PacketGamePlayerPingMapUpdateRequest,
+) -> Result<()> {
+  let game_id = packet.game_id;
+  state
+    .mem
+    .update_game_player_ping_map(game_id, player_id, packet.ping_map.clone());
+
+  // broadcast ping update when
+  // - game node selected
+  // - packet contains data related to the selected node
+  let select_node_id = state.mem.get_game_selected_node(game_id);
+  if let Some(select_node_id) = select_node_id {
+    if packet.ping_map.contains_key(&select_node_id) {
+      let mut player_ids = state.mem.get_game_player_ids(game_id);
+
+      if player_ids.is_empty() {
+        return Ok(());
+      }
+
+      player_ids.retain(|id| *id != player_id);
+      if player_ids.len() > 0 {
+        let mut senders = state.mem.get_player_senders(&player_ids);
+        for sender in senders.values_mut() {
+          sender.with_buf(|buf| {
+            buf.add_ping_update(game_id, player_id, packet.ping_map.clone());
+          });
+        }
+      }
+    }
+  }
+  Ok(())
+}
+
+async fn handle_game_player_ping_map_snapshot_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  game_id: i32,
+) -> Result<()> {
+  use crate::state::GamePlayerPingMapKey;
+  use flo_net::proto::flo_connect::*;
+
+  let mut sender = if let Some(sender) = state.mem.get_player_sender(player_id) {
+    sender
+  } else {
+    return Ok(());
+  };
+  if let Some(map) = state.mem.get_game_player_ping_map(game_id) {
+    let mut node_ping_map = HashMap::<i32, NodePingMap>::new();
+    for (GamePlayerPingMapKey { node_id, player_id }, ping) in map {
+      let item = node_ping_map
+        .entry(node_id)
+        .or_insert_with(|| Default::default());
+      item.player_ping_map.insert(player_id, ping);
+    }
+    sender
+      .send(PacketGamePlayerPingMapSnapshot {
+        game_id,
+        node_ping_map,
+      })
+      .await?;
+  } else {
+    sender
+      .send(PacketGamePlayerPingMapSnapshot {
+        game_id,
+        node_ping_map: Default::default(),
+      })
+      .await?;
+  }
+  Ok(())
+}
+
+async fn handle_game_select_node_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  packet: proto::flo_connect::PacketGameSelectNodeRequest,
+) -> Result<()> {
+  crate::game::select_game_node(state, packet.game_id, player_id, packet.node_id).await?;
   Ok(())
 }

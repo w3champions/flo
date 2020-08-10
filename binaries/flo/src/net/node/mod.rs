@@ -9,14 +9,14 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch, Semaphore};
 use tracing_futures::Instrument;
 
-use flo_net::proto::flo_connect::{Node, SelectedNode};
+use flo_net::proto::flo_connect::Node;
 
 use crate::error::*;
 use ping::Pinger;
 
 pub type NodesConfigSenderRef = Arc<watch::Sender<Vec<Node>>>;
 pub type NodeRegistryRef = Arc<NodeRegistry>;
-const DEFAULT_PING_INTERVAL: Duration = Duration::from_secs(60);
+const DEFAULT_PING_INTERVAL: Duration = Duration::from_secs(30);
 const ACTIVE_PING_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
@@ -25,7 +25,7 @@ pub struct NodeRegistry {
   ping_limiter: Arc<Semaphore>,
   storage: Arc<RwLock<HashMap<i32, LoadedNode>>>,
   nodes_sender_ref: NodesConfigSenderRef,
-  select_node_id: RwLock<Option<i32>>,
+  selected_node_id: RwLock<Option<i32>>,
 }
 
 impl NodeRegistry {
@@ -131,7 +131,7 @@ impl NodeRegistry {
       ping_limiter,
       storage,
       nodes_sender_ref,
-      select_node_id: RwLock::new(None),
+      selected_node_id: RwLock::new(None),
     }
   }
 
@@ -146,10 +146,22 @@ impl NodeRegistry {
       .map_err(|_| Error::BroadcastNodesConfigFailed)
   }
 
-  pub fn set_selected_node(&self, node: Option<SelectedNode>) -> Result<()> {
+  pub fn get_current_ping(&self, node_id: i32) -> Option<u32> {
+    self
+      .storage
+      .read()
+      .get(&node_id)
+      .and_then(|node| node.pinger.current_ping())
+  }
+
+  pub fn selected_node_id(&self) -> Option<i32> {
+    self.selected_node_id.read().clone()
+  }
+
+  pub fn set_selected_node(&self, node: Option<i32>) -> Result<()> {
     match node {
-      Some(SelectedNode { id: Some(id), .. }) => {
-        let mut guard = self.select_node_id.write();
+      Some(id) => {
+        let mut guard = self.selected_node_id.write();
         let storage_guard = self.storage.read();
 
         if let Some(prev_id) = guard.take() {
@@ -169,9 +181,8 @@ impl NodeRegistry {
           return Err(Error::InvalidSelectedNodeId(id));
         }
       }
-      Some(_) => return Err(Error::CustomNodeUnimplemented),
       None => {
-        if let Some(id) = self.select_node_id.write().take() {
+        if let Some(id) = self.selected_node_id.write().take() {
           let storage_guard = self.storage.read();
           if let Some(loaded) = storage_guard.get(&id) {
             loaded.pinger.set_interval(DEFAULT_PING_INTERVAL, false)?;

@@ -4,6 +4,10 @@ use tonic::Status;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("node not found")]
+  NodeNotFound,
+  #[error("player stream closed")]
+  PlayerStreamClosed,
   #[error("player token expired")]
   PlayerTokenExpired,
   #[error("join link expired")]
@@ -14,7 +18,7 @@ pub enum Error {
   PlayerNotFound,
   #[error("game not found")]
   GameNotFound,
-  #[error("only games with `Waiting` status are deletable")]
+  #[error("only games with `Preparing` status are deletable")]
   GameNotDeletable,
   #[error("invalid game data, please re-create")]
   GameDataInvalid,

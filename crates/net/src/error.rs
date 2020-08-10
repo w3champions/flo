@@ -4,6 +4,8 @@ use crate::packet::PacketTypeId;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("payload too large")]
+  PayloadTooLarge,
   #[error("stream timed out")]
   StreamTimeout,
   #[error("stream closed unexpectedly")]

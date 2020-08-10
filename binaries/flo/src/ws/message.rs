@@ -4,8 +4,9 @@ use std::borrow::Cow;
 use std::str::FromStr;
 
 use flo_net::proto::flo_connect::{
-  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGameSelectedNodeUpdate,
-  PacketGameSlotUpdate, PacketGameSlotUpdateRequest, PacketListNodes,
+  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot,
+  PacketGamePlayerPingMapSnapshotRequest, PacketGamePlayerPingMapUpdate, PacketGameSelectNode,
+  PacketGameSelectNodeRequest, PacketGameSlotUpdate, PacketGameSlotUpdateRequest,
 };
 
 use crate::error::{Error, Result};
@@ -23,6 +24,8 @@ pub enum IncomingMessage {
   ListMaps,
   GetMapDetail(MapPath),
   GameSlotUpdateRequest(PacketGameSlotUpdateRequest),
+  GameSelectNodeRequest(PacketGameSelectNodeRequest),
+  GamePlayerPingMapSnapshotRequest(PacketGamePlayerPingMapSnapshotRequest),
   ListNodesRequest,
 }
 
@@ -43,9 +46,11 @@ pub enum OutgoingMessage {
   GamePlayerLeave(PacketGamePlayerLeave),
   GameSlotUpdate(PacketGameSlotUpdate),
   PlayerSessionUpdate(PlayerSessionUpdate),
-  ListNodes(PacketListNodes),
+  ListNodes(NodeList),
   PingUpdate(PingUpdate),
-  GameSelectedNodeUpdate(PacketGameSelectedNodeUpdate),
+  GameSelectNode(PacketGameSelectNode),
+  GamePlayerPingMapUpdate(PacketGamePlayerPingMapUpdate),
+  GamePlayerPingMapSnapshot(PacketGamePlayerPingMapSnapshot),
 }
 
 impl FromStr for IncomingMessage {
@@ -157,4 +162,18 @@ pub struct MapForceOwned {
   pub name: String,
   pub flags: u32,
   pub player_set: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NodeList {
+  pub nodes: Vec<Node>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Node {
+  pub id: i32,
+  pub name: String,
+  pub location: String,
+  pub country_id: String,
+  pub ping: Option<u32>,
 }

@@ -1,7 +1,8 @@
 use futures::stream::StreamExt;
+use parking_lot::RwLock;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use serde::Serialize;
-
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing_futures::Instrument;
 
@@ -19,6 +20,7 @@ pub type LobbyStreamSender = mpsc::Sender<Frame>;
 pub struct LobbyStream {
   frame_sender: mpsc::Sender<Frame>,
   ws_sender: WsSenderRef,
+  current_game_id: Arc<RwLock<Option<i32>>>,
 }
 
 impl LobbyStream {
@@ -54,12 +56,15 @@ impl LobbyStream {
       }
     };
 
+    let current_game_id = Arc::new(RwLock::new(session.game_id.clone()));
+
     let (frame_sender, mut frame_r) = mpsc::channel(5);
 
     Self::send_message(&ws_sender, OutgoingMessage::PlayerSession(session)).await?;
 
     tokio::spawn({
       let ws_sender = ws_sender.clone();
+      let current_game_id = current_game_id.clone();
       async move {
         loop {
           tokio::select! {
@@ -93,7 +98,7 @@ impl LobbyStream {
                     }
                   }
 
-                  match Self::dispatch(&ws_sender, &nodes, frame).await {
+                  match Self::dispatch(&ws_sender, &nodes, current_game_id.clone(), frame).await {
                     Ok(_) => {},
                     Err(e) => {
                       tracing::debug!("exiting: dispatch: {}", e);
@@ -136,6 +141,7 @@ impl LobbyStream {
     Ok(LobbyStream {
       frame_sender,
       ws_sender,
+      current_game_id,
     })
   }
 
@@ -143,8 +149,17 @@ impl LobbyStream {
     self.frame_sender.clone()
   }
 
+  pub fn current_game_id(&self) -> Option<i32> {
+    self.current_game_id.read().clone()
+  }
+
   // forward server packets to the websocket connection
-  async fn dispatch(sender: &WsSenderRef, nodes: &NodeRegistryRef, frame: Frame) -> Result<()> {
+  async fn dispatch(
+    sender: &WsSenderRef,
+    nodes: &NodeRegistryRef,
+    current_game_id: Arc<RwLock<Option<i32>>>,
+    frame: Frame,
+  ) -> Result<()> {
     let msg = flo_net::frame_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
@@ -154,7 +169,10 @@ impl LobbyStream {
           })
         },
         p = PacketGameInfo => {
-          nodes.set_selected_node(p.game.as_ref().and_then(|g| g.node.clone()))?;
+          nodes.set_selected_node(p.game.as_ref().and_then(|g| {
+            let node = g.node.as_ref()?;
+            node.id.clone()
+          }))?;
           OutgoingMessage::CurrentGameInfo(p.game.extract()?)
         },
         p = PacketGamePlayerEnter => {
@@ -170,15 +188,34 @@ impl LobbyStream {
           if p.game_id.is_none() {
             nodes.set_selected_node(None)?;
           }
+          *current_game_id.write() = p.game_id.clone();
           OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
         },
         p = PacketListNodes => {
           nodes.update_nodes(p.nodes.clone())?;
-          OutgoingMessage::ListNodes(p)
+          let mut list = message::NodeList {
+            nodes: Vec::with_capacity(p.nodes.len())
+          };
+          for node in p.nodes {
+            list.nodes.push(message::Node {
+              id: node.id,
+              name: node.name,
+              location: node.location,
+              country_id: node.country_id,
+              ping: nodes.get_current_ping(node.id),
+            })
+          }
+          OutgoingMessage::ListNodes(list)
         },
-        p = PacketGameSelectedNodeUpdate => {
-          nodes.set_selected_node(p.node.clone())?;
-          OutgoingMessage::GameSelectedNodeUpdate(p)
+        p = PacketGameSelectNode => {
+          nodes.set_selected_node(p.node_id)?;
+          OutgoingMessage::GameSelectNode(p)
+        },
+        p = PacketGamePlayerPingMapUpdate => {
+          OutgoingMessage::GamePlayerPingMapUpdate(p)
+        },
+        p = PacketGamePlayerPingMapSnapshot => {
+          OutgoingMessage::GamePlayerPingMapSnapshot(p)
         }
       }
     };

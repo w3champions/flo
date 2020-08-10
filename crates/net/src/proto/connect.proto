@@ -74,9 +74,38 @@ message PacketListNodes {
   repeated Node nodes = 1;
 }
 
-message PacketGameSelectedNodeUpdate {
+message PacketGameSelectNodeRequest {
   int32 game_id = 1;
-  SelectedNode node = 2;
+  google.protobuf.Int32Value node_id = 2;
+}
+
+message PacketGameSelectNode {
+  int32 game_id = 1;
+  google.protobuf.Int32Value node_id = 2;
+}
+
+message PacketGamePlayerPingMapUpdateRequest {
+  int32 game_id = 1;
+  map<int32, uint32> ping_map = 2;
+}
+
+message PacketGamePlayerPingMapUpdate {
+  int32 game_id = 1;
+  int32 player_id = 2;
+  map<int32, uint32> ping_map = 3;
+}
+
+message PacketGamePlayerPingMapSnapshotRequest {
+  int32 game_id = 1;
+}
+
+message PacketGamePlayerPingMapSnapshot {
+  int32 game_id = 1;
+  map<int32, NodePingMap> node_ping_map = 2;
+}
+
+message NodePingMap {
+  map<int32, uint32> player_ping_map = 2;
 }
 
 message Node {

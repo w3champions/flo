@@ -6,6 +6,8 @@ use flo_util::binary::{BinDecode, BinEncode};
 use crate::error::Error;
 use crate::packet::{Frame, Header};
 
+const MAX_PAYLOAD_LEN: usize = 2048;
+
 #[derive(Debug)]
 pub struct FloFrameCodec {
   decode_state: DecoderState,
@@ -29,6 +31,11 @@ impl Decoder for FloFrameCodec {
         if src.remaining() >= Header::MIN_SIZE {
           let header = Header::decode(src)?;
           let payload_len = header.payload_len as usize;
+
+          if payload_len > MAX_PAYLOAD_LEN {
+            return Err(Error::PayloadTooLarge);
+          }
+
           if src.remaining() >= payload_len {
             // payload received
             Ok(Some(Frame {

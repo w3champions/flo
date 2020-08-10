@@ -17,7 +17,10 @@ use crate::ws::message::{
 };
 use crate::ws::stream::{WsSenderRef, WsStream, WsStreamExt};
 
-use flo_net::proto::flo_connect::{PacketGameSlotUpdateRequest, PacketListNodesRequest};
+use flo_net::proto::flo_connect::{
+  PacketGamePlayerPingMapSnapshotRequest, PacketGameSelectNodeRequest, PacketGameSlotUpdateRequest,
+  PacketListNodesRequest,
+};
 
 #[derive(Debug)]
 pub struct WsHandler {
@@ -133,6 +136,13 @@ impl StateRef {
         IncomingMessage::ListNodesRequest => {
           Self::spawn_handler(err_notify.clone(), self.clone().handle_list_nodes_request())
         }
+        IncomingMessage::GameSelectNodeRequest(req) => {
+          Self::spawn_handler(err_notify.clone(), self.clone().handle_select_node(req))
+        }
+        IncomingMessage::GamePlayerPingMapSnapshotRequest(req) => Self::spawn_handler(
+          err_notify.clone(),
+          self.clone().handle_player_ping_map_snapshot_request(req),
+        ),
       }
     }
   }
@@ -271,6 +281,19 @@ impl StateRef {
       .net
       .lobby_send(PacketListNodesRequest {})
       .await?;
+    Ok(())
+  }
+
+  async fn handle_select_node(self, req: PacketGameSelectNodeRequest) -> Result<()> {
+    self.get_flo_state().net.lobby_send(req).await?;
+    Ok(())
+  }
+
+  async fn handle_player_ping_map_snapshot_request(
+    self,
+    req: PacketGamePlayerPingMapSnapshotRequest,
+  ) -> Result<()> {
+    self.get_flo_state().net.lobby_send(req).await?;
     Ok(())
   }
 

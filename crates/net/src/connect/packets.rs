@@ -12,4 +12,15 @@ packet_type!(GameSlotUpdateRequest, PacketGameSlotUpdateRequest);
 packet_type!(PlayerSessionUpdate, PacketPlayerSessionUpdate);
 packet_type!(ListNodesRequest, PacketListNodesRequest);
 packet_type!(ListNodes, PacketListNodes);
-packet_type!(GameSelectedNodeUpdate, PacketGameSelectedNodeUpdate);
+packet_type!(GameSelectNodeRequest, PacketGameSelectNodeRequest);
+packet_type!(GameSelectNode, PacketGameSelectNode);
+packet_type!(
+  GamePlayerPingMapUpdateRequest,
+  PacketGamePlayerPingMapUpdateRequest
+);
+packet_type!(GamePlayerPingMapUpdate, PacketGamePlayerPingMapUpdate);
+packet_type!(
+  GamePlayerPingMapSnapshotRequest,
+  PacketGamePlayerPingMapSnapshotRequest
+);
+packet_type!(GamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshot);

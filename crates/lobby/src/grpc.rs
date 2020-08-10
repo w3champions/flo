@@ -130,11 +130,15 @@ impl FloLobby for FloLobbyService {
         .exec(move |conn| crate::game::db::create(conn, params))
         .await
         .map_err(|e| Status::internal(e.to_string()))?;
-      self.state.mem.register_game(game.id, &[player_id]).await;
+      self
+        .state
+        .mem
+        .register_game(game.id, Some(player_id), &[player_id])
+        .await;
 
       player_state.join_game(game.id);
       let update = player_state.get_session_update();
-      if let Some(sender) = player_state.get_sender_mut() {
+      if let Some(mut sender) = player_state.get_sender_cloned() {
         let next_game = game.clone().into_packet();
         sender.with_buf(|buf| {
           buf.update_session(update);
@@ -228,6 +232,21 @@ impl FloLobby for FloLobbyService {
     }))
   }
 
+  async fn select_game_node(
+    &self,
+    request: Request<SelectGameNodeRequest>,
+  ) -> Result<Response<()>, Status> {
+    let SelectGameNodeRequest {
+      game_id,
+      player_id,
+      node_id,
+    } = request.into_inner();
+
+    crate::game::select_game_node(self.state.clone(), game_id, player_id, node_id).await?;
+
+    Ok(Response::new(()))
+  }
+
   async fn cancel_game(&self, request: Request<CancelGameRequest>) -> Result<Response<()>, Status> {
     let req = request.into_inner();
     let game_id = req.game_id;
@@ -248,7 +267,7 @@ impl FloLobby for FloLobbyService {
       let mut player_state = self.state.mem.lock_player_state(*player).await;
       player_state.leave_game();
       let update = player_state.get_session_update();
-      player_state.get_sender_mut().map(|sender| {
+      player_state.get_sender_cloned().map(|mut sender| {
         sender.with_buf(move |buf| {
           buf.update_session(update);
           buf.add_player_leave(
