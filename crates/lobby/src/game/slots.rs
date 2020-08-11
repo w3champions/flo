@@ -4,11 +4,11 @@ use crate::player::PlayerRef;
 #[derive(Debug)]
 pub struct Slots {
   inner: Vec<Slot>,
-  num_of_players: usize,
+  map_players: usize,
 }
 
 impl Slots {
-  pub fn new(num_of_players: usize) -> Self {
+  pub fn new(map_players: usize) -> Self {
     let inner = std::iter::repeat(())
       .take(24)
       .enumerate()
@@ -16,7 +16,7 @@ impl Slots {
         Slot {
           player: None,
           settings: SlotSettings {
-            team: if idx >= num_of_players {
+            team: if idx >= map_players {
               24 // Referees
             } else {
               0
@@ -31,15 +31,12 @@ impl Slots {
       })
       .collect();
 
-    Self {
-      inner,
-      num_of_players,
-    }
+    Self { inner, map_players }
   }
 
-  pub fn from_vec(slots: Vec<Slot>) -> Self {
+  pub fn from_vec(map_players: usize, slots: Vec<Slot>) -> Self {
     Slots {
-      num_of_players: slots.iter().filter(|s| s.settings.team != 24).count(),
+      map_players,
       inner: slots,
     }
   }
@@ -172,7 +169,15 @@ impl Slots {
         }
 
         let new_team = settings.team;
-        if new_team < self.num_of_players as u32 || new_team == 24 {
+        if new_team != slot.settings.team {
+          // referees -> players: reset color
+          if slot.settings.team == 24 && new_team != 24 {
+            let next_color = color_set.iter().position(|v| !*v).map(|v| v as u32);
+            slot.settings.color = next_color.unwrap_or_default();
+          }
+        }
+
+        if new_team < self.map_players as u32 || new_team == 24 {
           slot.settings.team = new_team;
         }
 
@@ -192,7 +197,7 @@ impl Slots {
   fn get_color_set(&self) -> [bool; 24] {
     let mut set = [false; 24];
     for slot in &self.inner {
-      if let SlotStatus::Occupied = slot.settings.status {
+      if slot.settings.status == SlotStatus::Occupied && slot.settings.team != 24 {
         if slot.settings.color < 24 {
           set[slot.settings.color as usize] = true;
         }

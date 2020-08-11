@@ -364,13 +364,13 @@ struct GetSlots {
 
 fn get_slots(conn: &DbConn, id: i32) -> Result<GetSlots> {
   use game::dsl;
-  let (value, host_player_id): (Value, Option<i32>) = game::table
-    .select((dsl::slots, dsl::created_by))
+  let (value, host_player_id, max_players): (Value, Option<i32>, i32) = game::table
+    .select((dsl::slots, dsl::created_by, dsl::max_players))
     .find(id)
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
-  let slots = Slots::from_vec(serde_json::from_value(value)?);
+  let slots = Slots::from_vec(max_players as usize, serde_json::from_value(value)?);
   Ok(GetSlots {
     host_player_id,
     slots,
