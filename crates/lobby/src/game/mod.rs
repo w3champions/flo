@@ -233,7 +233,7 @@ pub async fn select_game_node(
   player_id: i32,
   node_id: Option<i32>,
 ) -> Result<()> {
-  let game_guard = state
+  let mut game_guard = state
     .mem
     .lock_game_state(game_id)
     .await
@@ -246,6 +246,8 @@ pub async fn select_game_node(
     .db
     .exec(move |conn| crate::game::db::select_node(conn, game_id, node_id))
     .await?;
+
+  game_guard.select_node(node_id);
 
   let players = game_guard.players().to_vec();
   drop(game_guard);

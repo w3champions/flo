@@ -411,9 +411,13 @@ impl LockedGameState {
     self.parent.remove_game(self.id, &self.players_snapshot)
   }
 
-  pub fn select_node(&mut self, node_id: i32) {
-    self.guard.selected_node_id = Some(node_id);
+  pub fn select_node(&mut self, node_id: Option<i32>) {
+    self.guard.selected_node_id = node_id.clone();
     let mut guard = self.parent.state.write();
-    guard.game_selected_node.insert(self.id, node_id);
+    if let Some(node_id) = node_id {
+      guard.game_selected_node.insert(self.id, node_id);
+    } else {
+      guard.game_selected_node.remove(&self.id);
+    }
   }
 }
