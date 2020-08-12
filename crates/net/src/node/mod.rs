@@ -13,4 +13,4 @@ packet_type!(
   PacketClientPlayerStatusUpdateRequest
 );
 packet_type!(ClientPlayerStatusUpdate, PacketClientPlayerStatusUpdate);
-packet_type!(ClientGameStatusUpdate, PacketClientGameStatusUpdate);
+packet_type!(NodeGameStatusUpdate, PacketNodeGameStatusUpdate);

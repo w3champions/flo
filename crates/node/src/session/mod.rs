@@ -11,11 +11,13 @@ use thiserror::Error;
 
 use flo_net::packet::{FloPacket, Frame, OptionalFieldExt};
 use flo_net::proto::flo_node::{
-  ControllerCreateGameRejectReason, Game, PacketControllerCreateGame,
-  PacketControllerCreateGameAccept,
+  ClientConnectRejectReason, ControllerCreateGameRejectReason, Game, PacketClientConnect,
+  PacketClientConnectAccept, PacketClientConnectReject, PacketControllerConnectReject,
+  PacketControllerCreateGame, PacketControllerCreateGameAccept,
 };
 
 use crate::error::*;
+use crate::metrics;
 
 #[derive(Debug)]
 pub struct SessionStore {
@@ -87,7 +89,7 @@ impl SessionStore {
         .collect()
     };
 
-    let player_tokens = pending
+    let player_tokens: Vec<_> = pending
       .iter()
       .map(|(token, _)| flo_net::proto::flo_node::PlayerToken { id: token.to_vec() })
       .collect();
@@ -105,8 +107,13 @@ impl SessionStore {
 
     g_guard.register(game)?;
 
+    metrics::GAME_SESSIONS.inc();
+    metrics::PENDING_PLAYER_TOKENS.add(player_tokens.len() as i64);
+
     Ok(PacketControllerCreateGameAccept { player_tokens }.encode_as_frame()?)
   }
+
+  pub fn handle_client_connect() {}
 }
 
 #[derive(Debug)]
@@ -123,6 +130,7 @@ impl PendingPlayerRegistry {
     }
   }
 
+  // for controller
   fn register(&self, pairs: Vec<(PlayerToken, PendingPlayer)>) -> Vec<PendingPlayer> {
     use std::collections::hash_map::Entry;
 
@@ -136,13 +144,16 @@ impl PendingPlayerRegistry {
       // remove stale player
       let stale_player = if player_token_guard.contains_key(&player_id) {
         match player_token_guard.entry(player_id) {
+          // replace existing token
           Entry::Occupied(mut e) => {
             let r = e.get_mut();
             let prev_token = std::mem::replace(r, token.clone());
             map_guard.remove(&prev_token)
           }
+          // add token
           Entry::Vacant(mut e) => {
             e.insert(token.clone());
+            metrics::PENDING_PLAYER_TOKENS.inc();
             None
           }
         }
@@ -188,6 +199,7 @@ struct GameRegistryGuard<'a> {
 }
 
 impl<'a> GameRegistryGuard<'a> {
+  // for controller
   fn pre_check(&mut self, game_id: i32) -> Result<()> {
     use std::collections::hash_map::Entry;
 
@@ -198,10 +210,13 @@ impl<'a> GameRegistryGuard<'a> {
     Ok(())
   }
 
+  // for controller
   fn register(&mut self, game: Game) -> Result<()> {
     let game_id = game.id;
     let session = Arc::new(RwLock::new(GameSession::new(game)?));
+
     self.guard.insert(game_id, session);
+    metrics::GAME_SESSIONS.inc();
 
     Ok(())
   }

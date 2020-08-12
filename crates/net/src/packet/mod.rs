@@ -163,8 +163,9 @@ pub enum PacketTypeId {
   ClientPlayerStatusUpdateRequest,
   #[bin(value = 0x44)]
   ClientPlayerStatusUpdate,
+  // Node -> [Client, Controller]
   #[bin(value = 0x45)]
-  ClientGameStatusUpdate,
+  NodeGameStatusUpdate,
 
   // Controller <-> Observer
   #[bin(value = 0x50)]

@@ -34,6 +34,11 @@ message PacketControllerCreateGameReject {
   ControllerCreateGameRejectReason reason = 1;
 }
 
+message PacketNodeGameStatusUpdate {
+  int32 game_id = 1;
+  GameStatus status = 2;
+}
+
 message PacketClientConnect {
   flo_common.Version version = 1;
   bytes session_id = 2;
@@ -53,11 +58,6 @@ message PacketClientPlayerStatusUpdateRequest {
 }
 
 message PacketClientPlayerStatusUpdate {
-  int32 player_id = 1;
-  GameClientStatus status = 2;
-}
-
-message PacketClientGameStatusUpdate {
   int32 player_id = 1;
   GameClientStatus status = 2;
 }

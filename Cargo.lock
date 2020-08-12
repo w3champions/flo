@@ -859,6 +859,7 @@ dependencies = [
  "flo-util",
  "flo-w3gs",
  "futures 0.3.5",
+ "hyper",
  "lazy_static",
  "parking_lot",
  "prometheus",
