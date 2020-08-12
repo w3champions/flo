@@ -55,7 +55,7 @@ pub async fn serve(state: LobbyStateRef) -> Result<()> {
       };
 
       if let Err(err) = handle_stream(state.clone(), player_id, stream, receiver).await {
-        tracing::warn!("stream error: {}", err);
+        tracing::debug!("stream error: {}", err);
       }
 
       state
@@ -137,23 +137,23 @@ async fn handle_stream(
 
         let frame = incoming?;
 
-        flo_net::frame_packet! {
+        flo_net::match_packet! {
           frame => {
             packet = proto::flo_common::PacketPong => {
               // tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
-            },
+            }
             packet = proto::flo_connect::PacketGameSlotUpdateRequest => {
               handle_game_slot_update_request(state.clone(), player_id, packet).await?;
-            },
+            }
             _packet = proto::flo_connect::PacketListNodesRequest => {
               handle_list_nodes_request(state.clone(), player_id).await?;
-            },
+            }
             packet = proto::flo_connect::PacketGamePlayerPingMapUpdateRequest => {
               handle_game_player_ping_map_update_request(state.clone(), player_id, packet).await?;
-            },
+            }
             packet = proto::flo_connect::PacketGamePlayerPingMapSnapshotRequest => {
               handle_game_player_ping_map_snapshot_request(state.clone(), player_id, packet.game_id).await?;
-            },
+            }
             packet = proto::flo_connect::PacketGameSelectNodeRequest => {
               handle_game_select_node_request(state.clone(), player_id, packet).await?;
             }

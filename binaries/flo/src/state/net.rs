@@ -74,7 +74,7 @@ impl LobbyState {
   pub fn new(
     domain: &str,
     mut ping_receiver: mpsc::Receiver<PingUpdate>,
-    nodes: NodeRegistryRef,
+    _nodes: NodeRegistryRef,
   ) -> Self {
     let conn = Arc::new(RwLock::new(None::<LobbyConn>));
 

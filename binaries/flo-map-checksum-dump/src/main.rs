@@ -116,7 +116,7 @@ fn process_map(path: &str) -> ([u8; 20], u32) {
   for r in replay.into_records() {
     let r = r.unwrap();
     if let flo_w3replay::Record::GameInfo(info) = r {
-      return (info.game_settings.map_sha1, info.game_settings.map_xoro);
+      return (info.game_settings.map_sha1, info.game_settings.map_checksum);
     }
   }
   unreachable!()

@@ -92,6 +92,17 @@ impl FloStream {
   }
 
   #[inline]
+  pub async fn recv_timeout<T>(&mut self, duration: Duration) -> Result<T>
+  where
+    T: FloPacket + Default,
+  {
+    let frame = timeout(duration, self.recv_frame())
+      .await
+      .map_err(|_elapsed| Error::StreamTimeout)??;
+    Ok(frame.decode()?)
+  }
+
+  #[inline]
   pub async fn recv_frame(&mut self) -> Result<Frame> {
     let frame = self
       .transport

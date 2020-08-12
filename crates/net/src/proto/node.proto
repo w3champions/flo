@@ -5,11 +5,11 @@ import "proto/common.proto";
 
 message PacketControllerConnect {
   flo_common.Version lobby_version = 1;
-  bytes secret_key = 2;
+  string secret = 2;
 }
 
 message PacketControllerConnectAccept {
-  flo_common.Version node_version = 1;
+  flo_common.Version version = 1;
 }
 
 message PacketControllerConnectReject {
@@ -17,61 +17,107 @@ message PacketControllerConnectReject {
 }
 
 enum ControllerConnectRejectReason {
-  ConnectLobbyRejectReasonUnknown = 0;
-  ConnectLobbyRejectReasonControllerVersionTooOld = 1;
-  ConnectLobbyRejectReasonInvalidSecretKey = 2;
+  ControllerConnectRejectReasonUnknown = 0;
+  ControllerConnectRejectReasonControllerVersionTooOld = 1;
+  ControllerConnectRejectReasonInvalidSecretKey = 2;
 }
 
-message NodeSession {
-  bytes id = 1;
+message PacketControllerCreateGame {
+  Game game = 1;
 }
 
-message PacketCreatePlayerSession {
-  int32 player_id = 1;
-  string name = 2;
-  int32 player_source = 3;
+message PacketControllerCreateGameAccept {
+  repeated PlayerToken player_tokens = 1;
 }
 
-message PacketCreatePlayerSessionReply {
-  NodeSession session = 1;
+message PacketControllerCreateGameReject {
+  ControllerCreateGameRejectReason reason = 1;
 }
 
-message PacketNodeDisconnect {
-  NodeDisconnectReason reason = 1;
-}
-
-enum NodeDisconnectReason {
-  NodeDisconnectReasonUnknown = 0;
-  NodeDisconnectReasonMulti = 1;
-  NodeDisconnectReasonMaintenance = 2;
-}
-
-message PacketPing {
-  uint32 ms = 1;
-}
-
-message PacketPong {
-  uint32 ms = 1;
-}
-
-message PacketCreateGame {
-  int32 game_id = 1;
-  bytes game_info = 2;
-}
-
-message PacketPlayerConnect {
-  flo_common.Version connect_version = 1;
+message PacketClientConnect {
+  flo_common.Version version = 1;
   bytes session_id = 2;
 }
 
-message PacketPlayerConnectAccept {
-  flo_common.Version node_version = 1;
+message PacketClientConnectAccept {
+  flo_common.Version version = 1;
+  Game game = 2;
 }
 
-message PacketPlayerConnectReject {
-  NodeDisconnectReason reason = 1;
+message PacketClientConnectReject {
+  ClientConnectRejectReason reason = 1;
 }
 
-message PacketJoinGame {
-  int32 game_id = 1;
+message PacketClientPlayerStatusUpdateRequest {
+  GameClientStatus status = 1;
+}
+
+message PacketClientPlayerStatusUpdate {
+  int32 player_id = 1;
+  GameClientStatus status = 2;
+}
+
+message PacketClientGameStatusUpdate {
+  int32 player_id = 1;
+  GameClientStatus status = 2;
+}
+
+enum ClientConnectRejectReason {
+  ClientConnectRejectReasonUnknown = 0;
+  ClientConnectRejectReasonMulti = 1;
+  ClientConnectRejectReasonMaintenance = 2;
+}
+
+enum ControllerCreateGameRejectReason {
+  ControllerCreateGameRejectReasonUnknown = 0;
+  ControllerCreateGameRejectReasonGameExists = 1;
+  ControllerCreateGameRejectReasonPlayerBusy = 2;
+  ControllerCreateGameRejectReasonMaintenance = 3;
+}
+
+message PlayerToken {
+  bytes id = 1;
+}
+
+message Game {
+  int32 id = 1;
+  GameStatus status = 2;
+  GameSettings settings = 3;
+  repeated GameSlot slots = 4;
+}
+
+enum GameStatus {
+  GameStatusWaiting = 0;
+  GameStatusRunning = 1;
+  GameStatusEnded = 2;
+}
+
+message GameSettings {
+  uint32 game_setting_flags = 1;
+  uint32 map_width = 2;
+  uint32 map_height = 3;
+  uint32 map_checksum = 4;
+  string map_path = 5;
+  bytes map_sha1 = 6;
+}
+
+message GamePlayer {
+  int32 player_id = 1;
+  string name = 2;
+}
+
+message GameSlot {
+  uint32 id = 1;
+  GamePlayer player = 2;
+  flo_common.SlotSettings settings = 3;
+  GameClientStatus client_status = 4;
+}
+
+enum GameClientStatus {
+  GameClientStatusPending = 0;
+  GameClientStatusConnected = 1;
+  GameClientStatusLoading = 2;
+  GameClientStatusLoaded = 3;
+  GameClientStatusLeft = 5;
+  GameClientStatusDisconnected = 6;
 }

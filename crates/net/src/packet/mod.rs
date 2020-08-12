@@ -55,7 +55,7 @@ impl Frame {
 /// If no branch matches, returns Err(...)
 ///
 /// ```no_run
-/// let event = flo_net::frame_packet! {
+/// let event = flo_net::match_packet! {
 ///   frame => {
 ///     p = PacketLobbyDisconnect => {
 ///       LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
@@ -67,13 +67,12 @@ impl Frame {
 /// };
 /// ```
 #[macro_export]
-macro_rules! frame_packet {
+macro_rules! match_packet {
   (
     $frame:expr => {
       $(
         $binding:ident = $packet_type:ty => $block:block
-      ),*
-      $(,)?
+      )*
     }
   ) => {
     match $frame.type_id {
@@ -95,10 +94,13 @@ macro_rules! frame_packet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
 pub enum PacketTypeId {
+  // Common
   #[bin(value = 0x01)]
   Ping,
   #[bin(value = 0x02)]
   Pong,
+
+  // Client <-> Lobby
   #[bin(value = 0x03)]
   ConnectLobby,
   #[bin(value = 0x04)]
@@ -127,14 +129,55 @@ pub enum PacketTypeId {
   GameSelectNodeRequest,
   #[bin(value = 0x10)]
   GameSelectNode,
-  #[bin(value = 0x11)]
+  #[bin(value = 0x1A)]
   GamePlayerPingMapUpdateRequest,
-  #[bin(value = 0x12)]
+  #[bin(value = 0x1B)]
   GamePlayerPingMapUpdate,
-  #[bin(value = 0x13)]
+  #[bin(value = 0x1C)]
   GamePlayerPingMapSnapshotRequest,
-  #[bin(value = 0x14)]
+  #[bin(value = 0x1D)]
   GamePlayerPingMapSnapshot,
+
+  // Lobby <-> Node
+  #[bin(value = 0x30)]
+  ControllerConnect,
+  #[bin(value = 0x31)]
+  ControllerConnectAccept,
+  #[bin(value = 0x32)]
+  ControllerConnectReject,
+  #[bin(value = 0x33)]
+  ControllerCreateGame,
+  #[bin(value = 0x34)]
+  ControllerCreateGameAccept,
+  #[bin(value = 0x35)]
+  ControllerCreateGameReject,
+
+  // Client <-> Node
+  #[bin(value = 0x40)]
+  ClientConnect,
+  #[bin(value = 0x41)]
+  ClientConnectAccept,
+  #[bin(value = 0x42)]
+  ClientConnectReject,
+  #[bin(value = 0x43)]
+  ClientPlayerStatusUpdateRequest,
+  #[bin(value = 0x44)]
+  ClientPlayerStatusUpdate,
+  #[bin(value = 0x45)]
+  ClientGameStatusUpdate,
+
+  // Controller <-> Observer
+  #[bin(value = 0x50)]
+  ObserverConnect,
+  #[bin(value = 0x51)]
+  ObserverConnectAccept,
+  #[bin(value = 0x52)]
+  ObserverConnectReject,
+  #[bin(value = 0x53)]
+  ObserverData,
+
+  #[bin(value = 0xF7)]
+  W3GS,
   UnknownValue(u8),
 }
 

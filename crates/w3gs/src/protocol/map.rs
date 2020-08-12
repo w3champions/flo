@@ -23,7 +23,7 @@ impl MapCheck {
       file_path: game_settings.map_path.clone(),
       file_size,
       file_crc,
-      map_xoro: game_settings.map_xoro,
+      map_xoro: game_settings.map_checksum,
       sha1: game_settings.map_sha1,
     }
   }

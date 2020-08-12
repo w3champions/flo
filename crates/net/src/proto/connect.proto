@@ -59,13 +59,13 @@ message PacketGamePlayerLeave {
 
 message PacketGameSlotUpdateRequest {
   int32 game_id = 1;
-  SlotSettings slot_settings = 3;
+  flo_common.SlotSettings slot_settings = 3;
 }
 
 message PacketGameSlotUpdate {
   int32 game_id = 1;
   int32 slot_index = 2;
-  SlotSettings slot_settings = 3;
+  flo_common.SlotSettings slot_settings = 3;
 }
 
 message PacketListNodesRequest {}
@@ -169,36 +169,7 @@ enum SelectedNodeType {
 
 message Slot {
   PlayerInfo player = 1;
-  SlotSettings settings = 2;
-}
-
-message SlotSettings {
-  uint32 team = 1;
-  uint32 color = 2;
-  Computer computer = 3;
-  uint32 handicap = 4;
-  SlotStatus status = 5;
-  Race race = 6;
-}
-
-enum SlotStatus {
-  SlotStatusOpen = 0;
-  SlotStatusClosed = 1;
-  SlotStatusOccupied = 2;
-}
-
-enum Race {
-  RaceHuman = 0;
-  RaceOrc = 1;
-  RaceNightElf = 2;
-  RaceUndead = 3;
-  RaceRandom = 4;
-}
-
-enum Computer {
-  ComputerEasy = 0;
-  ComputerNormal = 1;
-  ComputerInsane = 2;
+  flo_common.SlotSettings settings = 2;
 }
 
 message Map {
@@ -212,6 +183,7 @@ enum GameStatus {
   GameStatusPlaying = 1;
   GameStatusEnded = 2;
   GameStatusPaused = 3;
+  GameStatusTerminated = 4;
 }
 
 enum PlayerLeaveReason {

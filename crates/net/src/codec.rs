@@ -6,7 +6,7 @@ use flo_util::binary::{BinDecode, BinEncode};
 use crate::error::Error;
 use crate::packet::{Frame, Header};
 
-const MAX_PAYLOAD_LEN: usize = 2048;
+const MAX_PAYLOAD_LEN: usize = 4096;
 
 #[derive(Debug)]
 pub struct FloFrameCodec {

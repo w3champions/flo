@@ -32,7 +32,7 @@ async fn main() {
 
   let mut game_info = GameInfo::from_replay(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
   game_info.set_port(port);
-  game_info.data.settings.map_xoro = 3389385288;
+  game_info.data.settings.map_checksum = 3389385288;
 
   let (inspect, rest) = W3Replay::inspect(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
   let inspect = Arc::new(inspect);

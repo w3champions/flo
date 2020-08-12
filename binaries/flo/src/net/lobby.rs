@@ -45,14 +45,14 @@ impl LobbyStream {
 
     let reply = stream.recv_frame().await?;
 
-    let session = flo_net::frame_packet! {
+    let session = flo_net::match_packet! {
       reply => {
         p = PacketConnectLobbyAccept => {
           PlayerSession::unpack(p.session)?
-        },
+        }
         p = PacketConnectLobbyReject => {
           return Err(Error::ConnectionRequestRejected(RejectReason::unpack(p.reason)?))
-        },
+        }
       }
     };
 
@@ -160,37 +160,37 @@ impl LobbyStream {
     current_game_id: Arc<RwLock<Option<i32>>>,
     frame: Frame,
   ) -> Result<()> {
-    let msg = flo_net::frame_packet! {
+    let msg = flo_net::match_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
           OutgoingMessage::Disconnect(message::Disconnect {
             reason: S2ProtoEnum::unpack_i32(p.reason)?,
             message: "Server closed the connection".to_string()
           })
-        },
+        }
         p = PacketGameInfo => {
           nodes.set_selected_node(p.game.as_ref().and_then(|g| {
             let node = g.node.as_ref()?;
             node.id.clone()
           }))?;
           OutgoingMessage::CurrentGameInfo(p.game.extract()?)
-        },
+        }
         p = PacketGamePlayerEnter => {
           OutgoingMessage::GamePlayerEnter(p)
-        },
+        }
         p = PacketGamePlayerLeave => {
           OutgoingMessage::GamePlayerLeave(p)
-        },
+        }
         p = PacketGameSlotUpdate => {
           OutgoingMessage::GameSlotUpdate(p)
-        },
+        }
         p = PacketPlayerSessionUpdate => {
           if p.game_id.is_none() {
             nodes.set_selected_node(None)?;
           }
           *current_game_id.write() = p.game_id.clone();
           OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
-        },
+        }
         p = PacketListNodes => {
           nodes.update_nodes(p.nodes.clone())?;
           let mut list = message::NodeList {
@@ -206,14 +206,14 @@ impl LobbyStream {
             })
           }
           OutgoingMessage::ListNodes(list)
-        },
+        }
         p = PacketGameSelectNode => {
           nodes.set_selected_node(p.node_id)?;
           OutgoingMessage::GameSelectNode(p)
-        },
+        }
         p = PacketGamePlayerPingMapUpdate => {
           OutgoingMessage::GamePlayerPingMapUpdate(p)
-        },
+        }
         p = PacketGamePlayerPingMapSnapshot => {
           OutgoingMessage::GamePlayerPingMapSnapshot(p)
         }

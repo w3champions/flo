@@ -14,3 +14,32 @@ message PacketPing {
 message PacketPong {
   uint32 ms = 1;
 }
+
+message SlotSettings {
+  uint32 team = 1;
+  uint32 color = 2;
+  Computer computer = 3;
+  uint32 handicap = 4;
+  SlotStatus status = 5;
+  Race race = 6;
+}
+
+enum SlotStatus {
+  SlotStatusOpen = 0;
+  SlotStatusClosed = 1;
+  SlotStatusOccupied = 2;
+}
+
+enum Race {
+  RaceHuman = 0;
+  RaceOrc = 1;
+  RaceNightElf = 2;
+  RaceUndead = 3;
+  RaceRandom = 4;
+}
+
+enum Computer {
+  ComputerEasy = 0;
+  ComputerNormal = 1;
+  ComputerInsane = 2;
+}

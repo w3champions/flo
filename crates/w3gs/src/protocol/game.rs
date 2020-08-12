@@ -10,7 +10,7 @@ pub struct GameSettings {
   pub unk_1: u8,
   pub map_width: u16,
   pub map_height: u16,
-  pub map_xoro: u32,
+  pub map_checksum: u32,
   pub map_path: CString,
   pub host_name: CString,
   pub map_sha1: [u8; 20],
@@ -22,7 +22,7 @@ impl GameSettings {
     + 1 /* 0x0 */
     + size_of::<u16>() /* Map width */
     + size_of::<u16>() /* Map height */
-    + size_of::<u32>() /* Map xoro */
+    + size_of::<u32>() /* Map checksum */
     + self.map_path.as_bytes().len() + 1 /* Map path */
     + self.host_name.as_bytes().len() + 1 /* Host name */
     + 1 /* 0x0 */
@@ -38,7 +38,7 @@ impl BinEncode for GameSettings {
     stat_string_buf.put_u8(self.unk_1);
     stat_string_buf.put_u16_le(self.map_width);
     stat_string_buf.put_u16_le(self.map_height);
-    stat_string_buf.put_u32_le(self.map_xoro);
+    stat_string_buf.put_u32_le(self.map_checksum);
     stat_string_buf.put(self.map_path.as_bytes());
     stat_string_buf.put_u8(0);
     stat_string_buf.put(self.host_name.as_bytes());
@@ -106,7 +106,7 @@ impl BinDecode for GameSettings {
       unk_1,
       map_width,
       map_height,
-      map_xoro,
+      map_checksum: map_xoro,
       map_path,
       host_name,
       map_sha1,

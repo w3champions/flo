@@ -32,6 +32,7 @@
       <sourceFolder url="file://$MODULE_DIR$/deps/flo-grpc/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-cli/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-node-service/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/observer/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

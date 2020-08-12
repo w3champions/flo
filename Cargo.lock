@@ -534,7 +534,7 @@ dependencies = [
  "pq-sys",
  "r2d2",
  "serde_json",
- "uuid",
+ "uuid 0.6.5",
 ]
 
 [[package]]
@@ -854,17 +854,20 @@ name = "flo-node"
 version = "0.1.0"
 dependencies = [
  "bytes 0.5.6",
- "dashmap",
  "flo-constants",
  "flo-net",
  "flo-util",
  "flo-w3gs",
  "futures 0.3.5",
+ "lazy_static",
  "parking_lot",
+ "prometheus",
+ "s2-grpc-utils",
  "thiserror",
  "tokio",
  "tracing",
  "tracing-futures",
+ "uuid 0.8.1",
 ]
 
 [[package]]
@@ -876,6 +879,10 @@ dependencies = [
  "flo-node",
  "tokio",
 ]
+
+[[package]]
+name = "flo-observer"
+version = "0.1.0"
 
 [[package]]
 name = "flo-platform"
@@ -1825,6 +1832,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0ced56dee39a6e960c15c74dc48849d614586db2eaada6497477af7c7811cd"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "protobuf",
+ "spin",
+ "thiserror",
+]
+
+[[package]]
 name = "prost"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1874,6 +1895,12 @@ dependencies = [
  "bytes 0.5.6",
  "prost",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d883f78645c21b7281d21305181aa1f4dd9e9363e7cf2566c93121552cff003e"
 
 [[package]]
 name = "quote"
@@ -2899,6 +2926,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1436e58182935dcd9ce0add9ea0b558e8a87befe01c1a301e6020aeb0876363"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "uuid"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fde2f6a4bea1d6e007c4ad38c6839fa71cbb63b6dbf5b595aa38dc9b1093c11"
+dependencies = [
+ "rand",
 ]
 
 [[package]]

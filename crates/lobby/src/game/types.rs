@@ -97,6 +97,7 @@ pub enum GameStatus {
   Playing = 1,
   Ended = 2,
   Paused = 4,
+  Terminated = 5,
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
@@ -184,6 +185,7 @@ impl Game {
         GameStatus::Playing => packet::GameStatus::Playing,
         GameStatus::Ended => packet::GameStatus::Ended,
         GameStatus::Paused => packet::GameStatus::Paused,
+        GameStatus::Terminated => packet::GameStatus::Terminated,
       }
       .into(),
       map: Some(packet::Map {
