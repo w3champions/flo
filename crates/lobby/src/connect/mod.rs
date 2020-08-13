@@ -182,6 +182,10 @@ async fn send_initial_state(
   };
 
   let mut frames = vec![
+    connect::PacketListNodes {
+      nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
+    }
+    .encode_as_frame()?,
     connect::PacketConnectLobbyAccept {
       lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
       session: Some({
@@ -198,20 +202,26 @@ async fn send_initial_state(
       }),
     }
     .encode_as_frame()?,
-    connect::PacketListNodes {
-      nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
-    }
-    .encode_as_frame()?,
   ];
 
   if let Some(game_id) = game_id {
-    let game = state
+    let (game, node_player_token) = state
       .db
-      .exec(move |conn| crate::game::db::get_full(conn, game_id))
-      .await?
-      .into_packet();
+      .exec(move |conn| crate::game::db::get_full_and_node_player_token(conn, game_id, player_id))
+      .await?;
+
+    let game = game.into_packet();
     let frame = connect::PacketGameInfo { game: Some(game) }.encode_as_frame()?;
     frames.push(frame);
+
+    if let Some(player_token) = node_player_token {
+      let frame = connect::PacketGamePlayerToken {
+        game_id,
+        player_token: player_token.to_vec(),
+      }
+      .encode_as_frame()?;
+      frames.push(frame);
+    }
   }
 
   stream.send_frames(frames).await?;

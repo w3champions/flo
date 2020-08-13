@@ -27,11 +27,13 @@ message PacketControllerCreateGame {
 }
 
 message PacketControllerCreateGameAccept {
-  repeated PlayerToken player_tokens = 1;
+  int32 game_id = 1;
+  repeated PlayerToken player_tokens = 2;
 }
 
 message PacketControllerCreateGameReject {
-  ControllerCreateGameRejectReason reason = 1;
+  int32 game_id = 1;
+  ControllerCreateGameRejectReason reason = 2;
 }
 
 message PacketNodeGameStatusUpdate {
@@ -41,7 +43,7 @@ message PacketNodeGameStatusUpdate {
 
 message PacketClientConnect {
   flo_common.Version version = 1;
-  bytes session_id = 2;
+  bytes token = 2;
 }
 
 message PacketClientConnectAccept {
@@ -50,7 +52,15 @@ message PacketClientConnectAccept {
 }
 
 message PacketClientConnectReject {
-  ClientConnectRejectReason reason = 1;
+  int32 game_id = 1;
+  int32 player_id = 2;
+  ClientConnectRejectReason reason = 3;
+}
+
+message PacketClientPlayerClientInfo {
+  int32 game_id = 1;
+  string war3_version = 2;
+  bytes map_sha1 = 3;
 }
 
 message PacketClientPlayerStatusUpdateRequest {
@@ -66,6 +76,8 @@ enum ClientConnectRejectReason {
   ClientConnectRejectReasonUnknown = 0;
   ClientConnectRejectReasonMulti = 1;
   ClientConnectRejectReasonMaintenance = 2;
+  ClientConnectRejectReasonGameVersion = 3;
+  ClientConnectRejectReasonMapSha1 = 4;
 }
 
 enum ControllerCreateGameRejectReason {
@@ -93,12 +105,9 @@ enum GameStatus {
 }
 
 message GameSettings {
-  uint32 game_setting_flags = 1;
-  uint32 map_width = 2;
-  uint32 map_height = 3;
-  uint32 map_checksum = 4;
-  string map_path = 5;
-  bytes map_sha1 = 6;
+  string map_path = 1;
+  bytes map_sha1 = 2;
+  uint32 map_checksum = 3;
 }
 
 message GamePlayer {
@@ -118,6 +127,6 @@ enum GameClientStatus {
   GameClientStatusConnected = 1;
   GameClientStatusLoading = 2;
   GameClientStatusLoaded = 3;
-  GameClientStatusLeft = 5;
-  GameClientStatusDisconnected = 6;
+  GameClientStatusLeft = 4;
+  GameClientStatusDisconnected = 5;
 }

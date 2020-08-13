@@ -91,7 +91,7 @@ macro_rules! match_packet {
   };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, BinEncode, BinDecode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BinEncode, BinDecode)]
 #[bin(enum_repr(u8))]
 pub enum PacketTypeId {
   // Common
@@ -129,14 +129,22 @@ pub enum PacketTypeId {
   GameSelectNodeRequest,
   #[bin(value = 0x10)]
   GameSelectNode,
-  #[bin(value = 0x1A)]
+  #[bin(value = 0x11)]
   GamePlayerPingMapUpdateRequest,
-  #[bin(value = 0x1B)]
+  #[bin(value = 0x12)]
   GamePlayerPingMapUpdate,
-  #[bin(value = 0x1C)]
+  #[bin(value = 0x13)]
   GamePlayerPingMapSnapshotRequest,
-  #[bin(value = 0x1D)]
+  #[bin(value = 0x14)]
   GamePlayerPingMapSnapshot,
+  #[bin(value = 0x15)]
+  GamePlayerToken,
+  #[bin(value = 0x16)]
+  GameStartRequest,
+  #[bin(value = 0x17)]
+  GameStartAccept,
+  #[bin(value = 0x18)]
+  GameStartReject,
 
   // Lobby <-> Node
   #[bin(value = 0x30)]
@@ -163,8 +171,10 @@ pub enum PacketTypeId {
   ClientPlayerStatusUpdateRequest,
   #[bin(value = 0x44)]
   ClientPlayerStatusUpdate,
-  // Node -> [Client, Controller]
   #[bin(value = 0x45)]
+  ClientPlayerClientInfo,
+  // Node -> [Client, Controller]
+  #[bin(value = 0x46)]
   NodeGameStatusUpdate,
 
   // Controller <-> Observer

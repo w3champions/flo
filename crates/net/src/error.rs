@@ -19,6 +19,8 @@ pub enum Error {
   UnexpectedPacketTypeId { got: PacketTypeId },
   #[error("packet field not present")]
   PacketFieldNotPresent,
+  #[error("task cancelled unexpectedly")]
+  Cancelled,
   #[error("io: {0}")]
   Io(#[from] std::io::Error),
   #[error("decode: {0}")]

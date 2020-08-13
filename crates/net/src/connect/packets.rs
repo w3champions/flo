@@ -24,3 +24,4 @@ packet_type!(
   PacketGamePlayerPingMapSnapshotRequest
 );
 packet_type!(GamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshot);
+packet_type!(GamePlayerToken, PacketGamePlayerToken);

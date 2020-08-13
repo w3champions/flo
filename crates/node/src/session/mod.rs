@@ -110,7 +110,13 @@ impl SessionStore {
     metrics::GAME_SESSIONS.inc();
     metrics::PENDING_PLAYER_TOKENS.add(player_tokens.len() as i64);
 
-    Ok(PacketControllerCreateGameAccept { player_tokens }.encode_as_frame()?)
+    Ok(
+      PacketControllerCreateGameAccept {
+        game_id,
+        player_tokens,
+      }
+      .encode_as_frame()?,
+    )
   }
 
   pub fn handle_client_connect() {}

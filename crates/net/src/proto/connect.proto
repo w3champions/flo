@@ -104,6 +104,29 @@ message PacketGamePlayerPingMapSnapshot {
   map<int32, NodePingMap> node_ping_map = 2;
 }
 
+message PacketGamePlayerToken {
+  int32 game_id = 1;
+  bytes player_token = 2;
+}
+
+message PacketGameStartRequest {
+  int32 game_id = 1;
+}
+
+message PacketGameStartAccept {
+  int32 game_id = 1;
+}
+
+message PacketGameStartReject {
+  int32 game_id = 1;
+  repeated GameStartRejectedPlayer rejected_players = 2;
+}
+
+message GameStartRejectedPlayer {
+  int32 player_id = 1;
+  GameStartRejectReason reason = 2;
+}
+
 message NodePingMap {
   map<int32, uint32> player_ping_map = 2;
 }
@@ -180,14 +203,20 @@ message Map {
 
 enum GameStatus {
   GameStatusPreparing = 0;
-  GameStatusPlaying = 1;
-  GameStatusEnded = 2;
-  GameStatusPaused = 3;
-  GameStatusTerminated = 4;
+  GameStatusCreated = 1;
+  GameStatusRunning = 2;
+  GameStatusEnded = 3;
+  GameStatusPaused = 4;
+  GameStatusTerminated = 5;
 }
 
 enum PlayerLeaveReason {
   PlayerLeaveReasonLeft = 0;
   PlayerLeaveReasonKicked = 1;
   PlayerLeaveReasonGameCancelled = 2;
+}
+
+enum GameStartRejectReason {
+  GameStartRejectReasonWar3Version = 0;
+  GameStartRejectReasonMapSha1 = 1;
 }

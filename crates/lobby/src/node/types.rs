@@ -158,3 +158,12 @@ impl NodeRef {
     }
   }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlayerToken(pub [u8; 16]);
+
+impl PlayerToken {
+  pub fn to_vec(&self) -> Vec<u8> {
+    self.0.to_vec()
+  }
+}

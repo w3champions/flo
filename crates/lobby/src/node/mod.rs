@@ -1,3 +1,4 @@
+mod conn;
 pub mod db;
 mod types;
 

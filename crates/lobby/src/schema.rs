@@ -25,6 +25,7 @@ table! {
         meta -> Jsonb,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        player_tokens -> Nullable<Jsonb>,
     }
 }
 

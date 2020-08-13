@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use flo_net::proto::flo_connect as packet;
 
 use crate::map::Map;
-use crate::node::NodeRef;
+use crate::node::{NodeRef, PlayerToken};
 use crate::player::PlayerRef;
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
@@ -94,8 +94,9 @@ pub struct GameEntry {
 #[s2_grpc(proto_enum_type(flo_grpc::game::GameStatus, flo_net::proto::flo_connect::GameStatus))]
 pub enum GameStatus {
   Preparing = 0,
-  Playing = 1,
-  Ended = 2,
+  Created = 1,
+  Running = 2,
+  Ended = 3,
   Paused = 4,
   Terminated = 5,
 }
@@ -182,7 +183,8 @@ impl Game {
       name: self.name,
       status: match self.status {
         GameStatus::Preparing => packet::GameStatus::Preparing,
-        GameStatus::Playing => packet::GameStatus::Playing,
+        GameStatus::Created => packet::GameStatus::Created,
+        GameStatus::Running => packet::GameStatus::Running,
         GameStatus::Ended => packet::GameStatus::Ended,
         GameStatus::Paused => packet::GameStatus::Paused,
         GameStatus::Terminated => packet::GameStatus::Terminated,

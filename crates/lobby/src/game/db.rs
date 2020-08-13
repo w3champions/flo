@@ -3,12 +3,13 @@ use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::db::DbConn;
 use crate::error::*;
 use crate::game::{Game, GameEntry, GameStatus, Slot, SlotSettings, Slots};
 use crate::map::Map;
-use crate::node::NodeRef;
+use crate::node::{NodeRef, PlayerToken};
 use crate::player::PlayerRef;
 use crate::schema::game;
 
@@ -122,7 +123,7 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
     GameStatusFilter::Live => {
       q = q.filter(
         dsl::status
-          .eq(GameStatus::Playing)
+          .eq(GameStatus::Running)
           .and(dsl::is_private.eq(false)),
       )
     }
@@ -322,6 +323,27 @@ pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
   Ok(row.into_game(meta, slots)?)
 }
 
+pub fn get_full_and_node_player_token(
+  conn: &DbConn,
+  id: i32,
+  player_id: i32,
+) -> Result<(Game, Option<PlayerToken>)> {
+  let mut row: Row = game::table
+    .find(id)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+  let meta: Meta = serde_json::from_value(row.meta.clone())?;
+  let slots: Vec<Slot> = serde_json::from_value(row.slots.clone())?;
+  let player_token = if let Some(value) = std::mem::replace(&mut row.player_tokens, None) {
+    let mut map: HashMap<i32, PlayerToken> = serde_json::from_value(value)?;
+    map.remove(&player_id)
+  } else {
+    None
+  };
+  Ok((row.into_game(meta, slots)?, player_token))
+}
+
 #[derive(Debug)]
 pub struct GameStateFromDb {
   pub id: i32,
@@ -336,7 +358,11 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
   use game::dsl;
 
   let rows: Vec<(i32, Option<Value>, Value, Option<i32>)> = game::table
-    .filter(dsl::status.eq_any(&[GameStatus::Preparing, GameStatus::Playing]))
+    .filter(dsl::status.eq_any(&[
+      GameStatus::Preparing,
+      GameStatus::Created,
+      GameStatus::Running,
+    ]))
     .select((dsl::id, dsl::node, dsl::slots, dsl::created_by))
     .load(conn)?;
   let mut games = Vec::with_capacity(rows.len());
@@ -416,6 +442,23 @@ fn end_game(conn: &DbConn, id: i32) -> Result<()> {
   Ok(())
 }
 
+pub fn update_created(
+  conn: &DbConn,
+  id: i32,
+  player_tokens: HashMap<i32, PlayerToken>,
+) -> Result<()> {
+  use diesel::dsl::sql;
+  use game::dsl;
+  diesel::update(game::table.find(id))
+    .filter(dsl::status.ne(GameStatus::Preparing))
+    .set((
+      dsl::status.eq(GameStatus::Created),
+      dsl::player_tokens.eq(serde_json::to_value(player_tokens)?),
+    ))
+    .execute(conn)?;
+  Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
   pub map: Map,
@@ -440,6 +483,7 @@ pub struct Row {
   pub meta: Value,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
+  pub player_tokens: Option<Value>,
 }
 
 impl Row {
