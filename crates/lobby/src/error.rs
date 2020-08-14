@@ -6,6 +6,8 @@ use tonic::Status;
 pub enum Error {
   #[error("node not found")]
   NodeNotFound,
+  #[error("invalid node address: {0}")]
+  InvalidNodeAddress(String),
   #[error("player stream closed")]
   PlayerStreamClosed,
   #[error("player token expired")]
