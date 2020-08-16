@@ -47,6 +47,7 @@ table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         country_id -> Text,
+        disabled -> Bool,
     }
 }
 

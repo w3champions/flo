@@ -14,10 +14,14 @@ pub enum Error {
   InvalidPingNodeReply,
   #[error("Warcraft ||| not located")]
   War3NotLocated,
+  #[error("connection request rejected by server: {0:?}")]
+  ConnectionRequestRejected(crate::lobby::RejectReason),
   #[error("task failed to execute to completion: {0}")]
   TaskJoinError(#[from] tokio::task::JoinError),
-  #[error("connection request rejected by server: {0:?}")]
-  ConnectionRequestRejected(crate::net::lobby::RejectReason),
+  #[error("task cancelled")]
+  TaskCancelled,
+  #[error("event channel closed: {0}")]
+  EventChannelClosed(&'static str),
   #[error("server not connected")]
   ServerNotConnected,
   #[error("json: {0}")]

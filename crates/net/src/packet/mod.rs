@@ -51,11 +51,40 @@ impl Frame {
   }
 }
 
+#[macro_export]
+macro_rules! select_flo_packet {
+  (
+    $frame:expr => {
+      $(
+        $binding:ident = $packet_type:ty => $block:block
+      )*
+    }
+  ) => {
+    match $frame.type_id {
+      $(
+        <$packet_type as $crate::packet::FloPacket>::TYPE_ID => {
+          match <$packet_type as $crate::packet::Message>::decode(
+            $frame.payload
+          ) {
+            Ok($binding) => {
+              Ok($block)
+            },
+            Err(e) => Err($crate::error::Error::from(e)),
+          }
+        }
+      ),*
+      other => {
+        Err($crate::error::Error::unexpected_packet_type_id(other).into())
+      },
+    }
+  };
+}
+
 /// Decodes packet by type id
 /// If no branch matches, returns Err(...)
 ///
 /// ```no_run
-/// let event = flo_net::match_packet! {
+/// flo_net::try_flo_packet! {
 ///   frame => {
 ///     p = PacketLobbyDisconnect => {
 ///       LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
@@ -67,7 +96,7 @@ impl Frame {
 /// };
 /// ```
 #[macro_export]
-macro_rules! match_packet {
+macro_rules! try_flo_packet {
   (
     $frame:expr => {
       $(
@@ -145,6 +174,8 @@ pub enum PacketTypeId {
   GameStartAccept,
   #[bin(value = 0x18)]
   GameStartReject,
+  #[bin(value = 0x19)]
+  GameStartPlayerClientInfoRequest,
 
   // Lobby <-> Node
   #[bin(value = 0x30)]
@@ -171,20 +202,19 @@ pub enum PacketTypeId {
   ClientPlayerStatusUpdateRequest,
   #[bin(value = 0x44)]
   ClientPlayerStatusUpdate,
-  #[bin(value = 0x45)]
-  ClientPlayerClientInfo,
+
   // Node -> [Client, Controller]
-  #[bin(value = 0x46)]
+  #[bin(value = 0x50)]
   NodeGameStatusUpdate,
 
   // Controller <-> Observer
-  #[bin(value = 0x50)]
+  #[bin(value = 0x60)]
   ObserverConnect,
-  #[bin(value = 0x51)]
+  #[bin(value = 0x61)]
   ObserverConnectAccept,
-  #[bin(value = 0x52)]
+  #[bin(value = 0x62)]
   ObserverConnectReject,
-  #[bin(value = 0x53)]
+  #[bin(value = 0x63)]
   ObserverData,
 
   #[bin(value = 0xF7)]

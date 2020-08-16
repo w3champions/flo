@@ -259,3 +259,43 @@ pub async fn select_game_node(
 
   Ok(())
 }
+
+pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> Result<()> {
+  let mut game_guard = state
+    .mem
+    .lock_game_state(game_id)
+    .await
+    .ok_or_else(|| Error::GameNotFound)?;
+
+  if game_guard.get_host_player() != Some(player_id) {
+    return Err(Error::PlayerNotHost.into());
+  }
+
+  let game = state
+    .db
+    .exec(move |conn| crate::game::db::get_full(conn, game_id))
+    .await?;
+
+  let node_id = if let Some(id) = game.node.as_ref().and_then(|node| node.get_node_id()) {
+    id
+  } else {
+    return Err(Error::GameNodeNotSelected);
+  };
+
+  let node_conn = state
+    .nodes
+    .get_conn(node_id)
+    .ok_or_else(|| Error::NodeNotFound)?;
+
+  let created = node_conn.create_game(&game).await?;
+
+  let players = game_guard.players().to_vec();
+  drop(game_guard);
+
+  // let mut senders = state.mem.get_player_senders(&players);
+  // for sender in senders.values_mut() {
+  //   sender.with_buf(|buf| buf.set_node_update(game_id, node_id))
+  // }
+
+  Ok(())
+}

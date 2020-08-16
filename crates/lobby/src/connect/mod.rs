@@ -137,7 +137,7 @@ async fn handle_stream(
 
         let frame = incoming?;
 
-        flo_net::match_packet! {
+        flo_net::try_flo_packet! {
           frame => {
             packet = proto::flo_common::PacketPong => {
               // tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
@@ -156,6 +156,9 @@ async fn handle_stream(
             }
             packet = proto::flo_connect::PacketGameSelectNodeRequest => {
               handle_game_select_node_request(state.clone(), player_id, packet).await?;
+            }
+            packet = flo_net::proto::flo_connect::PacketGameStartRequest => {
+              handle_game_start_request(state.clone(), player_id, packet).await?;
             }
           }
         }
@@ -181,28 +184,23 @@ async fn send_initial_state(
     player.joined_game_id()
   };
 
-  let mut frames = vec![
-    connect::PacketListNodes {
-      nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
-    }
-    .encode_as_frame()?,
-    connect::PacketConnectLobbyAccept {
-      lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
-      session: Some({
-        use proto::flo_connect::*;
-        Session {
-          player: player.pack()?,
-          status: if game_id.is_some() {
-            PlayerStatus::InGame.into()
-          } else {
-            PlayerStatus::Idle.into()
-          },
-          game_id: game_id.clone(),
-        }
-      }),
-    }
-    .encode_as_frame()?,
-  ];
+  let mut frames = vec![connect::PacketConnectLobbyAccept {
+    lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
+    session: Some({
+      use proto::flo_connect::*;
+      Session {
+        player: player.pack()?,
+        status: if game_id.is_some() {
+          PlayerStatus::InGame.into()
+        } else {
+          PlayerStatus::Idle.into()
+        },
+        game_id: game_id.clone(),
+      }
+    }),
+    nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
+  }
+  .encode_as_frame()?];
 
   if let Some(game_id) = game_id {
     let (game, node_player_token) = state
@@ -350,5 +348,14 @@ async fn handle_game_select_node_request(
   packet: proto::flo_connect::PacketGameSelectNodeRequest,
 ) -> Result<()> {
   crate::game::select_game_node(state, packet.game_id, player_id, packet.node_id).await?;
+  Ok(())
+}
+
+async fn handle_game_start_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  packet: proto::flo_connect::PacketGameStartRequest,
+) -> Result<()> {
+  crate::game::start_game(state, packet.game_id, player_id).await?;
   Ok(())
 }

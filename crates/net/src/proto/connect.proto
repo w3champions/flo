@@ -12,6 +12,7 @@ message PacketConnectLobby {
 message PacketConnectLobbyAccept {
   flo_common.Version lobby_version = 1;
   Session session = 2;
+  repeated Node nodes = 3;
 }
 
 enum ConnectLobbyRejectReason {
@@ -119,12 +120,19 @@ message PacketGameStartAccept {
 
 message PacketGameStartReject {
   int32 game_id = 1;
-  repeated GameStartRejectedPlayer rejected_players = 2;
+  string message = 2;
+  repeated GameStartRejectedPlayer rejected_players = 3;
 }
 
 message GameStartRejectedPlayer {
   int32 player_id = 1;
   GameStartRejectReason reason = 2;
+}
+
+message PacketGameStartPlayerClientInfoRequest {
+  int32 game_id = 1;
+  string war3_version = 2;
+  bytes map_sha1 = 3;
 }
 
 message NodePingMap {

@@ -7,7 +7,6 @@ use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
-use thiserror::Error;
 
 use flo_net::packet::{FloPacket, Frame, OptionalFieldExt};
 use flo_net::proto::flo_node::{
@@ -157,7 +156,7 @@ impl PendingPlayerRegistry {
             map_guard.remove(&prev_token)
           }
           // add token
-          Entry::Vacant(mut e) => {
+          Entry::Vacant(e) => {
             e.insert(token.clone());
             metrics::PENDING_PLAYER_TOKENS.inc();
             None
@@ -196,8 +195,6 @@ impl GameRegistry {
     }
   }
 }
-
-type GameSessionRef = Arc<RwLock<GameSession>>;
 
 #[derive(Debug)]
 struct GameRegistryGuard<'a> {

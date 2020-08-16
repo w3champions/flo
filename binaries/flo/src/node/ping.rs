@@ -13,7 +13,7 @@ use flo_constants::NODE_ECHO_PORT;
 use flo_net::time::StopWatch;
 
 use crate::error::*;
-use crate::net::node::PingUpdate;
+use crate::node::PingUpdate;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const PACKETS: usize = 1;

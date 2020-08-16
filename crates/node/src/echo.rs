@@ -18,6 +18,4 @@ pub async fn serve_echo() -> Result<()> {
       socket.send_to(&recv_buf[..], &peer).await.ok();
     }
   }
-
-  Ok(())
 }

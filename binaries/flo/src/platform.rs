@@ -1,6 +1,7 @@
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
@@ -11,10 +12,13 @@ use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct PlatformState {
+  config: RwLock<ClientConfig>,
   info: RwLock<Result<ClientPlatformInfo, PlatformStateError>>,
   storage: RwLock<Option<W3Storage>>,
   maps: RwLock<Option<Value>>,
 }
+
+pub type PlatformStateRef = Arc<PlatformState>;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PlatformStateError {
@@ -24,37 +28,34 @@ pub enum PlatformStateError {
 }
 
 impl PlatformState {
-  pub async fn init(config: &ClientConfig) -> Result<Self> {
-    let info = tokio::task::block_in_place(move || ClientPlatformInfo::with_config(config))
-      .map_err(|e| match e {
-        PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
-        PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
-        e => {
-          tracing::error!("init platform info: {}", e);
-          PlatformStateError::Internal
-        }
-      });
+  pub async fn init() -> Result<Self> {
+    let (config, info) = load().await;
     Ok(PlatformState {
+      config: RwLock::new(config),
       info: RwLock::new(info),
       storage: RwLock::new(None),
       maps: RwLock::new(None),
     })
   }
 
-  pub async fn reload(&self, config: &ClientConfig) -> Result<()> {
-    let info = tokio::task::block_in_place(move || ClientPlatformInfo::with_config(config))
-      .map_err(|e| match e {
-        PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
-        PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
-        e => {
-          tracing::error!("init platform info: {}", e);
-          PlatformStateError::Internal
-        }
-      });
+  pub fn into_ref(self) -> PlatformStateRef {
+    Arc::new(self)
+  }
+
+  pub async fn reload(&self) -> Result<()> {
+    let (config, info) = load().await;
+    *self.config.write() = config;
     *self.info.write() = info;
     self.storage.write().take();
     self.maps.write().take();
     Ok(())
+  }
+
+  pub fn with_config<F, R>(&self, f: F) -> R
+  where
+    F: FnOnce(&ClientConfig) -> R,
+  {
+    f(&self.config.read())
   }
 
   pub async fn with_storage<F, R>(&self, f: F) -> Result<R>
@@ -115,4 +116,19 @@ impl PlatformState {
       &Err(e) => Err(e),
     }
   }
+}
+
+async fn load() -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
+  tokio::task::block_in_place(move || {
+    let config = ClientConfig::load().unwrap_or_default();
+    let info = ClientPlatformInfo::with_config(&config).map_err(|e| match e {
+      PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
+      PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
+      e => {
+        tracing::error!("init platform info: {}", e);
+        PlatformStateError::Internal
+      }
+    });
+    (config, info)
+  })
 }

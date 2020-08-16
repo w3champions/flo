@@ -133,6 +133,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
 
 [[package]]
+name = "backoff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "721c249ab59cbc483ad4294c9ee2671835c1e43e9ffc277e6b4ecfef733cfdc5"
+dependencies = [
+ "futures-core",
+ "instant",
+ "pin-project",
+ "rand",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -767,6 +780,7 @@ dependencies = [
 name = "flo-lobby"
 version = "0.1.0"
 dependencies = [
+ "backoff",
  "bs-diesel-utils",
  "chrono",
  "dashmap",

@@ -19,6 +19,8 @@ pub struct Node {
   #[s2_grpc(skip_pack)]
   pub updated_at: DateTime<Utc>,
   pub country_id: String,
+  #[s2_grpc(skip_pack)]
+  pub disabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,6 +40,15 @@ pub enum NodeRef {
     secret: String,
     country_id: String,
   },
+}
+
+impl NodeRef {
+  pub fn get_node_id(&self) -> Option<i32> {
+    match *self {
+      NodeRef::Public { id, .. } => Some(id),
+      _ => None,
+    }
+  }
 }
 
 impl S2ProtoUnpack<flo_grpc::game::SelectedNode> for NodeRef {
@@ -166,4 +177,11 @@ impl PlayerToken {
   pub fn to_vec(&self) -> Vec<u8> {
     self.0.to_vec()
   }
+}
+
+#[derive(Debug, Queryable)]
+pub struct NodeConnConfig {
+  pub id: i32,
+  pub addr: String,
+  pub secret: String,
 }

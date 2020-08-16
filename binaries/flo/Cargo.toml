@@ -16,7 +16,7 @@ flo-w3map = { path = "../../crates/w3map" }
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 s2-grpc-utils = "0.2"
 dotenv = "0.15.0"
-tokio = { version = "0.2.22", features = ["full"] }
+tokio = { version = "0.2.22", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "signal", "rt-threaded"] }
 async-tungstenite = { version = "0.7.1", features = ["tokio-runtime"] }
 tracing = "0.1"
 tracing-futures = "0.2.4"

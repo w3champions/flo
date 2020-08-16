@@ -3,7 +3,6 @@ mod env;
 mod game;
 mod metrics;
 mod net;
-mod protocol;
 mod session;
 mod version;
 

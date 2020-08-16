@@ -4,12 +4,12 @@ use tokio::sync::mpsc;
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
-use flo_constants::NODE_SOCKET_PORT;
+use flo_constants::NODE_CONTROLLER_PORT;
 use flo_net::listener::FloListener;
-use flo_net::match_packet;
 use flo_net::packet::{FloPacket, Frame};
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
+use flo_net::try_flo_packet;
 
 use crate::error::*;
 use crate::session::SessionStore;
@@ -25,7 +25,7 @@ impl ControllerHandler {
   }
 
   pub async fn serve(&mut self) -> Result<()> {
-    let mut listener = FloListener::bind_v4(NODE_SOCKET_PORT).await?;
+    let mut listener = FloListener::bind_v4(NODE_CONTROLLER_PORT).await?;
 
     while let Some(incoming) = listener.incoming().next().await {
       if let Ok(stream) = incoming {
@@ -122,12 +122,12 @@ async fn handle_stream(dropper: Arc<Notify>, mut stream: FloStream) -> Result<()
 }
 
 async fn handle_frame(mut tx: mpsc::Sender<Frame>, frame: Frame) -> Result<()> {
-  match_packet! {
+  try_flo_packet! {
     frame => {
       pkt = PacketControllerCreateGame => {
         match SessionStore::get().handle_controller_create_game(pkt) {
           Ok(frame) => {
-            if let Err(e) = tx.send(frame).await {
+            if let Err(_) = tx.send(frame).await {
               tracing::warn!("connection dropped")
             }
           },

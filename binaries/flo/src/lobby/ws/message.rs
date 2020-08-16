@@ -11,10 +11,9 @@ use flo_net::proto::flo_connect::{
 
 use crate::error::{Error, Result};
 
-pub use crate::net::lobby::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
-use crate::net::node::PingUpdate;
-use crate::state::FloState;
-use crate::state::PlatformStateError;
+pub use crate::lobby::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
+use crate::node::PingUpdate;
+use crate::platform::PlatformStateError;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -89,24 +88,6 @@ impl ErrorMessage {
   pub fn new<T: ToString>(v: T) -> Self {
     ErrorMessage {
       message: v.to_string(),
-    }
-  }
-}
-
-impl FloState {
-  pub fn get_war3_info(&self) -> War3Info {
-    let info = self.platform.map(|info| War3Info {
-      located: true,
-      version: info.version.clone().into(),
-      error: None,
-    });
-    match info {
-      Ok(info) => info,
-      Err(e) => War3Info {
-        located: false,
-        version: None,
-        error: Some(e),
-      },
     }
   }
 }

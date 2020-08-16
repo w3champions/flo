@@ -57,12 +57,6 @@ message PacketClientConnectReject {
   ClientConnectRejectReason reason = 3;
 }
 
-message PacketClientPlayerClientInfo {
-  int32 game_id = 1;
-  string war3_version = 2;
-  bytes map_sha1 = 3;
-}
-
 message PacketClientPlayerStatusUpdateRequest {
   GameClientStatus status = 1;
 }

@@ -4,8 +4,15 @@ use tonic::Status;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("task cancelled")]
+  TaskCancelled,
   #[error("node not found")]
   NodeNotFound,
+  #[error("node rejected connection: {addr:?}: {reason:?}")]
+  NodeConnectionRejected {
+    addr: std::net::SocketAddrV4,
+    reason: flo_net::proto::flo_node::ControllerConnectRejectReason,
+  },
   #[error("invalid node address: {0}")]
   InvalidNodeAddress(String),
   #[error("player stream closed")]
@@ -26,6 +33,14 @@ pub enum Error {
   GameDataInvalid,
   #[error("the game you are trying to join is full")]
   GameFull,
+  #[error("create game request already exists")]
+  GameCreating,
+  #[error("create game request timeout")]
+  GameCreateTimeout,
+  #[error("create game request rejected: {0:?}")]
+  GameCreateReject(flo_net::proto::flo_node::ControllerCreateGameRejectReason),
+  #[error("game node not selected")]
+  GameNodeNotSelected,
   #[error("this map has no player slot")]
   MapHasNoPlayer,
   #[error("you can only join one game at a time")]
