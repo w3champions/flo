@@ -14,7 +14,6 @@ flo-w3storage = { path = "../../crates/w3storage" }
 flo-w3map = { path = "../../crates/w3map" }
 flo-event = { path = "../../crates/event" }
 
-bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 s2-grpc-utils = "0.2"
 dotenv = "0.15.0"
 tokio = { version = "0.2.22", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "signal", "rt-threaded"] }

@@ -12,7 +12,7 @@ thiserror = "1"
 lazy_static = "1"
 prost = "0.6"
 futures = "0.3"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2", features = ["tcp"] }
 tokio-util = { version = "0.3.1", features = ["codec"] }
 rand = "0.7.3"
 crc32fast = "1.2.0"

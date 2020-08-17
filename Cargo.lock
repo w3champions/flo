@@ -664,7 +664,6 @@ version = "0.1.0"
 dependencies = [
  "async-tungstenite",
  "base64",
- "bs-diesel-utils",
  "dotenv",
  "flo-config",
  "flo-constants",
