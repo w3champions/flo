@@ -1,11 +1,10 @@
 mod error;
-mod event;
 mod lobby;
 mod node;
 mod platform;
 mod version;
 
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::channel;
 
 use crate::lobby::Lobby;
 use crate::platform::PlatformState;
@@ -18,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let platform = PlatformState::init().await?.into_ref();
   let (lobby_sender, mut lobby_receiver) = channel(1);
-  let lobby = Lobby::init(platform.clone(), lobby_sender).await;
+  let _lobby = Lobby::init(platform.clone(), lobby_sender).await;
   tokio::spawn(async move {
     while let Some(event) = lobby_receiver.recv().await {
       dbg!(event);

@@ -154,10 +154,6 @@ impl NodeRegistry {
       .and_then(|node| node.pinger.current_ping())
   }
 
-  pub fn selected_node_id(&self) -> Option<i32> {
-    self.selected_node_id.read().clone()
-  }
-
   pub fn set_selected_node(&self, node: Option<i32>) -> Result<()> {
     match node {
       Some(id) => {

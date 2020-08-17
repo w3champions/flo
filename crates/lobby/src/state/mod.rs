@@ -10,7 +10,7 @@ use crate::game::{
   db::{get_all_active_game_state, GameStateFromDb},
   GameEntry,
 };
-use crate::node::{NodeRef, NodeStateRef, NodesState};
+use crate::node::{NodeRef, NodeRegistry, NodeRegistryRef};
 
 mod config;
 pub use config::ConfigClientStorageRef;
@@ -21,7 +21,7 @@ pub struct LobbyStateRef {
   pub db: ExecutorRef,
   pub mem: MemStorageRef,
   pub config: ConfigClientStorageRef,
-  pub nodes: NodeStateRef,
+  pub nodes: NodeRegistryRef,
 }
 
 impl LobbyStateRef {
@@ -31,7 +31,7 @@ impl LobbyStateRef {
     let (mem, config, nodes) = tokio::try_join!(
       MemStorage::init(db.clone()),
       ConfigStorage::init(db.clone()),
-      NodesState::init(db.clone())
+      NodeRegistry::init(db.clone())
     )?;
 
     Ok(LobbyStateRef {

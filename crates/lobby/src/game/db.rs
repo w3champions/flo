@@ -447,7 +447,6 @@ pub fn update_created(
   id: i32,
   player_tokens: HashMap<i32, PlayerToken>,
 ) -> Result<()> {
-  use diesel::dsl::sql;
   use game::dsl;
   diesel::update(game::table.find(id))
     .filter(dsl::status.ne(GameStatus::Preparing))

@@ -20,10 +20,6 @@ pub enum Error {
   TaskJoinError(#[from] tokio::task::JoinError),
   #[error("task cancelled")]
   TaskCancelled,
-  #[error("event channel closed: {0}")]
-  EventChannelClosed(&'static str),
-  #[error("server not connected")]
-  ServerNotConnected,
   #[error("json: {0}")]
   Json(#[from] serde_json::Error),
   #[error("io: {0}")]

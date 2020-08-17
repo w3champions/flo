@@ -7,6 +7,7 @@ use flo_net::proto::flo_connect::{
   GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot,
   PacketGamePlayerPingMapSnapshotRequest, PacketGamePlayerPingMapUpdate, PacketGameSelectNode,
   PacketGameSelectNodeRequest, PacketGameSlotUpdate, PacketGameSlotUpdateRequest,
+  PacketGameStartAccept, PacketGameStartReject, PacketGameStartRequest,
 };
 
 use crate::error::{Error, Result};
@@ -26,6 +27,7 @@ pub enum IncomingMessage {
   GameSelectNodeRequest(PacketGameSelectNodeRequest),
   GamePlayerPingMapSnapshotRequest(PacketGamePlayerPingMapSnapshotRequest),
   ListNodesRequest,
+  GameStartRequest(PacketGameStartRequest),
 }
 
 #[derive(Debug, Serialize)]
@@ -50,6 +52,8 @@ pub enum OutgoingMessage {
   GameSelectNode(PacketGameSelectNode),
   GamePlayerPingMapUpdate(PacketGamePlayerPingMapUpdate),
   GamePlayerPingMapSnapshot(PacketGamePlayerPingMapSnapshot),
+  GameStartReject(PacketGameStartReject),
+  GameStartAccept(PacketGameStartAccept),
 }
 
 impl FromStr for IncomingMessage {

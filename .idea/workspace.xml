@@ -7,6 +7,10 @@
     <expand>
       <path>
         <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
         <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
       </path>
     </expand>
@@ -14,6 +18,7 @@
       <path>
         <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
         <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="BRANCH:develop" type="e8cecc67:BranchNodeDescriptor" />
       </path>
     </select>
   </component>
@@ -47,54 +52,43 @@
     <cargoProject FILE="$PROJECT_DIR$/binaries/flo-map-checksum-import/Cargo.toml" />
     <cargoProject FILE="$PROJECT_DIR$/binaries/flo-cli/Cargo.toml" />
     <cargoProject FILE="$PROJECT_DIR$/binaries/flo-node-service/Cargo.toml" />
+    <cargoProject FILE="$PROJECT_DIR$/crates/flo-event/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e045edb2-199b-4ce4-bbaa-801debc8ab31" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/mod.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/stream.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/handler.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/mod.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/stream.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/migrations/2020-08-15-121500_node_disabled/down.sql" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/migrations/2020-08-15-121500_node_disabled/up.sql" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/event/Cargo.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/event/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/flo.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/flo.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo-lobby-service/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo-lobby-service/src/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/binaries/flo/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/binaries/flo/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/event.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/stream.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/stream.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/handler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/handler.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/message.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/message.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/stream.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/stream.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/binaries/flo/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/net/lobby.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/net/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/net/node/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/node/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/net/node/ping.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/node/ping.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/state/game.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/state/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/state/net.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/state/platform.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/platform.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/handler.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/message.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/lobby/ws/message.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/mod.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/binaries/flo/src/ws/stream.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/constants/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/constants/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/binaries/flo/src/node/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/node/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/poc_host.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/replay.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lan/src/bin/replay2.rs" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/connect/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/connect/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/connect/state.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/connect/state.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/db.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/game/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/game/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/conn.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/conn.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/db.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/db.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/node/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/node/types.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lobby/src/schema.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/schema.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lobby/src/state/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lobby/src/state/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/net/src/connect/packets.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/connect/packets.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/net/src/packet/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/packet/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/net/src/proto/connect.proto" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/proto/connect.proto" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/net/src/proto/node.proto" beforeDir="false" afterPath="$PROJECT_DIR$/crates/net/src/proto/node.proto" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/node/src/echo.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/node/src/echo.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/node/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/node/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/node/src/net/controller.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/node/src/net/controller.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/node/src/protocol/codec.rs" beforeDir="false" afterPath="$PROJECT_DIR$/binaries/flo/src/event.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/node/src/protocol/mod.rs" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/node/src/session/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/node/src/session/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/node/src/session/types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/node/src/session/types.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -612,7 +606,14 @@
       <option name="project" value="LOCAL" />
       <updated>1597405090676</updated>
     </task>
-    <option name="localTasksCounter" value="46" />
+    <task id="LOCAL-00046" summary="refactor: event senders">
+      <created>1597602977582</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1597602977582</updated>
+    </task>
+    <option name="localTasksCounter" value="47" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -648,7 +649,24 @@
         </entry>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="CUSTOM_BOOLEAN_PROPERTIES">
+                <map>
+                  <entry key="Show.Git.Branches" value="true" />
+                </map>
+              </option>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="develop" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
           </value>
         </entry>
       </map>
@@ -657,7 +675,6 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
-    <MESSAGE value="feat: lobby impl WIP" />
     <MESSAGE value="feat: implementing FloLobby service" />
     <MESSAGE value="feat: add missing files" />
     <MESSAGE value="feat: lobby service" />
@@ -682,7 +699,8 @@
     <MESSAGE value="feat: metric collect" />
     <MESSAGE value="feat: node protocol" />
     <MESSAGE value="feat: lobby node conn wip" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: lobby node conn wip" />
+    <MESSAGE value="refactor: event senders" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor: event senders" />
   </component>
   <component name="WindowStateProjectService">
     <state x="724" y="276" key="#Inspections" timestamp="1593760914337">
@@ -715,11 +733,11 @@
     </state>
     <state x="978" y="468" key="#com.intellij.fileTypes.FileTypeChooser/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595444913251" />
     <state x="838" y="399" key="#com.intellij.fileTypes.FileTypeChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596330837396" />
-    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser" timestamp="1597596081490">
+    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser" timestamp="1597637385764">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="1054" y="367" key="#com.intellij.ide.util.MemberChooser/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1595508491051" />
-    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597596081490" />
+    <state x="903" y="313" key="#com.intellij.ide.util.MemberChooser/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597637385764" />
     <state x="908" y="390" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1596112337440">
       <screen x="0" y="0" width="2560" height="1400" />
     </state>
@@ -738,34 +756,50 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="878" y="352" key="FileChooserDialogImpl/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597033176828" />
-    <state width="2151" height="268" key="GridCell.Tab.0.bottom" timestamp="1597599618790">
+    <state width="2151" height="270" key="GridCell.Tab.0.bottom" timestamp="1597648081588">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1258" height="511" key="GridCell.Tab.0.bottom/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.bottom/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510860" />
-    <state width="2151" height="268" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597599618790" />
+    <state width="2151" height="270" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597648081588" />
     <state width="2151" height="424" key="GridCell.Tab.0.bottom/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="268" key="GridCell.Tab.0.center" timestamp="1597599618790">
+    <state width="2151" height="270" key="GridCell.Tab.0.center" timestamp="1597648081588">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1258" height="511" key="GridCell.Tab.0.center/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.center/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="268" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597599618790" />
+    <state width="2151" height="270" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597648081588" />
     <state width="2151" height="424" key="GridCell.Tab.0.center/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="268" key="GridCell.Tab.0.left" timestamp="1597599618790">
+    <state width="2151" height="270" key="GridCell.Tab.0.left" timestamp="1597648081588">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1258" height="511" key="GridCell.Tab.0.left/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496637" />
     <state width="1845" height="290" key="GridCell.Tab.0.left/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510858" />
-    <state width="2151" height="268" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597599618790" />
+    <state width="2151" height="270" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597648081588" />
     <state width="2151" height="424" key="GridCell.Tab.0.left/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
-    <state width="2151" height="268" key="GridCell.Tab.0.right" timestamp="1597599618790">
+    <state width="2151" height="270" key="GridCell.Tab.0.right" timestamp="1597648081588">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="1258" height="511" key="GridCell.Tab.0.right/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202496638" />
     <state width="1845" height="290" key="GridCell.Tab.0.right/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593211510859" />
-    <state width="2151" height="268" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597599618790" />
+    <state width="2151" height="270" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597648081588" />
     <state width="2151" height="424" key="GridCell.Tab.0.right/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593445106508" />
+    <state width="2151" height="409" key="GridCell.Tab.1.bottom" timestamp="1597641467224">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="2151" height="409" key="GridCell.Tab.1.bottom/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597641467224" />
+    <state width="2151" height="409" key="GridCell.Tab.1.center" timestamp="1597641467224">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="2151" height="409" key="GridCell.Tab.1.center/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597641467224" />
+    <state width="2151" height="409" key="GridCell.Tab.1.left" timestamp="1597641467224">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="2151" height="409" key="GridCell.Tab.1.left/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597641467224" />
+    <state width="2151" height="409" key="GridCell.Tab.1.right" timestamp="1597641467224">
+      <screen x="0" y="0" width="2194" height="1194" />
+    </state>
+    <state width="2151" height="409" key="GridCell.Tab.1.right/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597641467224" />
     <state x="946" y="318" key="RollbackChangesDialog" timestamp="1594214894599">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
@@ -780,10 +814,10 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state width="498" height="446" key="SwitcherDM/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1593920003585" />
-    <state x="690" y="330" key="Vcs.Push.Dialog.v2" timestamp="1597405107437">
+    <state x="690" y="330" key="Vcs.Push.Dialog.v2" timestamp="1597603019158">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
-    <state x="690" y="330" key="Vcs.Push.Dialog.v2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597405107437" />
+    <state x="690" y="330" key="Vcs.Push.Dialog.v2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597603019158" />
     <state x="4186" y="20" width="1994" height="994" key="com.intellij.history.integration.ui.views.DirectoryHistoryDialog" timestamp="1597169756989">
       <screen x="3840" y="0" width="2194" height="1194" />
     </state>
@@ -805,21 +839,21 @@
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="570" y="320" width="1804" height="884" key="dock-window-2/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597575135091" />
-    <state x="751" y="182" width="696" height="831" key="find.popup" timestamp="1597539204325">
+    <state x="1223" y="167" width="696" height="831" key="find.popup" timestamp="1597625720612">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="1533" y="141" width="813" height="975" key="find.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202178437" />
     <state x="676" y="184" width="598" height="735" key="find.popup/1920.23.1920.1057/34.23.1886.1057@34.23.1886.1057" timestamp="1593209314658" />
-    <state x="751" y="182" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597539204325" />
+    <state x="1223" y="167" width="696" height="831" key="find.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597625720612" />
     <state x="882" y="310" key="git4idea.branch.GitSmartOperationDialog" timestamp="1596516714253">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="882" y="310" key="git4idea.branch.GitSmartOperationDialog/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1596516714253" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1597599618500">
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup" timestamp="1597647960557">
       <screen x="0" y="0" width="2194" height="1194" />
     </state>
     <state x="880" y="329" width="785" height="794" key="run.anything.popup/0.0.2560.1400/3840.0.2560.1400@0.0.2560.1400" timestamp="1596202552491" />
-    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597599618500" />
+    <state x="754" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@0.0.2194.1194" timestamp="1597647960557" />
     <state x="4594" y="281" width="672" height="677" key="run.anything.popup/3840.0.2194.1194/0.0.2194.1194@3840.0.2194.1194" timestamp="1593444445589" />
     <state x="760" y="264" width="672" height="678" key="search.everywhere.popup" timestamp="1597590682428">
       <screen x="0" y="0" width="2194" height="1194" />

@@ -14,6 +14,7 @@ members = [
   "crates/w3replay",
   "crates/connect",
   "crates/constants",
+  "crates/event",
 
   "crates/lobby",
   "crates/node",

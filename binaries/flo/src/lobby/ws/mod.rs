@@ -7,7 +7,7 @@ use http::{Request, Response};
 use parking_lot::RwLock;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
@@ -84,16 +84,6 @@ impl Ws {
       state,
     })
   }
-
-  /// Send a websocket message
-  /// messages will be discarded if client is not connected
-  pub async fn send_or_discard(&self, msg: OutgoingMessage) {
-    self.sender.clone().send(msg).await.ok();
-  }
-
-  pub fn disconnect_current<T: ToString>(&self, reason: message::DisconnectReason, message: T) {
-    self.state.disconnect_current(reason, message)
-  }
 }
 
 #[derive(Debug)]
@@ -152,31 +142,24 @@ impl State {
         }
       };
       {
-        self.disconnect_current(
-          message::DisconnectReason::Multi,
-          "Another browser window took up the connection.",
+        let current = std::mem::replace(
+          &mut self.handler.write() as &mut Option<_>,
+          Some(WsHandlerRef::new(
+            self.platform.clone(),
+            self.event_sender.clone(),
+            WsStream::new(stream),
+          )),
         );
-        *self.handler.write() = Some(WsHandlerRef::new(
-          self.platform.clone(),
-          self.event_sender.clone(),
-          WsStream::new(stream),
-        ));
-      }
-    }
-  }
 
-  pub fn disconnect_current<T: ToString>(&self, reason: message::DisconnectReason, message: T) {
-    let handler = self.handler.write().take();
-    if let Some(handler) = handler {
-      let message = message.to_string();
-      tokio::spawn(async move {
-        handler
-          .send_or_discard(message::OutgoingMessage::Disconnect(message::Disconnect {
-            reason,
-            message,
-          }))
-          .await;
-      });
+        if let Some(current) = current {
+          current
+            .send_or_discard(OutgoingMessage::Disconnect(message::Disconnect {
+              reason: message::DisconnectReason::Multi,
+              message: "Another browser window took up the connection.".to_string(),
+            }))
+            .await;
+        }
+      }
     }
   }
 }
@@ -219,6 +202,7 @@ pub enum WsEvent {
 #[derive(Debug)]
 pub struct ConnectLobbyEvent {
   pub token: String,
+  pub sender: Sender<OutgoingMessage>,
 }
 
 impl From<tokio::sync::mpsc::error::SendError<WsEvent>> for Error {

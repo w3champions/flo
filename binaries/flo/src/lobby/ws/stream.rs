@@ -1,9 +1,8 @@
-use async_tungstenite::tungstenite::{error::Error as WsError, Message as WsMessage};
+use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::WebSocketStream;
 use futures::{SinkExt, StreamExt};
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 
 use super::message::{IncomingMessage, OutgoingMessage};
 use crate::error::Result;
@@ -37,7 +36,7 @@ impl WsStream {
         None => break None,
       };
 
-      let msg = match msg {
+      match msg {
         WsMessage::Text(text) => match serde_json::from_str::<IncomingMessage>(&text) {
           Ok(msg) => break Some(msg),
           Err(err) => {

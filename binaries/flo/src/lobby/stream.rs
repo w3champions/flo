@@ -6,17 +6,16 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
+use flo_event::*;
 pub use flo_net::connect::*;
 use flo_net::packet::*;
 use flo_net::stream::FloStream;
 
 use super::ws::{message, WsMessageSender};
 use crate::error::*;
-use crate::event::*;
 use crate::lobby::ws::message::OutgoingMessage;
 use crate::node::NodeRegistryRef;
 
-pub type LobbyStreamSender = Sender<Frame>;
 pub type LobbyStreamEventSender = EventSender<LobbyStreamEvent>;
 
 #[derive(Debug)]
@@ -34,29 +33,32 @@ impl Drop for LobbyStream {
 
 impl LobbyStream {
   pub fn new(
+    id: u64,
     domain: &str,
-    mut event_sender: LobbyStreamEventSender,
+    mut ws_sender: WsMessageSender,
+    event_sender: LobbyStreamEventSender,
     nodes_reg: NodeRegistryRef,
     token: String,
   ) -> Self {
     let current_game_id = Arc::new(RwLock::new(None));
-    let (frame_sender, mut frame_receiver) = channel(5);
+    let (frame_sender, frame_receiver) = channel(5);
     let dropper = Arc::new(Notify::new());
 
     tokio::spawn(
       {
-        let frame_sender = frame_sender.clone();
         let current_game_id = current_game_id.clone();
         let domain = domain.to_string();
         let mut event_sender = event_sender.clone();
         let dropper = dropper.clone();
         async move {
           let serve = Self::connect_and_serve(
+            id,
             &domain,
             event_sender.clone(),
             nodes_reg,
             frame_receiver,
             current_game_id,
+            ws_sender.clone(),
             token,
           );
 
@@ -70,6 +72,17 @@ impl LobbyStream {
           };
 
           if let Err(err) = result {
+            ws_sender
+              .send(OutgoingMessage::ConnectRejected(
+                message::ErrorMessage::new(match &err {
+                  Error::ConnectionRequestRejected(reason) => {
+                    format!("server rejected: {:?}", reason)
+                  }
+                  other => other.to_string(),
+                }),
+              ))
+              .await
+              .ok();
             event_sender
               .send_or_log_as_error(LobbyStreamEvent::ConnectionErrorEvent(err))
               .await;
@@ -89,11 +102,13 @@ impl LobbyStream {
   }
 
   async fn connect_and_serve(
+    id: u64,
     domain: &str,
     mut event_sender: LobbyStreamEventSender,
     nodes_reg: NodeRegistryRef,
     mut frame_receiver: Receiver<Frame>,
     current_game_id: Arc<RwLock<Option<i32>>>,
+    mut ws_sender: WsMessageSender,
     token: String,
   ) -> Result<()> {
     let addr = format!("{}:{}", domain, flo_constants::LOBBY_SOCKET_PORT);
@@ -127,9 +142,12 @@ impl LobbyStream {
 
     *current_game_id.write() = session.game_id.clone();
 
-    event_sender.send(LobbyStreamEvent::ConnectedEvent).await?;
     event_sender
-      .send(LobbyStreamEvent::WsMessage({
+      .send(LobbyStreamEvent::ConnectedEvent)
+      .await
+      .map_err(|_| Error::TaskCancelled)?;
+    ws_sender
+      .send({
         let mut list = message::NodeList {
           nodes: Vec::with_capacity(nodes.len()),
         };
@@ -143,12 +161,10 @@ impl LobbyStream {
           })
         }
         message::OutgoingMessage::ListNodes(list)
-      }))
+      })
       .await?;
-    event_sender
-      .send(LobbyStreamEvent::WsMessage(
-        message::OutgoingMessage::PlayerSession(session),
-      ))
+    ws_sender
+      .send(message::OutgoingMessage::PlayerSession(session))
       .await?;
 
     loop {
@@ -183,43 +199,32 @@ impl LobbyStream {
                 }
               }
 
-              match Self::dispatch(&mut event_sender, &nodes_reg, current_game_id.clone(), frame).await {
+              match Self::dispatch(&mut event_sender, &mut ws_sender, &nodes_reg, current_game_id.clone(), frame).await {
                 Ok(_) => {},
                 Err(e) => {
                   tracing::debug!("exiting: dispatch: {}", e);
-                  let r =  event_sender.send(LobbyStreamEvent::WsMessage(message::OutgoingMessage::Disconnect(message::Disconnect {
-                    reason: DisconnectReason::Unknown,
-                    message: format!("dispatch: {}", e)
-                  }))).await;
-                  match r {
-                    Ok(_) => {},
-                    Err(e) => {
-                      tracing::debug!("exiting: send disconnect: {}", e);
-                    }
-                  }
                   break;
                 }
               }
             },
             Err(e) => {
               tracing::debug!("exiting: recv: {}", e);
-              match event_sender.send(LobbyStreamEvent::WsMessage(message::OutgoingMessage::Disconnect(message::Disconnect {
-                reason: DisconnectReason::Unknown,
-                message: format!("recv: {}", e),
-              }))).await {
-                Ok(_) => {},
-                Err(e) => {
-                  tracing::debug!("exiting: send disconnect: {}", e);
-                }
-              }
               break;
             }
           }
         }
       }
     }
+
+    ws_sender
+      .send(OutgoingMessage::Disconnect(message::Disconnect {
+        reason: message::DisconnectReason::Unknown,
+        message: "Server connection closed".to_string(),
+      }))
+      .await
+      .ok();
     event_sender
-      .send(LobbyStreamEvent::DisconnectedEvent)
+      .send(LobbyStreamEvent::DisconnectedEvent(id))
       .await
       .ok();
     tracing::debug!("exiting");
@@ -238,12 +243,11 @@ impl LobbyStream {
   // forward server packets to the websocket connection
   async fn dispatch(
     event_sender: &mut LobbyStreamEventSender,
+    ws_sender: &mut WsMessageSender,
     nodes: &NodeRegistryRef,
     current_game_id: Arc<RwLock<Option<i32>>>,
     frame: Frame,
   ) -> Result<()> {
-    use message::OutgoingMessage;
-
     let msg = flo_net::try_flo_packet! {
       frame => {
         p = PacketLobbyDisconnect => {
@@ -259,6 +263,12 @@ impl LobbyStream {
           }))?;
 
           let game: GameInfo = p.game.extract()?;
+
+          event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameinfoUpdateEvent {
+            game_id: game.id,
+            map_path: game.map.clone().extract()?.path,
+          })).await;
+
           OutgoingMessage::CurrentGameInfo(game)
         }
         p = PacketGamePlayerEnter => {
@@ -303,10 +313,16 @@ impl LobbyStream {
         p = PacketGamePlayerPingMapSnapshot => {
           OutgoingMessage::GamePlayerPingMapSnapshot(p)
         }
+        p = PacketGameStartReject => {
+          OutgoingMessage::GameStartReject(p)
+        }
+        p = PacketGameStartAccept => {
+          OutgoingMessage::GameStartAccept(p)
+        }
       }
     };
 
-    event_sender.send(LobbyStreamEvent::WsMessage(msg)).await?;
+    ws_sender.send(msg).await?;
     Ok(())
   }
 }
@@ -367,9 +383,15 @@ pub enum RejectReason {
 #[derive(Debug)]
 pub enum LobbyStreamEvent {
   ConnectedEvent,
-  WsMessage(OutgoingMessage),
   ConnectionErrorEvent(Error),
-  DisconnectedEvent,
+  GameInfoUpdateEvent(GameinfoUpdateEvent),
+  DisconnectedEvent(u64),
+}
+
+#[derive(Debug)]
+pub struct GameinfoUpdateEvent {
+  pub game_id: i32,
+  pub map_path: String,
 }
 
 impl FloEvent for LobbyStreamEvent {

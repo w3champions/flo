@@ -53,7 +53,7 @@ impl GameSession {
   pub fn new(game: proto::Game) -> Result<Self> {
     Ok(GameSession {
       game_id: game.id,
-      status: GameStatus::Waiting,
+      status: GameStatus::Created,
       slots: S2ProtoUnpack::unpack(game.slots)?,
       created_at: SystemTime::now(),
     })
@@ -118,9 +118,10 @@ pub struct GamePlayer {
   pub name: String,
 }
 
-#[derive(Debug, Copy, Clone, S2ProtoEnum)]
+#[derive(Debug, Copy, Clone, S2ProtoEnum, PartialEq)]
 #[s2_grpc(proto_enum_type(flo_net::proto::flo_node::GameStatus))]
 pub enum GameStatus {
+  Created,
   Waiting,
   Running,
   Ended,

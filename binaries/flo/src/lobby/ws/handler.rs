@@ -1,16 +1,12 @@
-use async_tungstenite::tungstenite::Message as WsMessage;
-
-use futures::TryStreamExt;
-use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
-use flo_net::packet::{FloPacket, Frame};
+use flo_net::packet::FloPacket;
 use flo_net::proto::flo_connect::{
   PacketGamePlayerPingMapSnapshotRequest, PacketGameSelectNodeRequest, PacketGameSlotUpdateRequest,
-  PacketListNodesRequest,
+  PacketGameStartRequest, PacketListNodesRequest,
 };
 
 use super::message::{
@@ -85,6 +81,10 @@ async fn serve_stream(
   loop {
     tokio::select! {
       _ = dropper.notified() => {
+        ws_receiver.close();
+        while let Some(msg) = ws_receiver.try_recv().ok() {
+          stream.send(msg).await?;
+        }
         stream.flush().await;
         break;
       }
@@ -92,6 +92,7 @@ async fn serve_stream(
         if let Some(msg) = msg {
           stream.send(msg).await?;
         } else {
+          tracing::debug!("ws sender dropped");
           break;
         }
       }
@@ -103,6 +104,7 @@ async fn serve_stream(
         let msg = if let Some(msg) = next {
           msg
         } else {
+          tracing::debug!("stream closed");
           break;
         };
 
@@ -131,7 +133,9 @@ impl ServeState {
         self.handle_reload_client_info(reply_sender.clone()).await?;
       }
       IncomingMessage::Connect(connect) => {
-        self.handle_connect(connect.token).await?;
+        self
+          .handle_connect(reply_sender.clone(), connect.token)
+          .await?;
       }
       IncomingMessage::ListMaps => {
         self.handle_map_list(reply_sender.clone()).await?;
@@ -153,6 +157,9 @@ impl ServeState {
       IncomingMessage::GamePlayerPingMapSnapshotRequest(req) => {
         self.handle_player_ping_map_snapshot_request(req).await?;
       }
+      IncomingMessage::GameStartRequest(req) => {
+        self.handle_game_start_request(req).await?;
+      }
     }
     Ok(())
   }
@@ -164,11 +171,14 @@ impl ServeState {
     })
   }
 
-  async fn handle_connect(&self, token: String) -> Result<()> {
+  async fn handle_connect(&self, sender: Sender<OutgoingMessage>, token: String) -> Result<()> {
     self
       .event_sender
       .clone()
-      .send(WsEvent::ConnectLobbyEvent(ConnectLobbyEvent { token }))
+      .send(WsEvent::ConnectLobbyEvent(ConnectLobbyEvent {
+        sender,
+        token,
+      }))
       .await?;
     Ok(())
   }
@@ -290,6 +300,15 @@ impl ServeState {
     &self,
     req: PacketGamePlayerPingMapSnapshotRequest,
   ) -> Result<()> {
+    self
+      .event_sender
+      .clone()
+      .send(WsEvent::LobbyFrameEvent(req.encode_as_frame()?))
+      .await?;
+    Ok(())
+  }
+
+  async fn handle_game_start_request(&self, req: PacketGameStartRequest) -> Result<()> {
     self
       .event_sender
       .clone()

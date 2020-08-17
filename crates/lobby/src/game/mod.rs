@@ -260,8 +260,9 @@ pub async fn select_game_node(
   Ok(())
 }
 
+#[tracing::instrument(skip(state))]
 pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> Result<()> {
-  let mut game_guard = state
+  let game_guard = state
     .mem
     .lock_game_state(game_id)
     .await
@@ -282,12 +283,52 @@ pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     return Err(Error::GameNodeNotSelected);
   };
 
-  let node_conn = state
-    .nodes
-    .get_conn(node_id)
-    .ok_or_else(|| Error::NodeNotFound)?;
+  let node_conn = state.nodes.get_conn(node_id)?;
 
-  let created = node_conn.create_game(&game).await?;
+  let created = match node_conn.create_game(&game).await {
+    Ok(created) => created,
+    // failed, reply host player
+    Err(err) => {
+      if let Some(mut sender) = state.mem.get_player_sender(player_id) {
+        let pkt = match err {
+          Error::GameCreateTimeout => proto::flo_connect::PacketGameStartReject {
+            game_id,
+            message: format!("Create game timeout."),
+            ..Default::default()
+          },
+          Error::GameCreateReject(reason) => {
+            use proto::flo_node::ControllerCreateGameRejectReason;
+            proto::flo_connect::PacketGameStartReject {
+              game_id,
+              message: match reason {
+                ControllerCreateGameRejectReason::Unknown => {
+                  format!("Create game request rejected.")
+                }
+                ControllerCreateGameRejectReason::GameExists => format!("Game already started."),
+                ControllerCreateGameRejectReason::PlayerBusy => {
+                  format!("Create game request rejected: Player busy.")
+                }
+                ControllerCreateGameRejectReason::Maintenance => {
+                  format!("Create game request rejected: Server Maintenance.")
+                }
+              },
+              ..Default::default()
+            }
+          }
+          err => {
+            tracing::error!("node create game: {}", err);
+            proto::flo_connect::PacketGameStartReject {
+              game_id,
+              message: format!("Internal error."),
+              ..Default::default()
+            }
+          }
+        };
+        sender.send(pkt).await.ok();
+      }
+      return Ok(());
+    }
+  };
 
   let players = game_guard.players().to_vec();
   drop(game_guard);

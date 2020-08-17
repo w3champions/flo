@@ -93,9 +93,10 @@ message Game {
 }
 
 enum GameStatus {
-  GameStatusWaiting = 0;
-  GameStatusRunning = 1;
-  GameStatusEnded = 2;
+  GameStatusCreated = 0;
+  GameStatusWaiting = 1;
+  GameStatusRunning = 2;
+  GameStatusEnded = 3;
 }
 
 message GameSettings {

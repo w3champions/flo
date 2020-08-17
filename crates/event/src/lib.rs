@@ -1,12 +1,9 @@
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::Sender;
-
-use crate::error::*;
 
 pub trait FloEvent: Send {
   const NAME: &'static str;
@@ -37,6 +34,7 @@ impl<T> Clone for EventSender<T> {
 }
 
 impl<T> EventSender<T> {
+  #[inline]
   fn new(inner: Sender<T>) -> Self {
     Self {
       inner,
@@ -44,15 +42,22 @@ impl<T> EventSender<T> {
     }
   }
 
-  pub async fn send(&mut self, event: T) -> Result<()> {
-    self
-      .inner
-      .send(event)
-      .await
-      .map_err(|_| Error::TaskCancelled)?;
+  #[inline]
+  pub async fn send(&mut self, event: T) -> Result<(), EventSendError<T>> {
+    let result = self.inner.send(event).await;
+
+    if let Err(err) = result {
+      let event = match TrySendError::from(err) {
+        TrySendError::Closed(event) => event,
+        TrySendError::Full(event) => event,
+      };
+      return Err(EventSendError::new(event));
+    }
+
     Ok(())
   }
 
+  #[inline]
   pub fn close(&self) {
     self.closed.store(true, Ordering::SeqCst)
   }
@@ -62,6 +67,7 @@ impl<T> EventSenderExt<T> for EventSender<T>
 where
   T: FloEvent,
 {
+  #[inline]
   fn send_or_log_as_error(&mut self, event: T) -> BoxFuture<()> {
     if self.closed.load(Ordering::SeqCst) {
       if let Some(description) = event.description() {
@@ -91,11 +97,21 @@ where
       .boxed()
   }
 
+  #[inline]
   fn send_or_discard(&mut self, event: T) -> BoxFuture<()> {
     if self.closed.load(Ordering::SeqCst) {
+      tracing::debug!("{} discard: closed", T::NAME);
       return async {}.boxed();
     }
-    self.inner.send(event).map(|_result| ()).boxed()
+    self
+      .inner
+      .send(event)
+      .map(|result| {
+        if let Err(_) = result {
+          tracing::debug!("{} discard: receiver dropped", T::NAME);
+        }
+      })
+      .boxed()
   }
 }
 
@@ -109,6 +125,7 @@ impl<T> EventSenderExt<T> for Sender<T>
 where
   T: FloEvent,
 {
+  #[inline]
   fn send_or_log_as_error(&mut self, event: T) -> BoxFuture<()> {
     self
       .send(event)
@@ -129,7 +146,25 @@ where
       .boxed()
   }
 
+  #[inline]
   fn send_or_discard(&mut self, event: T) -> BoxFuture<()> {
     self.send(event).map(|_result| ()).boxed()
+  }
+}
+
+#[derive(Debug)]
+pub struct EventSendError<T> {
+  inner: T,
+}
+
+impl<T> EventSendError<T> {
+  #[inline]
+  fn new(inner: T) -> Self {
+    EventSendError { inner }
+  }
+
+  #[inline]
+  pub fn into_inner(self) -> T {
+    self.inner
   }
 }

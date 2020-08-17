@@ -63,7 +63,6 @@ impl PlayerSenderRef {
       async move {
         loop {
           state.flush_notify.notified().await;
-          tracing::debug!("worker activated");
 
           let frames = { state.buf.lock().take_frames() };
 

@@ -668,6 +668,7 @@ dependencies = [
  "dotenv",
  "flo-config",
  "flo-constants",
+ "flo-event",
  "flo-log",
  "flo-net",
  "flo-platform",
@@ -737,6 +738,15 @@ name = "flo-constants"
 version = "0.1.0"
 
 [[package]]
+name = "flo-event"
+version = "0.1.0"
+dependencies = [
+ "futures 0.3.5",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "flo-grpc"
 version = "0.1.0"
 dependencies = [
@@ -787,6 +797,7 @@ dependencies = [
  "diesel",
  "dotenv",
  "flo-constants",
+ "flo-event",
  "flo-grpc",
  "flo-net",
  "flo-w3gs",

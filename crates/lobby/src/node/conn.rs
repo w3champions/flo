@@ -1,4 +1,3 @@
-use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use futures::future::{abortable, AbortHandle};
 use futures::FutureExt;
 use parking_lot::RwLock;
@@ -6,13 +5,14 @@ use s2_grpc_utils::S2ProtoUnpack;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::sync::Notify;
 use tokio::time::delay_for;
 use tracing_futures::Instrument;
 
+use flo_event::*;
 use flo_net::packet::*;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
@@ -25,17 +25,32 @@ pub type HandlerSender = Sender<Frame>;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
-pub struct NodeConnRef {
+pub struct NodeConn {
   state: Arc<NodeConnState>,
 }
 
-impl NodeConnRef {
-  pub fn new(addr: &str, secret: &str) -> Result<Self> {
+impl Drop for NodeConn {
+  fn drop(&mut self) {
+    self.state.event_sender.close();
+    self.state.dropper.notify();
+  }
+}
+
+impl NodeConn {
+  pub fn new(
+    id: i32,
+    addr: &str,
+    secret: &str,
+    event_sender: EventSender<NodeConnEvent>,
+    delay: Option<Duration>,
+  ) -> Result<Self> {
     let (sender, receiver) = channel(1);
 
     let (ip, port) = parse_addr(addr)?;
 
     let state = Arc::new(NodeConnState {
+      id,
+      event_sender: event_sender.clone(),
       sender,
       secret: secret.to_string(),
       status: RwLock::new(NodeConnStatus::Connecting),
@@ -46,33 +61,24 @@ impl NodeConnRef {
     tokio::spawn(
       {
         let state = state.clone();
-        let addr = addr.to_string();
+        let mut event_sender = event_sender.clone();
         async move {
-          let worker = backoff::future::retry_notify(
-            backoff::ExponentialBackoff {
-              multiplier: 2_f64,
-              ..backoff::ExponentialBackoff::default()
-            },
-            {
-              let state = state.clone();
-              move || Self::worker(state.clone(), ip, port)
-            },
-            {
-              let state = state.clone();
-              move |e, d| {
-                tracing::error!("node conn: {}", e);
-                tracing::debug!("retry after: {:?}", d);
-                *state.status.write() = NodeConnStatus::Reconnecting;
+          if let Some(delay) = delay {
+            tokio::select! {
+              _ = state.dropper.notified() => {
+                return;
               }
-            },
-          );
-          tokio::select! {
-            r = worker => {
-              tracing::error!("worker returned unexpectedly: {:?}", r);
-            },
-            _ = state.dropper.notified() => {
-              tracing::debug!("dropped");
+              _ = delay_for(delay) => {}
             }
+          }
+
+          if let Err(err) = Self::worker(state.clone(), ip, port, receiver).await {
+            event_sender
+              .send_or_log_as_error(NodeConnEvent::new(
+                id,
+                NodeConnEventData::WorkerErrorEvent(err),
+              ))
+              .await;
           }
           tracing::debug!("exiting");
         }
@@ -88,6 +94,10 @@ impl NodeConnRef {
 
     if self.state.creating_games.read().contains_key(&game_id) {
       return Err(Error::GameCreating);
+    }
+
+    if *self.state.status.read() != NodeConnStatus::Connected {
+      return Err(Error::NodeNotReady);
     }
 
     let (tx, rx) = oneshot::channel();
@@ -132,6 +142,7 @@ impl NodeConnRef {
         state.reply_create_game(game_id, Err(Error::GameCreateTimeout))
       }
     });
+    tokio::spawn(timeout);
 
     let pending = CreatingGame {
       sender: Some(tx),
@@ -144,10 +155,10 @@ impl NodeConnRef {
       let mut sender = self.state.sender.clone();
       async move {
         tokio::time::timeout(REQUEST_TIMEOUT, async move {
-          sender
-            .send(pkt.encode_as_frame()?)
-            .await
-            .map_err(|_| Error::TaskCancelled)?;
+          sender.send(pkt.encode_as_frame()?).await.map_err(|_| {
+            tracing::error!("node frame receiver dropped");
+            Error::TaskCancelled
+          })?;
           Ok::<_, Error>(())
         })
         .await??;
@@ -163,7 +174,10 @@ impl NodeConnRef {
       })
     });
 
-    let res = rx.await.map_err(|_| Error::TaskCancelled)??;
+    let res = rx.await.map_err(|_| {
+      tracing::error!("node pending game dropped");
+      Error::TaskCancelled
+    })??;
     Ok(res)
   }
 
@@ -171,62 +185,85 @@ impl NodeConnRef {
     state: Arc<NodeConnState>,
     ip: Ipv4Addr,
     port: u16,
-  ) -> Result<(), backoff::Error<Error>> {
-    fn map_net_err(e: flo_net::error::Error) -> backoff::Error<Error> {
-      backoff::Error::Transient(Error::from(e))
-    }
-
+    mut receiver: Receiver<Frame>,
+  ) -> Result<()> {
     let addr = SocketAddrV4::new(ip, port);
-    let mut stream = FloStream::connect(addr).await.map_err(map_net_err)?;
+    let mut stream = FloStream::connect(addr).await?;
 
     stream
       .send(PacketControllerConnect {
         lobby_version: Some(crate::version::FLO_LOBBY_VERSION.into()),
         secret: state.secret.clone(),
       })
-      .await
-      .map_err(map_net_err)?;
+      .await?;
 
-    let res = stream.recv_frame().await.map_err(map_net_err)?;
+    let res = stream.recv_frame().await?;
 
-    (flo_net::select_flo_packet! {
+    flo_net::try_flo_packet! {
       res => {
         packet = PacketControllerConnectAccept => {
           tracing::debug!("node connected: version = {:?}", packet.version);
         }
         packet = PacketControllerConnectReject => {
-          return Err(
-            backoff::Error::Permanent(
-              Error::NodeConnectionRejected {
-                addr,
-                reason: packet.reason(),
-              }
-            )
-          )
-        }
-        packet = PacketControllerCreateGameAccept => {
-          let game_id = packet.game_id;
-          state.reply_create_game(
-            game_id,
-            CreatedGameInfo::unpack(packet).map_err(Into::into),
-          )
-        }
-        packet = PacketControllerCreateGameReject => {
-          let game_id = packet.game_id;
-          state.reply_create_game(
-            game_id,
-            Err(Error::GameCreateReject(packet.reason())),
-          )
+          return Err(Error::NodeConnectionRejected {
+            addr,
+            reason: packet.reason(),
+          })
         }
       }
-    })
-    .map_err(map_net_err)?;
+    };
 
     *state.status.write() = NodeConnStatus::Connected;
+    state
+      .event_sender
+      .clone()
+      .send_or_discard(NodeConnEvent::new(
+        state.id,
+        NodeConnEventData::ConnectedEvent,
+      ))
+      .await;
 
     loop {
-      delay_for(Duration::from_secs(100)).await;
+      tokio::select! {
+        _ = state.dropper.notified() => {
+          break;
+        }
+        frame = receiver.recv() => {
+          let frame = if let Some(frame) = frame {
+            frame
+          } else {
+            break;
+          };
+          if let Err(err) = stream.send_frame(frame).await {
+            tracing::error!("send: {}", err);
+            break;
+          }
+        }
+        res = stream.recv_frame() => {
+          match res {
+            Ok(frame) => {
+              if let Err(err) = state.handle_frame(frame).await {
+                tracing::error!("handle frame: {}", err);
+              }
+            },
+            Err(err) => {
+              tracing::error!("recv: {}", err);
+              break;
+            },
+          }
+        }
+      }
     }
+
+    state
+      .event_sender
+      .clone()
+      .send_or_discard(NodeConnEvent::new(
+        state.id,
+        NodeConnEventData::DisconnectedEvent,
+      ))
+      .await;
+    tracing::debug!("exiting");
 
     Ok(())
   }
@@ -269,6 +306,8 @@ impl Drop for CreatingGame {
 
 #[derive(Debug)]
 struct NodeConnState {
+  id: i32,
+  event_sender: EventSender<NodeConnEvent>,
   sender: Sender<Frame>,
   secret: String,
   status: RwLock<NodeConnStatus>,
@@ -277,6 +316,28 @@ struct NodeConnState {
 }
 
 impl NodeConnState {
+  async fn handle_frame(&self, frame: Frame) -> Result<()> {
+    flo_net::try_flo_packet! {
+      frame => {
+        packet = PacketControllerCreateGameAccept => {
+          let game_id = packet.game_id;
+          self.reply_create_game(
+            game_id,
+            CreatedGameInfo::unpack(packet).map_err(Into::into),
+          )
+        }
+        packet = PacketControllerCreateGameReject => {
+          let game_id = packet.game_id;
+          self.reply_create_game(
+            game_id,
+            Err(Error::GameCreateReject(packet.reason())),
+          )
+        }
+      }
+    }
+    Ok(())
+  }
+
   fn reply_create_game(&self, game_id: i32, result: Result<CreatedGameInfo>) {
     let sender = self
       .creating_games
@@ -295,7 +356,6 @@ impl NodeConnState {
 enum NodeConnStatus {
   Connecting,
   Connected,
-  Reconnecting,
 }
 
 fn parse_addr(addr: &str) -> Result<(Ipv4Addr, u16)> {
@@ -317,4 +377,27 @@ fn parse_addr(addr: &str) -> Result<(Ipv4Addr, u16)> {
     (addr, port)
   };
   Ok((ip, port))
+}
+
+#[derive(Debug)]
+pub struct NodeConnEvent {
+  pub node_id: i32,
+  pub data: NodeConnEventData,
+}
+
+impl NodeConnEvent {
+  fn new(node_id: i32, data: NodeConnEventData) -> Self {
+    Self { node_id, data }
+  }
+}
+
+#[derive(Debug)]
+pub enum NodeConnEventData {
+  ConnectedEvent,
+  DisconnectedEvent,
+  WorkerErrorEvent(Error),
+}
+
+impl FloEvent for NodeConnEvent {
+  const NAME: &'static str = "NodeConnEvent";
 }

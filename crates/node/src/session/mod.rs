@@ -12,7 +12,7 @@ use flo_net::packet::{FloPacket, Frame, OptionalFieldExt};
 use flo_net::proto::flo_node::{
   ClientConnectRejectReason, ControllerCreateGameRejectReason, Game, PacketClientConnect,
   PacketClientConnectAccept, PacketClientConnectReject, PacketControllerConnectReject,
-  PacketControllerCreateGame, PacketControllerCreateGameAccept,
+  PacketControllerCreateGame, PacketControllerCreateGameAccept, PacketControllerCreateGameReject,
 };
 
 use crate::error::*;
@@ -66,7 +66,20 @@ impl SessionStore {
 
     let mut g_guard = self.games.lock();
 
-    g_guard.pre_check(game_id)?;
+    if let Err(err) = g_guard.pre_check(game_id) {
+      let reason = match err {
+        Error::GameExists => ControllerCreateGameRejectReason::GameExists,
+        Error::PlayerBusy(_) => ControllerCreateGameRejectReason::PlayerBusy,
+        err => return Err(err),
+      };
+      return Ok(
+        PacketControllerCreateGameReject {
+          game_id,
+          reason: reason.into(),
+        }
+        .encode_as_frame()?,
+      );
+    }
 
     let pending: Vec<(PlayerToken, PendingPlayer)> = {
       let players: Vec<_> = game
@@ -206,8 +219,10 @@ impl<'a> GameRegistryGuard<'a> {
   fn pre_check(&mut self, game_id: i32) -> Result<()> {
     use std::collections::hash_map::Entry;
 
-    if self.guard.contains_key(&game_id) {
-      return Err(Error::GameExists);
+    if let Some(game) = self.guard.get(&game_id) {
+      if game.read().status != GameStatus::Created {
+        return Err(Error::GameExists);
+      }
     }
 
     Ok(())
@@ -216,10 +231,12 @@ impl<'a> GameRegistryGuard<'a> {
   // for controller
   fn register(&mut self, game: Game) -> Result<()> {
     let game_id = game.id;
+
     let session = Arc::new(RwLock::new(GameSession::new(game)?));
 
-    self.guard.insert(game_id, session);
-    metrics::GAME_SESSIONS.inc();
+    if self.guard.insert(game_id, session).is_none() {
+      metrics::GAME_SESSIONS.inc();
+    }
 
     Ok(())
   }

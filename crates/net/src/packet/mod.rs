@@ -51,35 +51,6 @@ impl Frame {
   }
 }
 
-#[macro_export]
-macro_rules! select_flo_packet {
-  (
-    $frame:expr => {
-      $(
-        $binding:ident = $packet_type:ty => $block:block
-      )*
-    }
-  ) => {
-    match $frame.type_id {
-      $(
-        <$packet_type as $crate::packet::FloPacket>::TYPE_ID => {
-          match <$packet_type as $crate::packet::Message>::decode(
-            $frame.payload
-          ) {
-            Ok($binding) => {
-              Ok($block)
-            },
-            Err(e) => Err($crate::error::Error::from(e)),
-          }
-        }
-      ),*
-      other => {
-        Err($crate::error::Error::unexpected_packet_type_id(other).into())
-      },
-    }
-  };
-}
-
 /// Decodes packet by type id
 /// If no branch matches, returns Err(...)
 ///

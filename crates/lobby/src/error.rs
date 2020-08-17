@@ -8,6 +8,8 @@ pub enum Error {
   TaskCancelled,
   #[error("node not found")]
   NodeNotFound,
+  #[error("node not ready")]
+  NodeNotReady,
   #[error("node rejected connection: {addr:?}: {reason:?}")]
   NodeConnectionRejected {
     addr: std::net::SocketAddrV4,
