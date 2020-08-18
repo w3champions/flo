@@ -217,8 +217,6 @@ struct GameRegistryGuard<'a> {
 impl<'a> GameRegistryGuard<'a> {
   // for controller
   fn pre_check(&mut self, game_id: i32) -> Result<()> {
-    use std::collections::hash_map::Entry;
-
     if let Some(game) = self.guard.get(&game_id) {
       if game.read().status != GameStatus::Created {
         return Err(Error::GameExists);

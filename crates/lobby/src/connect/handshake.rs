@@ -2,8 +2,8 @@ use flo_net::connect::*;
 use flo_net::packet::*;
 use flo_net::stream::FloStream;
 
-use crate::connect::state::ConnectState;
 use crate::error::*;
+use crate::game::Game;
 use crate::player::token::validate_player_token;
 
 pub async fn handle_handshake(stream: &mut FloStream) -> Result<ConnectState> {
@@ -19,4 +19,10 @@ pub async fn handle_handshake(stream: &mut FloStream) -> Result<ConnectState> {
     player_id: token.player_id,
     joined_game: None,
   })
+}
+
+#[derive(Debug)]
+pub struct ConnectState {
+  pub player_id: i32,
+  pub joined_game: Option<Game>,
 }

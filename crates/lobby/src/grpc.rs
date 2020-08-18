@@ -140,10 +140,16 @@ impl FloLobby for FloLobbyService {
       let update = player_state.get_session_update();
       if let Some(mut sender) = player_state.get_sender_cloned() {
         let next_game = game.clone().into_packet();
-        sender.with_buf(|buf| {
-          buf.update_session(update);
-          buf.set_game(next_game);
-        });
+        sender.send(update).await.ok();
+        sender
+          .send({
+            use flo_net::proto::flo_connect::*;
+            PacketGameInfo {
+              game: next_game.into(),
+            }
+          })
+          .await
+          .ok();
       }
       game
     };
@@ -268,14 +274,20 @@ impl FloLobby for FloLobbyService {
       player_state.leave_game();
       let update = player_state.get_session_update();
       player_state.get_sender_cloned().map(|mut sender| {
-        sender.with_buf(move |buf| {
-          buf.update_session(update);
-          buf.add_player_leave(
-            game_id,
-            *player,
-            flo_connect::PlayerLeaveReason::GameCancelled,
-          )
-        })
+        tokio::spawn(async move {
+          sender.send(update).await.ok();
+          sender
+            .send({
+              use flo_net::proto::flo_connect::*;
+              PacketGamePlayerLeave {
+                game_id,
+                player_id: sender.player_id(),
+                reason: flo_connect::PlayerLeaveReason::GameCancelled.into(),
+              }
+            })
+            .await
+            .ok();
+        });
       });
     }
     state.close();

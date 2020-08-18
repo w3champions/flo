@@ -1,10 +1,14 @@
+mod config;
+mod event;
+
 use bs_diesel_utils::{Executor, ExecutorRef};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc::channel;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
-use crate::connect::PlayerSenderRef;
+use crate::connect::{PlayerBroadcaster, PlayerSender};
 use crate::error::Result;
 use crate::game::{
   db::{get_all_active_game_state, GameStateFromDb},
@@ -12,12 +16,13 @@ use crate::game::{
 };
 use crate::node::{NodeRef, NodeRegistry, NodeRegistryRef};
 
-mod config;
 pub use config::ConfigClientStorageRef;
 use config::ConfigStorage;
+use event::{spawn_event_handler, FloEventContext, FloLobbyEventSender};
 
 #[derive(Clone)]
 pub struct LobbyStateRef {
+  event_sender: FloLobbyEventSender,
   pub db: ExecutorRef,
   pub mem: MemStorageRef,
   pub config: ConfigClientStorageRef,
@@ -26,6 +31,8 @@ pub struct LobbyStateRef {
 
 impl LobbyStateRef {
   pub async fn init() -> Result<Self> {
+    let (event_sender, event_receiver) = channel(16);
+
     let db = Executor::env().into_ref();
 
     let (mem, config, nodes) = tokio::try_join!(
@@ -34,9 +41,14 @@ impl LobbyStateRef {
       NodeRegistry::init(db.clone())
     )?;
 
+    let mem = mem.into_ref();
+
+    spawn_event_handler(FloEventContext { mem: mem.clone() }, event_receiver);
+
     Ok(LobbyStateRef {
+      event_sender,
       db,
-      mem: mem.into_ref(),
+      mem,
       config: config.into_ref(),
       nodes: nodes.into_ref(),
     })
@@ -109,7 +121,7 @@ struct MemStorageState {
   game_players: HashMap<i32, Vec<i32>>,
   game_selected_node: HashMap<i32, i32>,
   players: HashMap<i32, Arc<Mutex<MemGamePlayerState>>>,
-  player_senders: Arc<RwLock<HashMap<i32, PlayerSenderRef>>>,
+  player_senders: Arc<RwLock<HashMap<i32, PlayerSender>>>,
 }
 
 impl MemStorageState {
@@ -233,23 +245,23 @@ impl MemStorageRef {
     }
   }
 
-  pub fn get_player_sender(&self, id: i32) -> Option<PlayerSenderRef> {
+  pub fn get_player_sender(&self, id: i32) -> Option<PlayerSender> {
     self.state.read().player_senders.read().get(&id).cloned()
   }
 
-  pub fn get_player_senders(&self, ids: &[i32]) -> HashMap<i32, PlayerSenderRef> {
+  pub fn get_broadcaster(&self, ids: &[i32]) -> PlayerBroadcaster {
     if ids.is_empty() {
-      return HashMap::default();
+      return PlayerBroadcaster::empty();
     }
     let map = self.state.read().player_senders.clone();
-    let mut found = HashMap::with_capacity(ids.len());
+    let mut found = Vec::with_capacity(ids.len());
     let guard = map.read();
     for id in ids {
       if let Some(sender) = guard.get(id).cloned() {
-        found.insert(*id, sender);
+        found.push(sender);
       }
     }
-    found
+    PlayerBroadcaster::new(found)
   }
 
   pub fn get_game_player_ids(&self, game_id: i32) -> Vec<i32> {
@@ -312,7 +324,7 @@ impl MemStorageRef {
 pub struct LockedPlayerState {
   id: i32,
   guard: OwnedMutexGuard<MemGamePlayerState>,
-  sender_map: Arc<RwLock<HashMap<i32, PlayerSenderRef>>>,
+  sender_map: Arc<RwLock<HashMap<i32, PlayerSender>>>,
 }
 
 impl LockedPlayerState {
@@ -333,7 +345,7 @@ impl LockedPlayerState {
   }
 
   #[tracing::instrument(skip(self, sender))]
-  pub fn replace_sender(&mut self, sender: PlayerSenderRef) {
+  pub fn replace_sender(&mut self, sender: PlayerSender) {
     if let Some(mut sender) = self.sender_map.write().remove(&self.id) {
       tracing::debug!("sender replaced");
       tokio::spawn(async move {
@@ -343,24 +355,24 @@ impl LockedPlayerState {
     self.sender_map.write().insert(self.id, sender);
   }
 
-  pub fn remove_sender(&mut self, sender: PlayerSenderRef) {
+  pub fn remove_sender(&mut self, sid: u64) {
     let mut sender_map = self.sender_map.write();
     if sender_map
       .get(&self.id)
-      .map(|s| s.ptr_eq(&sender))
+      .map(|s| s.sid() == sid)
       .unwrap_or_default()
     {
       sender_map.remove(&self.id);
     }
   }
 
-  pub fn get_sender_cloned(&self) -> Option<PlayerSenderRef> {
+  pub fn get_sender_cloned(&self) -> Option<PlayerSender> {
     self.sender_map.read().get(&self.id).cloned()
   }
 
   pub fn with_sender<F, R>(&self, f: F) -> Option<R>
   where
-    F: FnOnce(&mut PlayerSenderRef) -> R,
+    F: FnOnce(&mut PlayerSender) -> R,
   {
     let mut sender = self.get_sender_cloned()?;
     Some(f(&mut sender))

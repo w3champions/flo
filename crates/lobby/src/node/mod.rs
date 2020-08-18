@@ -9,16 +9,14 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Notify;
-use tokio::time::delay_for;
 
 use crate::error::*;
 use crate::node::NodeConnConfig;
 
 use backoff::backoff::Backoff;
 use conn::{NodeConn, NodeConnEvent, NodeConnEventData};
-use flo_event::EventSender;
 use tracing_futures::Instrument;
 
 #[derive(Debug)]

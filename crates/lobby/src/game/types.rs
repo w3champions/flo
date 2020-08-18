@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use flo_net::proto::flo_connect as packet;
 
 use crate::map::Map;
-use crate::node::{NodeRef, PlayerToken};
+use crate::node::NodeRef;
 use crate::player::PlayerRef;
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]

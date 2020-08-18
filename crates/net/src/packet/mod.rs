@@ -29,7 +29,7 @@ pub(crate) struct Header {
   pub payload_len: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
   pub type_id: PacketTypeId,
   pub payload: Bytes,

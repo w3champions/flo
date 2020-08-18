@@ -1,4 +1,5 @@
 use crate::error::Result;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::UdpSocket;
 
 const ECHO_DATAGRAM_LEN: usize = 4;
@@ -6,7 +7,8 @@ const ECHO_DATAGRAM_LEN: usize = 4;
 use flo_constants::NODE_ECHO_PORT;
 
 pub async fn serve_echo() -> Result<()> {
-  let mut socket = UdpSocket::bind(("0.0.0.0", NODE_ECHO_PORT)).await?;
+  let mut socket =
+    UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, NODE_ECHO_PORT)).await?;
 
   let mut recv_buf = [0_u8; ECHO_DATAGRAM_LEN];
 

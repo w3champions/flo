@@ -19,10 +19,9 @@ use crate::error::*;
 use crate::state::{LobbyStateRef, LockedPlayerState};
 
 mod handshake;
-mod send_buf;
-mod state;
+mod sender;
 use crate::game::SlotSettings;
-pub use state::{Message as PlayerSenderMessage, PlayerReceiver, PlayerSenderRef};
+pub use sender::{PlayerBroadcaster, PlayerReceiver, PlayerSender};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
@@ -31,8 +30,11 @@ pub async fn serve(state: LobbyStateRef) -> Result<()> {
   let mut listener = FloListener::bind_v4(crate::constants::LOBBY_SOCKET_PORT).await?;
   tracing::info!("listening on port {}", listener.port());
 
+  let mut sid_counter = 0_u64;
   while let Some(mut stream) = listener.incoming().try_next().await? {
+    sid_counter = sid_counter.overflowing_add(1).0;
     let state = state.clone();
+    let sid = sid_counter;
     tokio::spawn(async move {
       tracing::debug!("connected: {}", stream.peer_addr()?);
 
@@ -47,29 +49,24 @@ pub async fn serve(state: LobbyStateRef) -> Result<()> {
       let player_id = accepted.player_id;
       tracing::debug!("accepted: player_id = {}", player_id);
 
-      let (sender, receiver) = {
-        let (sender, r) = PlayerSenderRef::new(player_id);
+      let receiver = {
+        let (sender, r) = PlayerSender::new(sid, player_id);
         let mut player_state = state.mem.lock_player_state(player_id).await;
-        player_state.replace_sender(sender.clone());
-        (sender, r)
+        player_state.replace_sender(sender);
+        r
       };
 
-      if let Err(err) = handle_stream(state.clone(), player_id, stream, receiver).await {
+      if let Err(err) = handle_stream(state.clone(), sid, player_id, stream, receiver).await {
         tracing::debug!("stream error: {}", err);
       }
 
-      state
-        .mem
-        .lock_player_state(player_id)
-        .await
-        .remove_sender(sender);
-
+      state.emit_player_stream_closed(sid, player_id).await;
       tracing::debug!("exiting: player_id = {}", player_id);
       Ok::<_, crate::error::Error>(())
     });
   }
 
-  tracing::info!("shutting down");
+  tracing::info!("exiting");
 
   Ok(())
 }
@@ -77,6 +74,7 @@ pub async fn serve(state: LobbyStateRef) -> Result<()> {
 #[tracing::instrument(target = "player_stream", skip(state, stream))]
 async fn handle_stream(
   state: LobbyStateRef,
+  sid: u64,
   player_id: i32,
   mut stream: FloStream,
   mut receiver: PlayerReceiver,
@@ -109,19 +107,8 @@ async fn handle_stream(
           break;
       }
       outgoing = receiver.recv() => {
-        if let Some(msg) = outgoing {
-          if let Err(e) = match msg {
-            PlayerSenderMessage::Frame(frame) => {
-              stream.send_frame(frame).await
-            }
-            PlayerSenderMessage::Frames(frames) => {
-              stream.send_frames(frames).await
-            }
-            PlayerSenderMessage::Broken => {
-              tracing::debug!("sender broken");
-              break;
-            }
-          } {
+        if let Some(frame) = outgoing {
+          if let Err(e) = stream.send_frame(frame).await {
             tracing::debug!("send error: {}", e);
             break;
           }
@@ -263,7 +250,7 @@ async fn handle_list_nodes_request(state: LobbyStateRef, player_id: i32) -> Resu
     let packet = proto::flo_connect::PacketListNodes {
       nodes: nodes.pack()?,
     };
-    sender.with_buf(move |buf| buf.list_nodes(packet));
+    sender.send(packet).await.ok();
   }
   Ok(())
 }
@@ -292,12 +279,16 @@ async fn handle_game_player_ping_map_update_request(
 
       player_ids.retain(|id| *id != player_id);
       if player_ids.len() > 0 {
-        let mut senders = state.mem.get_player_senders(&player_ids);
-        for sender in senders.values_mut() {
-          sender.with_buf(|buf| {
-            buf.add_ping_update(game_id, player_id, packet.ping_map.clone());
-          });
-        }
+        state
+          .mem
+          .get_broadcaster(&player_ids)
+          .broadcast(proto::flo_connect::PacketGamePlayerPingMapUpdate {
+            game_id,
+            player_id,
+            ping_map: packet.ping_map,
+          })
+          .await
+          .ok();
       }
     }
   }
