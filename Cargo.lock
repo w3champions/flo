@@ -668,6 +668,7 @@ dependencies = [
  "flo-config",
  "flo-constants",
  "flo-event",
+ "flo-lan",
  "flo-log",
  "flo-net",
  "flo-platform",

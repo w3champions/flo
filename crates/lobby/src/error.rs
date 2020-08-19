@@ -35,6 +35,8 @@ pub enum Error {
   GameDataInvalid,
   #[error("the game you are trying to join is full")]
   GameFull,
+  #[error("game is busy")]
+  GameBusy,
   #[error("create game request already exists")]
   GameCreating,
   #[error("create game request timeout")]

@@ -327,7 +327,7 @@ pub fn get_full_and_node_player_token(
   conn: &DbConn,
   id: i32,
   player_id: i32,
-) -> Result<(Game, Option<PlayerToken>)> {
+) -> Result<(Game, Option<[u8; 16]>)> {
   let mut row: Row = game::table
     .find(id)
     .first(conn)
@@ -336,7 +336,7 @@ pub fn get_full_and_node_player_token(
   let meta: Meta = serde_json::from_value(row.meta.clone())?;
   let slots: Vec<Slot> = serde_json::from_value(row.slots.clone())?;
   let player_token = if let Some(value) = std::mem::replace(&mut row.player_tokens, None) {
-    let mut map: HashMap<i32, PlayerToken> = serde_json::from_value(value)?;
+    let mut map: HashMap<i32, [u8; 16]> = serde_json::from_value(value)?;
     map.remove(&player_id)
   } else {
     None
@@ -363,6 +363,7 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
       GameStatus::Created,
       GameStatus::Running,
     ]))
+    .order(dsl::created_at)
     .select((dsl::id, dsl::node, dsl::slots, dsl::created_by))
     .load(conn)?;
   let mut games = Vec::with_capacity(rows.len());
@@ -442,17 +443,26 @@ fn end_game(conn: &DbConn, id: i32) -> Result<()> {
   Ok(())
 }
 
-pub fn update_created(
-  conn: &DbConn,
-  id: i32,
-  player_tokens: HashMap<i32, PlayerToken>,
-) -> Result<()> {
+pub fn update_created(conn: &DbConn, id: i32, player_tokens: HashMap<i32, [u8; 16]>) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
     .filter(dsl::status.ne(GameStatus::Preparing))
     .set((
       dsl::status.eq(GameStatus::Created),
       dsl::player_tokens.eq(serde_json::to_value(player_tokens)?),
+    ))
+    .execute(conn)?;
+  Ok(())
+}
+
+/// Created -> Preparing
+pub fn update_reset_created(conn: &DbConn, id: i32) -> Result<()> {
+  use game::dsl;
+  diesel::update(game::table.find(id))
+    .filter(dsl::status.ne(GameStatus::Created))
+    .set((
+      dsl::status.eq(GameStatus::Preparing),
+      dsl::player_tokens.eq(Option::<Value>::None),
     ))
     .execute(conn)?;
   Ok(())

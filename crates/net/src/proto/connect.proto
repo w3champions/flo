@@ -121,12 +121,7 @@ message PacketGameStartAccept {
 message PacketGameStartReject {
   int32 game_id = 1;
   string message = 2;
-  repeated GameStartRejectedPlayer rejected_players = 3;
-}
-
-message GameStartRejectedPlayer {
-  int32 player_id = 1;
-  GameStartRejectReason reason = 2;
+  map<int32, PacketGameStartPlayerClientInfoRequest> player_client_info_map = 3;
 }
 
 message PacketGameStartPlayerClientInfoRequest {

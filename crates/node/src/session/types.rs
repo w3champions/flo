@@ -9,7 +9,7 @@ use flo_net::packet::OptionalFieldExt;
 use flo_net::proto::flo_node as proto;
 
 use crate::error::*;
-use crate::net::PlayerSender;
+use crate::player::PlayerSender;
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub struct PlayerToken([u8; 16]);

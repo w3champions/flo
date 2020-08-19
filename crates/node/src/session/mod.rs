@@ -103,7 +103,10 @@ impl SessionStore {
 
     let player_tokens: Vec<_> = pending
       .iter()
-      .map(|(token, _)| flo_net::proto::flo_node::PlayerToken { id: token.to_vec() })
+      .map(|(token, player)| flo_net::proto::flo_node::PlayerToken {
+        player_id: player.player_id,
+        token: token.to_vec(),
+      })
       .collect();
 
     let stale_pending_players = self.pending_players.register(pending);

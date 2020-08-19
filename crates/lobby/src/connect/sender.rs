@@ -1,5 +1,6 @@
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
+use std::collections::HashMap;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use flo_net::packet::*;
@@ -112,5 +113,63 @@ impl PlayerBroadcaster {
       }
     }
     Ok(())
+  }
+
+  pub async fn broadcast_by<F, T>(self, f: F) -> Result<()>
+  where
+    F: BroadcastByFn<T>,
+    T: FloPacket,
+  {
+    if self.senders.is_empty() {
+      return Ok(());
+    }
+
+    let mut frame_map = HashMap::with_capacity(self.senders.len());
+    for sender in &self.senders {
+      let player_id = sender.player_id;
+      let pkt = f.call(player_id);
+      if let Some(pkt) = pkt {
+        frame_map.insert(player_id, pkt.encode_as_frame()?);
+      }
+    }
+
+    let futures: FuturesUnordered<_> = self
+      .senders
+      .into_iter()
+      .filter_map(|mut sender| {
+        frame_map.remove(&sender.player_id).map(|frame| async move {
+          let player_id = sender.player_id;
+          sender
+            .send_frame(frame)
+            .map(move |res| (player_id, res))
+            .await
+        })
+      })
+      .collect();
+    let results: Vec<_> = futures.collect().await;
+    for (player_id, res) in results {
+      if let Err(_) = res {
+        tracing::debug!(player_id, "frame discarded");
+      }
+    }
+    Ok(())
+  }
+
+  pub fn into_inner(self) -> Vec<PlayerSender> {
+    self.senders
+  }
+}
+
+pub trait BroadcastByFn<T> {
+  fn call(&self, player_id: i32) -> Option<T>;
+}
+
+impl<F, R, T> BroadcastByFn<T> for F
+where
+  F: Fn(i32) -> R,
+  R: Into<Option<T>>,
+{
+  fn call(&self, player_id: i32) -> Option<T> {
+    (*self)(player_id).into()
   }
 }

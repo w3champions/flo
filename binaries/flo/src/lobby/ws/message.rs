@@ -54,6 +54,7 @@ pub enum OutgoingMessage {
   GamePlayerPingMapSnapshot(PacketGamePlayerPingMapSnapshot),
   GameStartReject(PacketGameStartReject),
   GameStartAccept(PacketGameStartAccept),
+  GameStarted,
 }
 
 impl FromStr for IncomingMessage {

@@ -1,16 +1,21 @@
 pub mod db;
 mod slots;
+pub mod start;
 pub mod token;
 mod types;
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use s2_grpc_utils::S2ProtoPack;
+use std::collections::HashMap;
 
 use flo_net::proto;
 
+use crate::db::ExecutorRef;
 use crate::error::*;
 use crate::game::db::{LeaveGameParams, UpdateGameSlotSettingsParams};
-use crate::state::LobbyStateRef;
+use crate::node::NodeRegistryRef;
+use crate::state::event::FloEventContext;
+use crate::state::{LobbyStateRef, LockedGameState, MemStorageRef};
 pub use slots::Slots;
 pub use types::*;
 
@@ -30,6 +35,11 @@ pub async fn join_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> Re
       .lock_game_state(params.game_id)
       .await
       .ok_or_else(|| Error::GameNotFound)?;
+
+    if game_guard.is_sealed() {
+      return Err(Error::GameBusy);
+    }
+
     let game = state
       .db
       .exec(move |conn| {
@@ -108,6 +118,10 @@ pub async fn leave_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     .lock_game_state(player_state_game_id)
     .await
     .ok_or_else(|| Error::GameNotFound)?;
+
+  if game_guard.is_sealed() {
+    return Err(Error::GameBusy);
+  }
 
   let leave = state
     .db
@@ -281,17 +295,93 @@ pub async fn select_game_node(
 
 #[tracing::instrument(skip(state))]
 pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> Result<()> {
-  let game_guard = state
+  let mut game_guard = state
     .mem
     .lock_game_state(game_id)
     .await
     .ok_or_else(|| Error::GameNotFound)?;
+
+  if game_guard.is_sealed() {
+    return Err(Error::GameBusy);
+  }
 
   if game_guard.get_host_player() != Some(player_id) {
     return Err(Error::PlayerNotHost.into());
   }
 
   let game = state
+    .db
+    .exec(move |conn| crate::game::db::get(conn, game_id))
+    .await?;
+
+  if game.node.is_none() {
+    return Err(Error::GameNodeNotSelected);
+  };
+
+  if game_guard.start() {
+    game_guard
+      .get_broadcaster()
+      .broadcast(proto::flo_connect::PacketGameStartAccept { game_id })
+      .await
+      .ok();
+  }
+
+  Ok(())
+}
+
+pub async fn start_game_proceed(
+  ctx: &FloEventContext,
+  game_id: i32,
+  map: HashMap<i32, proto::flo_connect::PacketGameStartPlayerClientInfoRequest>,
+) -> Result<()> {
+  let mut game_guard = ctx
+    .mem
+    .lock_game_state(game_id)
+    .await
+    .ok_or_else(|| Error::GameNotFound)?;
+
+  let mut pass = true;
+
+  {
+    let mut version: Option<&str> = None;
+    let mut sha1: Option<&[u8]> = None;
+    for req in map.values() {
+      if version.get_or_insert(&req.war3_version) != &req.war3_version {
+        pass = false;
+        break;
+      }
+      if sha1.get_or_insert(&req.map_sha1).as_ref() != &req.map_sha1 as &[u8] {
+        pass = false;
+        break;
+      }
+    }
+  }
+
+  if !pass {
+    game_guard.start_game_reset();
+    game_guard
+      .get_broadcaster()
+      .broadcast(proto::flo_connect::PacketGameStartReject {
+        game_id,
+        message: "Unable to start the game because the game and map version check failed."
+          .to_string(),
+        player_client_info_map: map,
+      })
+      .await
+      .ok();
+    return Ok(());
+  }
+
+  create_node_game(&ctx, game_guard).await?;
+  Ok(())
+}
+
+pub async fn create_node_game(
+  ctx: &FloEventContext,
+  mut game_guard: LockedGameState,
+) -> Result<()> {
+  let game_id = game_guard.id();
+  let game = ctx
     .db
     .exec(move |conn| crate::game::db::get_full(conn, game_id))
     .await?;
@@ -302,13 +392,16 @@ pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     return Err(Error::GameNodeNotSelected);
   };
 
-  let node_conn = state.nodes.get_conn(node_id)?;
+  let node_conn = ctx.nodes.get_conn(node_id)?;
 
   let created = match node_conn.create_game(&game).await {
     Ok(created) => created,
     // failed, reply host player
     Err(err) => {
-      if let Some(mut sender) = state.mem.get_player_sender(player_id) {
+      if let Some(mut sender) = game_guard
+        .get_host_player()
+        .and_then(|player_id| ctx.mem.get_player_sender(player_id))
+      {
         let pkt = match err {
           Error::GameCreateTimeout => proto::flo_connect::PacketGameStartReject {
             game_id,
@@ -348,14 +441,78 @@ pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
       return Ok(());
     }
   };
+  game_guard.start_complete(&created);
 
-  let players = game_guard.players().to_vec();
-  drop(game_guard);
+  let token_map: HashMap<i32, [u8; 16]> = created
+    .player_tokens
+    .into_iter()
+    .map(|token| (token.player_id, token.bytes))
+    .collect();
 
-  // let mut senders = state.mem.get_player_senders(&players);
-  // for sender in senders.values_mut() {
-  //   sender.with_buf(|buf| buf.set_node_update(game_id, node_id))
-  // }
+  game_guard
+    .get_broadcaster()
+    .broadcast_by::<_, proto::flo_connect::PacketGamePlayerToken>(|player_id| {
+      if let Some(token) = token_map.get(&player_id) {
+        Some(proto::flo_connect::PacketGamePlayerToken {
+          game_id,
+          player_token: token.to_vec(),
+        })
+      } else {
+        tracing::error!(game_id, player_id, "player token was not found");
+        None
+      }
+    })
+    .await
+    .ok();
 
+  ctx
+    .db
+    .exec(move |conn| crate::game::db::update_created(conn, game_id, token_map))
+    .await?;
+
+  Ok(())
+}
+
+pub async fn start_game_set_timeout(ctx: &FloEventContext, game_id: i32) -> Result<()> {
+  let mut game_guard = ctx
+    .mem
+    .lock_game_state(game_id)
+    .await
+    .ok_or_else(|| Error::GameNotFound)?;
+  let state = game_guard.start_game_reset();
+  game_guard
+    .get_broadcaster()
+    .broadcast(proto::flo_connect::PacketGameStartReject {
+      game_id,
+      message: "Unable to start the game because of wait players' response timeout.".to_string(),
+      player_client_info_map: state.and_then(|state| state.get_map()).unwrap_or_default(),
+    })
+    .await
+    .ok();
+  Ok(())
+}
+
+pub async fn start_game_abort(ctx: &FloEventContext, game_id: i32) -> Result<()> {
+  let mut game_guard = ctx
+    .mem
+    .lock_game_state(game_id)
+    .await
+    .ok_or_else(|| Error::GameNotFound)?;
+  let state = game_guard.start_game_reset();
+
+  ctx
+    .db
+    .exec(move |conn| crate::game::db::update_reset_created(conn, game_id))
+    .await?;
+
+  game_guard
+    .get_broadcaster()
+    .broadcast(proto::flo_connect::PacketGameStartReject {
+      game_id,
+      message: "Unable to start the game because of a internal error.".to_string(),
+      player_client_info_map: state.and_then(|state| state.get_map()).unwrap_or_default(),
+    })
+    .await
+    .ok();
   Ok(())
 }

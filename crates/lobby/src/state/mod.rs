@@ -1,5 +1,5 @@
 mod config;
-mod event;
+pub mod event;
 
 use bs_diesel_utils::{Executor, ExecutorRef};
 use parking_lot::RwLock;
@@ -9,12 +9,13 @@ use tokio::sync::mpsc::channel;
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
 use crate::connect::{PlayerBroadcaster, PlayerSender};
-use crate::error::Result;
+use crate::error::*;
 use crate::game::{
   db::{get_all_active_game_state, GameStateFromDb},
-  GameEntry,
+  start::StartGameState,
+  GameClientStatus, GameEntry,
 };
-use crate::node::{NodeRef, NodeRegistry, NodeRegistryRef};
+use crate::node::{conn::CreatedGameInfo, NodeRef, NodeRegistry, NodeRegistryRef};
 
 pub use config::ConfigClientStorageRef;
 use config::ConfigStorage;
@@ -36,21 +37,29 @@ impl LobbyStateRef {
     let db = Executor::env().into_ref();
 
     let (mem, config, nodes) = tokio::try_join!(
-      MemStorage::init(db.clone()),
+      MemStorage::init(db.clone(), event_sender.clone()),
       ConfigStorage::init(db.clone()),
       NodeRegistry::init(db.clone())
     )?;
 
     let mem = mem.into_ref();
+    let nodes = nodes.into_ref();
 
-    spawn_event_handler(FloEventContext { mem: mem.clone() }, event_receiver);
+    spawn_event_handler(
+      FloEventContext {
+        db: db.clone(),
+        mem: mem.clone(),
+        nodes: nodes.clone(),
+      },
+      event_receiver,
+    );
 
     Ok(LobbyStateRef {
       event_sender,
       db,
       mem,
       config: config.into_ref(),
-      nodes: nodes.into_ref(),
+      nodes,
     })
   }
 }
@@ -60,6 +69,8 @@ pub struct MemGameState {
   pub host_player: Option<i32>,
   pub players: Vec<i32>,
   pub selected_node_id: Option<i32>,
+  pub start_state: Option<StartGameState>,
+  pub player_tokens: Option<HashMap<i32, [u8; 16]>>,
 }
 
 impl MemGameState {
@@ -68,6 +79,8 @@ impl MemGameState {
       host_player,
       players: players.to_vec(),
       selected_node_id: None,
+      start_state: None,
+      player_tokens: None,
     }
   }
 }
@@ -79,6 +92,7 @@ pub struct MemGamePlayerState {
 
 #[derive(Debug)]
 pub struct MemStorage {
+  event_sender: FloLobbyEventSender,
   state: RwLock<MemStorageState>,
 }
 
@@ -94,10 +108,11 @@ impl std::ops::Deref for MemStorageRef {
 }
 
 impl MemStorage {
-  pub async fn init(db: ExecutorRef) -> Result<Self> {
+  pub async fn init(db: ExecutorRef, event_sender: FloLobbyEventSender) -> Result<Self> {
     let data = db.exec(|conn| get_all_active_game_state(conn)).await?;
 
     Ok(MemStorage {
+      event_sender,
       state: RwLock::new(MemStorageState::new(data)),
     })
   }
@@ -113,11 +128,13 @@ pub struct GamePlayerPingMapKey {
   pub player_id: i32,
 }
 pub type GamePlayerPingMap = HashMap<GamePlayerPingMapKey, u32>;
+pub type GamePlayerClientStatusMap = HashMap<i32, GameClientStatus>;
 
 #[derive(Debug)]
 struct MemStorageState {
   games: HashMap<i32, Arc<Mutex<MemGameState>>>,
   game_player_ping_maps: Arc<RwLock<HashMap<i32, GamePlayerPingMap>>>,
+  game_player_client_status_maps: Arc<RwLock<HashMap<i32, GamePlayerClientStatusMap>>>,
   game_players: HashMap<i32, Vec<i32>>,
   game_selected_node: HashMap<i32, i32>,
   players: HashMap<i32, Arc<Mutex<MemGamePlayerState>>>,
@@ -155,9 +172,8 @@ impl MemStorageState {
       games.insert(
         item.id,
         Arc::new(Mutex::new(MemGameState {
-          host_player: item.created_by,
-          players: item.players,
           selected_node_id,
+          ..MemGameState::new(item.created_by, &item.players)
         })),
       );
     }
@@ -168,6 +184,7 @@ impl MemStorageState {
       games,
       game_players,
       game_player_ping_maps: Arc::new(RwLock::new(HashMap::new())),
+      game_player_client_status_maps: Arc::new(RwLock::new(HashMap::new())),
       game_selected_node,
     }
   }
@@ -193,6 +210,7 @@ impl MemStorageRef {
     guard.game_players.remove(&id);
     guard.game_player_ping_maps.write().remove(&id);
     guard.game_selected_node.remove(&id);
+    guard.game_player_client_status_maps.write().remove(&id);
     for id in players_snapshot {
       guard.players.remove(id);
     }
@@ -318,6 +336,37 @@ impl MemStorageRef {
   pub fn get_game_selected_node(&self, game_id: i32) -> Option<i32> {
     self.state.read().game_selected_node.get(&game_id).cloned()
   }
+
+  pub fn update_game_player_client_status_maps(
+    &self,
+    maps: Vec<(i32, HashMap<i32, GameClientStatus>)>,
+  ) {
+    if maps.is_empty() {
+      return;
+    }
+    let state_maps = self.state.read().game_player_client_status_maps.clone();
+    let mut guard = state_maps.write();
+    for (game_id, map) in maps {
+      use std::collections::hash_map::Entry;
+      match guard.entry(game_id) {
+        Entry::Vacant(entry) => {
+          entry.insert(map);
+        }
+        Entry::Occupied(mut entry) => {
+          entry.get_mut().extend(map);
+        }
+      }
+    }
+  }
+
+  pub fn get_game_player_client_status_map(
+    &self,
+    game_id: i32,
+  ) -> Option<GamePlayerClientStatusMap> {
+    let map = self.state.read().game_player_client_status_maps.clone();
+    let guard = map.read();
+    guard.get(&game_id).cloned()
+  }
 }
 
 #[derive(Debug)]
@@ -392,8 +441,17 @@ impl LockedGameState {
     self.id
   }
 
+  /// Sealed means the game is starting or has started
+  pub fn is_sealed(&self) -> bool {
+    self.guard.start_state.is_some() || self.guard.player_tokens.is_some()
+  }
+
   pub fn players(&self) -> &[i32] {
     &self.guard.players
+  }
+
+  pub fn get_broadcaster(&self) -> PlayerBroadcaster {
+    self.parent.get_broadcaster(&self.players_snapshot)
   }
 
   pub fn has_player(&self, player_id: i32) -> bool {
@@ -438,5 +496,46 @@ impl LockedGameState {
     } else {
       guard.game_selected_node.remove(&self.id);
     }
+  }
+
+  pub fn start(&mut self) -> bool {
+    if self.guard.start_state.is_some() {
+      return false;
+    }
+
+    let players = self.players_snapshot.clone();
+    self.guard.start_state = Some(StartGameState::new(
+      self.parent.event_sender.clone().into(),
+      self.id,
+      players,
+    ));
+    true
+  }
+
+  pub fn start_game_reset(&mut self) -> Option<StartGameState> {
+    self.guard.start_state.take()
+  }
+
+  pub fn start_ack(
+    &mut self,
+    player_id: i32,
+    pkt: flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest,
+  ) {
+    self
+      .guard
+      .start_state
+      .as_mut()
+      .map(move |state| state.ack_player(player_id, pkt));
+  }
+
+  pub fn start_complete(&mut self, info: &CreatedGameInfo) {
+    self.guard.start_state.take();
+    self.guard.player_tokens = Some(
+      info
+        .player_tokens
+        .iter()
+        .map(|token| (token.player_id, token.bytes.clone()))
+        .collect(),
+    )
   }
 }

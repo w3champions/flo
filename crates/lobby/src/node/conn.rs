@@ -281,12 +281,15 @@ impl S2ProtoUnpack<flo_net::proto::flo_node::PlayerToken> for PlayerToken {
     value: flo_net::proto::flo_node::PlayerToken,
   ) -> Result<Self, s2_grpc_utils::result::Error> {
     let mut bytes = [0_u8; 16];
-    if value.id.len() >= 16 {
-      bytes.clone_from_slice(&value.id[0..16]);
+    if value.token.len() >= 16 {
+      bytes.clone_from_slice(&value.token[0..16]);
     } else {
-      (&mut bytes[0..(value.id.len())]).clone_from_slice(&value.id[0..(value.id.len())]);
+      (&mut bytes[0..(value.token.len())]).clone_from_slice(&value.token[0..(value.token.len())]);
     }
-    Ok(PlayerToken(bytes))
+    Ok(PlayerToken {
+      player_id: value.player_id,
+      bytes,
+    })
   }
 }
 

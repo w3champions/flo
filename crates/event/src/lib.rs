@@ -1,15 +1,20 @@
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 
-pub trait FloEvent: Send {
+pub trait FloEvent: Sized + Send {
   const NAME: &'static str;
 
   fn description(&self) -> Option<String> {
     None
+  }
+
+  fn channel(buffer: usize) -> (Sender<Self>, Receiver<Self>) {
+    channel(buffer)
   }
 }
 
@@ -149,6 +154,50 @@ where
   #[inline]
   fn send_or_discard(&mut self, event: T) -> BoxFuture<()> {
     self.send(event).map(|_result| ()).boxed()
+  }
+}
+
+#[derive(Debug)]
+pub struct EventFromSender<T, FromType> {
+  inner: Sender<T>,
+  _phantom: PhantomData<FromType>,
+}
+
+impl<T, FromType> Clone for EventFromSender<T, FromType> {
+  fn clone(&self) -> Self {
+    Self {
+      inner: self.inner.clone(),
+      _phantom: PhantomData,
+    }
+  }
+}
+
+impl<T, FromType> EventSenderExt<FromType> for EventFromSender<T, FromType>
+where
+  T: FloEvent,
+  T: From<FromType>,
+{
+  #[inline]
+  fn send_or_log_as_error(&mut self, event: FromType) -> BoxFuture<()> {
+    self.inner.send_or_log_as_error(T::from(event))
+  }
+
+  #[inline]
+  fn send_or_discard(&mut self, event: FromType) -> BoxFuture<()> {
+    self.inner.send_or_discard(T::from(event))
+  }
+}
+
+impl<T, FromType> From<Sender<T>> for EventFromSender<T, FromType>
+where
+  T: FloEvent,
+  T: From<FromType>,
+{
+  fn from(sender: Sender<T>) -> Self {
+    Self {
+      inner: sender,
+      _phantom: PhantomData,
+    }
   }
 }
 

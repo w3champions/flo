@@ -1,8 +1,11 @@
+use bs_diesel_utils::ExecutorRef;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing_futures::Instrument;
 
 use flo_event::*;
 
+use crate::game::start::{GameStartEvent, GameStartEventData};
+use crate::node::NodeRegistryRef;
 use crate::state::{LobbyStateRef, MemStorageRef};
 
 pub type FloLobbyEventSender = Sender<FloLobbyEvent>;
@@ -10,6 +13,7 @@ pub type FloLobbyEventSender = Sender<FloLobbyEvent>;
 #[derive(Debug)]
 pub enum FloLobbyEvent {
   PlayerStreamClosedEvent(PlayerStreamClosedEvent),
+  GameStartEvent(GameStartEvent),
 }
 
 #[derive(Debug)]
@@ -22,9 +26,10 @@ impl FloEvent for FloLobbyEvent {
   const NAME: &'static str = "FloLobbyEvent";
 }
 
-#[derive(Debug)]
 pub struct FloEventContext {
+  pub db: ExecutorRef,
   pub mem: MemStorageRef,
+  pub nodes: NodeRegistryRef,
 }
 
 pub fn spawn_event_handler(ctx: FloEventContext, mut receiver: Receiver<FloLobbyEvent>) {
@@ -37,6 +42,21 @@ pub fn spawn_event_handler(ctx: FloEventContext, mut receiver: Receiver<FloLobby
             let mut guard = ctx.mem.lock_player_state(player_id).await;
             guard.remove_sender(sid);
           }
+          FloLobbyEvent::GameStartEvent(GameStartEvent { game_id, data }) => match data {
+            GameStartEventData::Timeout => {
+              if let Err(err) = crate::game::start_game_set_timeout(&ctx, game_id).await {
+                tracing::error!(game_id, "start game set timeout: {}", err);
+              }
+            }
+            GameStartEventData::Done(map) => {
+              if let Err(err) = crate::game::start_game_proceed(&ctx, game_id, map).await {
+                tracing::error!(game_id, "start game proceed: {}", err);
+                if let Err(err) = crate::game::start_game_abort(&ctx, game_id).await {
+                  tracing::error!(game_id, "start game abort: {}", err);
+                }
+              }
+            }
+          },
         }
       }
       tracing::debug!("exiting");

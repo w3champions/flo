@@ -148,6 +148,7 @@ struct LobbyState {
   event_sender: LobbyEventSender,
   stream_event_sender: Sender<LobbyStreamEvent>,
   conn: RwLock<Option<LobbyConn>>,
+  current_game_info: RwLock<Option<LobbyGameInfo>>,
 }
 
 impl LobbyState {
@@ -166,6 +167,7 @@ impl LobbyState {
       event_sender,
       stream_event_sender,
       conn: RwLock::new(None),
+      current_game_info: RwLock::new(None),
     }
   }
 
@@ -230,7 +232,22 @@ impl LobbyState {
       LobbyStreamEvent::ConnectionErrorEvent(err) => {
         tracing::error!("server connection: {}", err);
       }
-      LobbyStreamEvent::GameInfoUpdateEvent(_) => {}
+      LobbyStreamEvent::GameInfoUpdateEvent(event) => {
+        *self.current_game_info.write() = event.game_info;
+      }
+      LobbyStreamEvent::GameStartEvent(event) => {
+        let game_id = event.game_id;
+        if let Err(err) = self.handle_game_start(game_id).await {
+          tracing::error!("get client info: {}", err);
+        }
+      }
+      LobbyStreamEvent::GameStartedEvent(event) => {
+        tracing::info!(
+          game_id = event.game_id,
+          "game started, token = {:?}",
+          event.player_token
+        );
+      }
     }
   }
 
@@ -280,6 +297,37 @@ impl LobbyState {
       }
     }
   }
+
+  async fn handle_game_start(self: Arc<Self>, game_id: i32) -> Result<()> {
+    let info = { self.current_game_info.read().clone() };
+    if let Some(info) = info {
+      if info.game_id == game_id {
+        let version = self
+          .platform
+          .map(|info| info.version.clone())
+          .map_err(|_| Error::War3NotLocated)?;
+        let sha1 = self
+          .platform
+          .with_storage(move |storage| -> Result<_> {
+            use flo_w3map::W3Map;
+            let (_map, checksum) = W3Map::open_storage_with_checksum(storage, &info.map_path)?;
+            Ok(checksum.sha1)
+          })
+          .await?;
+        self
+          .send_frame_or_disconnect_ws(
+            flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest {
+              game_id,
+              war3_version: version,
+              map_sha1: sha1.to_vec(),
+            }
+            .encode_as_frame()?,
+          )
+          .await;
+      }
+    }
+    Ok(())
+  }
 }
 
 #[derive(Debug)]
@@ -322,6 +370,12 @@ impl Drop for LobbyConn {
   fn drop(&mut self) {
     self.event_sender.close();
   }
+}
+
+#[derive(Debug, Clone)]
+pub struct LobbyGameInfo {
+  pub game_id: i32,
+  pub map_path: String,
 }
 
 #[derive(Debug)]

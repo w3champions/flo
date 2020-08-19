@@ -147,6 +147,9 @@ async fn handle_stream(
             packet = flo_net::proto::flo_connect::PacketGameStartRequest => {
               handle_game_start_request(state.clone(), player_id, packet).await?;
             }
+            packet = flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest => {
+              handle_game_start_player_client_info_request(state.clone(), player_id, packet).await?;
+            }
           }
         }
       }
@@ -348,5 +351,16 @@ async fn handle_game_start_request(
   packet: proto::flo_connect::PacketGameStartRequest,
 ) -> Result<()> {
   crate::game::start_game(state, packet.game_id, player_id).await?;
+  Ok(())
+}
+
+async fn handle_game_start_player_client_info_request(
+  state: LobbyStateRef,
+  player_id: i32,
+  packet: proto::flo_connect::PacketGameStartPlayerClientInfoRequest,
+) -> Result<()> {
+  if let Some(mut game) = state.mem.lock_game_state(packet.game_id).await {
+    game.start_ack(player_id, packet);
+  }
   Ok(())
 }

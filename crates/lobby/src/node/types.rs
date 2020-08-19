@@ -171,11 +171,14 @@ impl NodeRef {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct PlayerToken(pub [u8; 16]);
+pub struct PlayerToken {
+  pub player_id: i32,
+  pub bytes: [u8; 16],
+}
 
 impl PlayerToken {
   pub fn to_vec(&self) -> Vec<u8> {
-    self.0.to_vec()
+    self.bytes.to_vec()
   }
 }
 

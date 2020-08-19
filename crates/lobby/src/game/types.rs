@@ -4,6 +4,7 @@ use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
 use flo_net::proto::flo_connect as packet;
+pub use flo_net::proto::flo_node::GameClientStatus;
 
 use crate::map::Map;
 use crate::node::NodeRef;

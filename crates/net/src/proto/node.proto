@@ -39,6 +39,7 @@ message PacketControllerCreateGameReject {
 message PacketNodeGameStatusUpdate {
   int32 game_id = 1;
   GameStatus status = 2;
+  map<int32, GameClientStatus> updated_player_client_status_map = 3;
 }
 
 message PacketClientConnect {
@@ -82,7 +83,8 @@ enum ControllerCreateGameRejectReason {
 }
 
 message PlayerToken {
-  bytes id = 1;
+  int32 player_id = 1;
+  bytes token = 2;
 }
 
 message Game {

@@ -14,6 +14,7 @@ use flo_net::stream::FloStream;
 use super::ws::{message, WsMessageSender};
 use crate::error::*;
 use crate::lobby::ws::message::OutgoingMessage;
+use crate::lobby::LobbyGameInfo;
 use crate::node::NodeRegistryRef;
 
 pub type LobbyStreamEventSender = EventSender<LobbyStreamEvent>;
@@ -264,9 +265,11 @@ impl LobbyStream {
 
           let game: GameInfo = p.game.extract()?;
 
-          event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameinfoUpdateEvent {
-            game_id: game.id,
-            map_path: game.map.clone().extract()?.path,
+          event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
+            game_info: Some(LobbyGameInfo {
+              game_id: game.id,
+              map_path: game.map.clone().extract()?.path,
+            })
           })).await;
 
           OutgoingMessage::CurrentGameInfo(game)
@@ -285,6 +288,9 @@ impl LobbyStream {
             nodes.set_selected_node(None)?;
           }
           *current_game_id.write() = p.game_id.clone();
+          event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
+            game_info: None
+          })).await;
           OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
         }
         p = PacketListNodes => {
@@ -317,7 +323,17 @@ impl LobbyStream {
           OutgoingMessage::GameStartReject(p)
         }
         p = PacketGameStartAccept => {
+           event_sender.send_or_log_as_error(LobbyStreamEvent::GameStartEvent(GameStartEvent {
+            game_id: p.game_id,
+          })).await;
           OutgoingMessage::GameStartAccept(p)
+        }
+        p = PacketGamePlayerToken => {
+          event_sender.send_or_log_as_error(LobbyStreamEvent::GameStartedEvent(GameStartedEvent {
+            game_id: p.game_id,
+            player_token: p.player_token,
+          })).await;
+          OutgoingMessage::GameStarted
         }
       }
     };
@@ -384,14 +400,26 @@ pub enum RejectReason {
 pub enum LobbyStreamEvent {
   ConnectedEvent,
   ConnectionErrorEvent(Error),
-  GameInfoUpdateEvent(GameinfoUpdateEvent),
+  GameInfoUpdateEvent(GameInfoUpdateEvent),
+  GameStartEvent(GameStartEvent),
+  GameStartedEvent(GameStartedEvent),
   DisconnectedEvent(u64),
 }
 
 #[derive(Debug)]
-pub struct GameinfoUpdateEvent {
+pub struct GameInfoUpdateEvent {
+  pub game_info: Option<LobbyGameInfo>,
+}
+
+#[derive(Debug)]
+pub struct GameStartEvent {
   pub game_id: i32,
-  pub map_path: String,
+}
+
+#[derive(Debug)]
+pub struct GameStartedEvent {
+  pub game_id: i32,
+  pub player_token: Vec<u8>,
 }
 
 impl FloEvent for LobbyStreamEvent {
