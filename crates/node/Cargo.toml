@@ -22,6 +22,7 @@ lazy_static = "1.0"
 uuid = { version = "0.8.1", features = ["v4"] }
 hyper = "0.13.7"
 prometheus = "0.9.0"
+dashmap = "3.11.10"
 
 [build-dependencies]
 flo-constants = { path = "../constants" }

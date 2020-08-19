@@ -881,6 +881,7 @@ name = "flo-node"
 version = "0.1.0"
 dependencies = [
  "bytes 0.5.6",
+ "dashmap",
  "flo-constants",
  "flo-net",
  "flo-util",

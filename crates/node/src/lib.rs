@@ -1,9 +1,9 @@
+mod client;
+mod controller;
 mod echo;
 mod env;
 mod game;
 mod metrics;
-mod net;
-mod player;
 mod session;
 mod version;
 
@@ -21,13 +21,12 @@ pub struct ConnectionState {
 pub use self::echo::serve_echo;
 
 pub async fn serve_controller() -> Result<()> {
-  let mut handler = net::ControllerHandler::new();
+  let mut handler = controller::ControllerHandler::new();
 
   handler.serve().await?;
 
   Ok(())
 }
 
-pub async fn serve_client() -> Result<()> {
-  Ok(())
-}
+pub use self::client::serve_client;
+pub use self::metrics::serve_metrics;

@@ -10,6 +10,8 @@ pub enum Error {
   PlayerBusy(i32),
   #[error("invalid secret")]
   InvalidSecret,
+  #[error("invalid token")]
+  InvalidToken,
   #[error("tokio io: {0}")]
   Tokio(#[from] tokio::io::Error),
   #[error("operation timeout")]
@@ -18,6 +20,8 @@ pub enum Error {
   Net(#[from] flo_net::error::Error),
   #[error("proto: {0}")]
   Proto(#[from] s2_grpc_utils::result::Error),
+  #[error("http: {0}")]
+  Http(#[from] hyper::error::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

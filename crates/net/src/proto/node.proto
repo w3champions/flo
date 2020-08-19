@@ -53,9 +53,8 @@ message PacketClientConnectAccept {
 }
 
 message PacketClientConnectReject {
-  int32 game_id = 1;
-  int32 player_id = 2;
-  ClientConnectRejectReason reason = 3;
+  ClientConnectRejectReason reason = 1;
+  string message = 2;
 }
 
 message PacketClientPlayerStatusUpdateRequest {
@@ -69,10 +68,9 @@ message PacketClientPlayerStatusUpdate {
 
 enum ClientConnectRejectReason {
   ClientConnectRejectReasonUnknown = 0;
-  ClientConnectRejectReasonMulti = 1;
-  ClientConnectRejectReasonMaintenance = 2;
-  ClientConnectRejectReasonGameVersion = 3;
-  ClientConnectRejectReasonMapSha1 = 4;
+  ClientConnectRejectReasonInvalidToken = 1;
+  ClientConnectRejectReasonMulti = 2;
+  ClientConnectRejectReasonMaintenance = 3;
 }
 
 enum ControllerCreateGameRejectReason {

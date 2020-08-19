@@ -1,6 +1,7 @@
 mod types;
 pub use types::*;
 
+use dashmap::DashMap;
 use lazy_static::lazy_static;
 use parking_lot::RwLockWriteGuard;
 use parking_lot::{Mutex, RwLock};
@@ -21,7 +22,7 @@ use crate::metrics;
 #[derive(Debug)]
 pub struct SessionStore {
   pending_players: PendingPlayerRegistry,
-  connected_players: RwLock<HashMap<i32, ConnectedPlayer>>,
+  connected_players: DashMap<i32, ConnectedPlayer>,
   games: GameRegistry,
 }
 
@@ -37,7 +38,7 @@ impl SessionStore {
   fn new() -> Self {
     SessionStore {
       pending_players: PendingPlayerRegistry::new(),
-      connected_players: RwLock::new(HashMap::new()),
+      connected_players: DashMap::new(),
       games: GameRegistry::new(),
     }
   }
@@ -56,17 +57,34 @@ impl SessionStore {
     }
 
     {
-      let connected_players_guard = self.connected_players.read();
       for id in &player_ids {
-        if connected_players_guard.contains_key(id) {
+        if self.connected_players.contains_key(id) {
           return Err(Error::PlayerBusy(*id));
         }
       }
     }
 
-    let mut g_guard = self.games.lock();
+    let pending: Vec<(PlayerToken, PendingPlayer)> = {
+      let players: Vec<_> = game
+        .slots
+        .iter()
+        .filter_map(|s| s.player.as_ref())
+        .collect();
+      players
+        .iter()
+        .map(|p| {
+          (
+            PlayerToken::new_uuid(),
+            PendingPlayer {
+              player_id: p.player_id,
+              game_id,
+            },
+          )
+        })
+        .collect()
+    };
 
-    if let Err(err) = g_guard.pre_check(game_id) {
+    if let Err(err) = self.games.register(game) {
       let reason = match err {
         Error::GameExists => ControllerCreateGameRejectReason::GameExists,
         Error::PlayerBusy(_) => ControllerCreateGameRejectReason::PlayerBusy,
@@ -80,26 +98,6 @@ impl SessionStore {
         .encode_as_frame()?,
       );
     }
-
-    let pending: Vec<(PlayerToken, PendingPlayer)> = {
-      let players: Vec<_> = game
-        .slots
-        .iter()
-        .filter_map(|s| s.player.as_ref())
-        .collect();
-      players
-        .iter()
-        .map(|p| {
-          (
-            PlayerToken::new(),
-            PendingPlayer {
-              player_id: p.player_id,
-              game_id,
-            },
-          )
-        })
-        .collect()
-    };
 
     let player_tokens: Vec<_> = pending
       .iter()
@@ -120,8 +118,6 @@ impl SessionStore {
       }
     }
 
-    g_guard.register(game)?;
-
     metrics::GAME_SESSIONS.inc();
     metrics::PENDING_PLAYER_TOKENS.add(player_tokens.len() as i64);
 
@@ -134,108 +130,89 @@ impl SessionStore {
     )
   }
 
-  pub fn handle_client_connect() {}
+  pub fn get_pending_player(&self, token: &PlayerToken) -> Option<PendingPlayer> {
+    self.pending_players.get_by_token(token)
+  }
 }
 
 #[derive(Debug)]
 struct PendingPlayerRegistry {
-  map: Arc<RwLock<HashMap<PlayerToken, PendingPlayer>>>,
-  player_token: Mutex<HashMap<i32, PlayerToken>>,
+  map: DashMap<PlayerToken, PendingPlayer>,
+  player_token: DashMap<i32, PlayerToken>,
 }
 
 impl PendingPlayerRegistry {
   fn new() -> Self {
     PendingPlayerRegistry {
-      map: Arc::new(RwLock::new(HashMap::new())),
-      player_token: Mutex::new(HashMap::new()),
+      map: DashMap::new(),
+      player_token: DashMap::new(),
     }
   }
 
   // for controller
   fn register(&self, pairs: Vec<(PlayerToken, PendingPlayer)>) -> Vec<PendingPlayer> {
-    use std::collections::hash_map::Entry;
-
-    let mut player_token_guard = self.player_token.lock();
-    let mut map_guard = self.map.write();
+    use dashmap::mapref::entry::Entry;
 
     let mut stale_players = vec![];
 
     for (token, player) in pairs {
       let player_id = player.player_id;
       // remove stale player
-      let stale_player = if player_token_guard.contains_key(&player_id) {
-        match player_token_guard.entry(player_id) {
-          // replace existing token
-          Entry::Occupied(mut e) => {
-            let r = e.get_mut();
-            let prev_token = std::mem::replace(r, token.clone());
-            map_guard.remove(&prev_token)
-          }
-          // add token
-          Entry::Vacant(e) => {
-            e.insert(token.clone());
-            metrics::PENDING_PLAYER_TOKENS.inc();
-            None
-          }
+      let stale_player = match self.player_token.entry(player_id) {
+        // replace existing token
+        Entry::Occupied(mut e) => {
+          let r = e.get_mut();
+          let prev_token = std::mem::replace(r, token.clone());
+          self.map.remove(&prev_token)
         }
-      } else {
-        None
+        // add token
+        Entry::Vacant(e) => {
+          e.insert(token.clone());
+          metrics::PENDING_PLAYER_TOKENS.inc();
+          None
+        }
       };
 
-      map_guard.insert(token.clone(), player);
+      self.map.insert(token.clone(), player);
 
-      if let Some(stale_player) = stale_player {
+      if let Some((_, stale_player)) = stale_player {
         stale_players.push(stale_player)
       }
     }
 
     stale_players
   }
+
+  pub fn get_by_token(&self, token: &PlayerToken) -> Option<PendingPlayer> {
+    self.map.get(&token).as_ref().map(|r| r.value().clone())
+  }
 }
 
 #[derive(Debug)]
 struct GameRegistry {
-  map: RwLock<HashMap<i32, Arc<RwLock<GameSession>>>>,
+  map: DashMap<i32, Arc<RwLock<GameSession>>>,
 }
 
 impl GameRegistry {
   fn new() -> Self {
     GameRegistry {
-      map: RwLock::new(HashMap::new()),
+      map: DashMap::new(),
     }
   }
 
-  fn lock(&self) -> GameRegistryGuard {
-    GameRegistryGuard {
-      guard: self.map.write(),
-    }
-  }
-}
-
-#[derive(Debug)]
-struct GameRegistryGuard<'a> {
-  guard: RwLockWriteGuard<'a, HashMap<i32, Arc<RwLock<GameSession>>>>,
-}
-
-impl<'a> GameRegistryGuard<'a> {
   // for controller
-  fn pre_check(&mut self, game_id: i32) -> Result<()> {
-    if let Some(game) = self.guard.get(&game_id) {
+  fn register(&self, game: Game) -> Result<()> {
+    let game_id = game.id;
+
+    if let Some(game) = self.map.get(&game_id) {
       if game.read().status != GameStatus::Created {
         return Err(Error::GameExists);
       }
     }
 
-    Ok(())
-  }
-
-  // for controller
-  fn register(&mut self, game: Game) -> Result<()> {
-    let game_id = game.id;
-
     let session = Arc::new(RwLock::new(GameSession::new(game)?));
 
-    if self.guard.insert(game_id, session).is_none() {
+    if self.map.insert(game_id, session).is_none() {
       metrics::GAME_SESSIONS.inc();
     }
 
