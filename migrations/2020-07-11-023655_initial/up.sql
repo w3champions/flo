@@ -17,7 +17,7 @@ create table game (
     id serial not null primary key,
     name text not null,
     map_name text not null,
-    status integer not null default 1,
+    status integer not null default 0,
     node jsonb,
     is_private boolean not null,
     secret integer,

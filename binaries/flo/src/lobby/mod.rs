@@ -16,6 +16,7 @@ use crate::error::*;
 use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
 use crate::platform::PlatformStateRef;
 
+pub use crate::lobby::stream::GameStartedEvent;
 use crate::lobby::stream::{LobbyStreamEvent, LobbyStreamEventSender};
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
@@ -235,18 +236,18 @@ impl LobbyState {
       LobbyStreamEvent::GameInfoUpdateEvent(event) => {
         *self.current_game_info.write() = event.game_info;
       }
-      LobbyStreamEvent::GameStartEvent(event) => {
+      LobbyStreamEvent::GameStartingEvent(event) => {
         let game_id = event.game_id;
         if let Err(err) = self.handle_game_start(game_id).await {
           tracing::error!("get client info: {}", err);
         }
       }
       LobbyStreamEvent::GameStartedEvent(event) => {
-        tracing::info!(
-          game_id = event.game_id,
-          "game started, token = {:?}",
-          event.player_token
-        );
+        self
+          .event_sender
+          .clone()
+          .send_or_log_as_error(LobbyEvent::GameStartedEvent(event))
+          .await;
       }
     }
   }
@@ -381,6 +382,7 @@ pub struct LobbyGameInfo {
 #[derive(Debug)]
 pub enum LobbyEvent {
   WsWorkerErrorEvent(Error),
+  GameStartedEvent(GameStartedEvent),
 }
 
 impl FloEvent for LobbyEvent {

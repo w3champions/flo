@@ -238,6 +238,7 @@ pub fn join(conn: &DbConn, params: JoinGameParams) -> Result<Vec<Slot>> {
   let player = crate::player::db::get_ref(conn, params.player_id)?;
 
   slots.join(&player);
+
   update_slots(conn, params.game_id, &slots)?;
 
   Ok(slots.into_inner())
@@ -407,7 +408,7 @@ fn get_slots(conn: &DbConn, id: i32) -> Result<GetSlots> {
 fn update_slots(conn: &DbConn, id: i32, slots: &[Slot]) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
-    .filter(dsl::status.ne(GameStatus::Preparing))
+    .filter(dsl::status.eq(GameStatus::Preparing))
     .set(dsl::slots.eq(serde_json::to_value(slots)?))
     .execute(conn)?;
   Ok(())
@@ -424,7 +425,7 @@ pub fn select_node(conn: &DbConn, id: i32, node_id: Option<i32>) -> Result<()> {
   };
 
   diesel::update(game::table.find(id))
-    .filter(dsl::status.ne(GameStatus::Preparing))
+    .filter(dsl::status.eq(GameStatus::Preparing))
     .set(dsl::node.eq(node))
     .execute(conn)?;
   Ok(())
@@ -446,7 +447,7 @@ fn end_game(conn: &DbConn, id: i32) -> Result<()> {
 pub fn update_created(conn: &DbConn, id: i32, player_tokens: HashMap<i32, [u8; 16]>) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
-    .filter(dsl::status.ne(GameStatus::Preparing))
+    .filter(dsl::status.eq(GameStatus::Preparing))
     .set((
       dsl::status.eq(GameStatus::Created),
       dsl::player_tokens.eq(serde_json::to_value(player_tokens)?),
@@ -459,7 +460,7 @@ pub fn update_created(conn: &DbConn, id: i32, player_tokens: HashMap<i32, [u8; 1
 pub fn update_reset_created(conn: &DbConn, id: i32) -> Result<()> {
   use game::dsl;
   diesel::update(game::table.find(id))
-    .filter(dsl::status.ne(GameStatus::Created))
+    .filter(dsl::status.eq(GameStatus::Created))
     .set((
       dsl::status.eq(GameStatus::Preparing),
       dsl::player_tokens.eq(Option::<Value>::None),

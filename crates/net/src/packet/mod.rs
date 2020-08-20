@@ -142,7 +142,7 @@ pub enum PacketTypeId {
   #[bin(value = 0x16)]
   GameStartRequest,
   #[bin(value = 0x17)]
-  GameStartAccept,
+  GameStarting,
   #[bin(value = 0x18)]
   GameStartReject,
   #[bin(value = 0x19)]

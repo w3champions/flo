@@ -6,7 +6,7 @@ mod version;
 
 use tokio::sync::mpsc::channel;
 
-use crate::lobby::Lobby;
+use crate::lobby::{GameStartedEvent, Lobby, LobbyEvent};
 use crate::platform::PlatformState;
 
 #[tokio::main]
@@ -20,7 +20,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let _lobby = Lobby::init(platform.clone(), lobby_sender).await;
   tokio::spawn(async move {
     while let Some(event) = lobby_receiver.recv().await {
-      dbg!(event);
+      match event {
+        LobbyEvent::WsWorkerErrorEvent(err) => {
+          tracing::error!("websocket: {}", err);
+        }
+        LobbyEvent::GameStartedEvent(event) => {
+          tracing::info!(
+            game_id = event.game_id,
+            "node token = {:?}",
+            event.player_token
+          );
+        }
+      }
     }
   });
 

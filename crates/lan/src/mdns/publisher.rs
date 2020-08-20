@@ -94,6 +94,7 @@ impl MdnsPublisher {
         tokio::select! {
           _ = &mut drop_rx => {
             debug!("signal received");
+            broadcast_cancel(&sender, &name).ok();
             break;
           },
           update = update_rx.recv() => {
@@ -305,6 +306,20 @@ fn broadcast(
   add_a_record(&mut msg, hostname, ip_info);
   add_aaaa_record(&mut msg, hostname, ip_info);
 
+  let bytes = msg.to_vec()?;
+
+  sender
+    .unbounded_send(SerialMessage::new(bytes.clone(), *MDNS_IPV4))
+    .map_err(|e| Error::MdnsBroadcastError(e.to_string()))?;
+
+  Ok(())
+}
+
+fn broadcast_cancel(sender: &BufStreamHandle, name: &Name) -> Result<()> {
+  let mut msg = Message::new();
+  let mut record = Record::with(constants::W3_SERVICE_NAME.clone(), RecordType::PTR, 0);
+  record.set_rdata(RData::PTR(name.clone())).set_ttl(0);
+  msg.add_answer(record);
   let bytes = msg.to_vec()?;
 
   sender

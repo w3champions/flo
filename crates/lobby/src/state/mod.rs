@@ -441,8 +441,7 @@ impl LockedGameState {
     self.id
   }
 
-  /// Sealed means the game is starting or has started
-  pub fn is_sealed(&self) -> bool {
+  pub fn player_slots_locked(&self) -> bool {
     self.guard.start_state.is_some() || self.guard.player_tokens.is_some()
   }
 

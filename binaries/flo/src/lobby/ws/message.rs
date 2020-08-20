@@ -7,7 +7,7 @@ use flo_net::proto::flo_connect::{
   GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot,
   PacketGamePlayerPingMapSnapshotRequest, PacketGamePlayerPingMapUpdate, PacketGameSelectNode,
   PacketGameSelectNodeRequest, PacketGameSlotUpdate, PacketGameSlotUpdateRequest,
-  PacketGameStartAccept, PacketGameStartReject, PacketGameStartRequest,
+  PacketGameStartReject, PacketGameStartRequest, PacketGameStarting,
 };
 
 use crate::error::{Error, Result};
@@ -53,8 +53,8 @@ pub enum OutgoingMessage {
   GamePlayerPingMapUpdate(PacketGamePlayerPingMapUpdate),
   GamePlayerPingMapSnapshot(PacketGamePlayerPingMapSnapshot),
   GameStartReject(PacketGameStartReject),
-  GameStartAccept(PacketGameStartAccept),
-  GameStarted,
+  GameStarting(PacketGameStarting),
+  GameStarted(GameStarted),
 }
 
 impl FromStr for IncomingMessage {
@@ -162,4 +162,9 @@ pub struct Node {
   pub location: String,
   pub country_id: String,
   pub ping: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GameStarted {
+  pub game_id: i32,
 }

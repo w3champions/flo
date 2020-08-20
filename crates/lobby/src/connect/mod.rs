@@ -198,12 +198,14 @@ async fn send_initial_state(
       .exec(move |conn| crate::game::db::get_full_and_node_player_token(conn, game_id, player_id))
       .await?;
 
+    let node_id = game.node.as_ref().and_then(|node| node.get_node_id());
     let game = game.into_packet();
     let frame = connect::PacketGameInfo { game: Some(game) }.encode_as_frame()?;
     frames.push(frame);
 
     if let Some(player_token) = node_player_token {
       let frame = connect::PacketGamePlayerToken {
+        node_id: node_id.ok_or_else(|| Error::GameNodeNotSelected)?,
         game_id,
         player_token: player_token.to_vec(),
       }

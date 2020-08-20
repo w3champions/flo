@@ -20,4 +20,4 @@ jobs:
         token: ${{secrets.PAT_MY_TOKEN}}
         submodules: recursive
     - name: Check
-      run: cargo check --all
+      run: cargo check -p flo-lobby-service && cargo check -p flo-node-service

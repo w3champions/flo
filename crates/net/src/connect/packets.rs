@@ -26,7 +26,7 @@ packet_type!(
 packet_type!(GamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshot);
 packet_type!(GamePlayerToken, PacketGamePlayerToken);
 packet_type!(GameStartRequest, PacketGameStartRequest);
-packet_type!(GameStartAccept, PacketGameStartAccept);
+packet_type!(GameStarting, PacketGameStarting);
 packet_type!(GameStartReject, PacketGameStartReject);
 packet_type!(
   GameStartPlayerClientInfoRequest,

@@ -322,18 +322,19 @@ impl LobbyStream {
         p = PacketGameStartReject => {
           OutgoingMessage::GameStartReject(p)
         }
-        p = PacketGameStartAccept => {
-           event_sender.send_or_log_as_error(LobbyStreamEvent::GameStartEvent(GameStartEvent {
+        p = PacketGameStarting => {
+           event_sender.send_or_log_as_error(LobbyStreamEvent::GameStartingEvent(GameStartingEvent {
             game_id: p.game_id,
           })).await;
-          OutgoingMessage::GameStartAccept(p)
+          OutgoingMessage::GameStarting(p)
         }
         p = PacketGamePlayerToken => {
           event_sender.send_or_log_as_error(LobbyStreamEvent::GameStartedEvent(GameStartedEvent {
+            node_id: p.node_id,
             game_id: p.game_id,
             player_token: p.player_token,
           })).await;
-          OutgoingMessage::GameStarted
+          OutgoingMessage::GameStarted(message::GameStarted{ game_id: p.game_id })
         }
       }
     };
@@ -401,7 +402,7 @@ pub enum LobbyStreamEvent {
   ConnectedEvent,
   ConnectionErrorEvent(Error),
   GameInfoUpdateEvent(GameInfoUpdateEvent),
-  GameStartEvent(GameStartEvent),
+  GameStartingEvent(GameStartingEvent),
   GameStartedEvent(GameStartedEvent),
   DisconnectedEvent(u64),
 }
@@ -412,12 +413,13 @@ pub struct GameInfoUpdateEvent {
 }
 
 #[derive(Debug)]
-pub struct GameStartEvent {
+pub struct GameStartingEvent {
   pub game_id: i32,
 }
 
 #[derive(Debug)]
 pub struct GameStartedEvent {
+  pub node_id: i32,
   pub game_id: i32,
   pub player_token: Vec<u8>,
 }

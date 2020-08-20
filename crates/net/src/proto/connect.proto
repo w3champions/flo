@@ -106,15 +106,16 @@ message PacketGamePlayerPingMapSnapshot {
 }
 
 message PacketGamePlayerToken {
-  int32 game_id = 1;
-  bytes player_token = 2;
+  int32 node_id = 1;
+  int32 game_id = 2;
+  bytes player_token = 3;
 }
 
 message PacketGameStartRequest {
   int32 game_id = 1;
 }
 
-message PacketGameStartAccept {
+message PacketGameStarting {
   int32 game_id = 1;
 }
 

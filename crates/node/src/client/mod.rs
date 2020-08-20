@@ -26,7 +26,7 @@ pub async fn serve_client() -> Result<()> {
           Err(err) => {
             let reason = match &err {
               Error::InvalidToken => ClientConnectRejectReason::InvalidToken,
-              err => ClientConnectRejectReason::Unknown,
+              _ => ClientConnectRejectReason::Unknown,
             };
             stream
               .send(PacketClientConnectReject {

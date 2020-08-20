@@ -36,7 +36,7 @@ pub async fn join_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> Re
       .await
       .ok_or_else(|| Error::GameNotFound)?;
 
-    if game_guard.is_sealed() {
+    if game_guard.player_slots_locked() {
       return Err(Error::GameBusy);
     }
 
@@ -119,7 +119,7 @@ pub async fn leave_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     .await
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if game_guard.is_sealed() {
+  if game_guard.player_slots_locked() {
     return Err(Error::GameBusy);
   }
 
@@ -301,7 +301,7 @@ pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
     .await
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if game_guard.is_sealed() {
+  if game_guard.player_slots_locked() {
     return Err(Error::GameBusy);
   }
 
@@ -321,7 +321,7 @@ pub async fn start_game(state: LobbyStateRef, game_id: i32, player_id: i32) -> R
   if game_guard.start() {
     game_guard
       .get_broadcaster()
-      .broadcast(proto::flo_connect::PacketGameStartAccept { game_id })
+      .broadcast(proto::flo_connect::PacketGameStarting { game_id })
       .await
       .ok();
   }
@@ -454,6 +454,7 @@ pub async fn create_node_game(
     .broadcast_by::<_, proto::flo_connect::PacketGamePlayerToken>(|player_id| {
       if let Some(token) = token_map.get(&player_id) {
         Some(proto::flo_connect::PacketGamePlayerToken {
+          node_id,
           game_id,
           player_token: token.to_vec(),
         })
@@ -484,7 +485,7 @@ pub async fn start_game_set_timeout(ctx: &FloEventContext, game_id: i32) -> Resu
     .get_broadcaster()
     .broadcast(proto::flo_connect::PacketGameStartReject {
       game_id,
-      message: "Unable to start the game because of wait players' response timeout.".to_string(),
+      message: "Some of the players didn't response in time.".to_string(),
       player_client_info_map: state.and_then(|state| state.get_map()).unwrap_or_default(),
     })
     .await
