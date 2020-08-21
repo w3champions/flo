@@ -16,6 +16,8 @@ pub enum Error {
   ReplayNoGameInfoRecord,
   #[error("the game info record in the replay file is invalid")]
   ReplayInvalidGameInfoRecord,
+  #[error("string contains null byte")]
+  NullByteInString,
   #[error("get ip: {0}")]
   GetIp(#[from] ipconfig::error::Error),
   #[error("bin decode: {0}")]

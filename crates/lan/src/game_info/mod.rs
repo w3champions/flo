@@ -10,6 +10,7 @@ use flo_w3replay::W3Replay;
 
 use crate::error::*;
 use crate::proto;
+use flo_w3gs::protocol::constants::GameSettingFlags;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GameInfo {
@@ -24,18 +25,47 @@ pub struct GameInfo {
 }
 
 impl GameInfo {
-  // pub fn new(name: &str) -> Self {
-  //   GameInfo {
-  //     message_id: 0,
-  //     game_id: "".t,
-  //     create_time: SystemTime,
-  //     secret: u32,
-  //     name: CString,
-  //     players_num: u8,
-  //     players_max: u8,
-  //     data: GameData,
-  //   }
-  // }
+  /// Constructs a GameInfo using default settings
+  pub fn new(
+    id: i32,
+    name: &str,
+    map_path: &str,
+    map_sha1: [u8; 20],
+    map_checksum: u32,
+  ) -> Result<Self> {
+    let name = CString::new(name).map_err(|_| Error::NullByteInString)?;
+    Ok(GameInfo {
+      message_id: 0,
+      game_id: id.to_string(),
+      create_time: SystemTime::now(),
+      secret: 0,
+      name: name.clone(),
+      players_num: 0,
+      players_max: 24,
+      data: GameData {
+        name,
+        _unknown_byte: 0,
+        settings: GameSettings {
+          game_setting_flags: GameSettingFlags::SPEED_FAST
+            | GameSettingFlags::TERRAIN_DEFAULT
+            | GameSettingFlags::OBS_ENABLED
+            | GameSettingFlags::OBS_REFEREES
+            | GameSettingFlags::TEAMS_TOGETHER
+            | GameSettingFlags::TEAMS_FIXED,
+          unk_1: 0,
+          map_width: 0,
+          map_height: 0,
+          map_checksum,
+          map_path: CString::new(map_path).map_err(|_| Error::NullByteInString)?,
+          host_name: CString::new("Flo").unwrap(),
+          map_sha1,
+        },
+        slots_total: 24,
+        flags: GameFlags::OBS_FULL,
+        port: 16000,
+      },
+    })
+  }
 
   pub fn from_replay<P: AsRef<Path>>(path: P) -> Result<Self> {
     use flo_w3replay::Record;

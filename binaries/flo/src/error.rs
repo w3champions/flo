@@ -6,6 +6,8 @@ pub enum Error {
   SetPingIntervalFailed,
   #[error("invalid selected node id: {0}")]
   InvalidSelectedNodeId(i32),
+  #[error("invalid map info")]
+  InvalidMapInfo,
   #[error("broadcast nodes config failed")]
   BroadcastNodesConfigFailed,
   #[error("ping node timeout")]
@@ -16,14 +18,10 @@ pub enum Error {
   War3NotLocated,
   #[error("connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(crate::lobby::RejectReason),
-  #[error("task failed to execute to completion: {0}")]
-  TaskJoinError(#[from] tokio::task::JoinError),
   #[error("task cancelled")]
   TaskCancelled,
-  #[error("json: {0}")]
-  Json(#[from] serde_json::Error),
-  #[error("io: {0}")]
-  Io(#[from] std::io::Error),
+  #[error("lan: {0}")]
+  Lan(#[from] flo_lan::error::Error),
   #[error("websocket: {0}")]
   Websocket(#[from] async_tungstenite::tungstenite::error::Error),
   #[error("map: {0}")]
@@ -36,6 +34,12 @@ pub enum Error {
   Platform(#[from] flo_platform::error::Error),
   #[error("packet conversion: {0}")]
   PacketConversion(#[from] s2_grpc_utils::result::Error),
+  #[error("task failed to execute to completion: {0}")]
+  TaskJoinError(#[from] tokio::task::JoinError),
+  #[error("json: {0}")]
+  Json(#[from] serde_json::Error),
+  #[error("io: {0}")]
+  Io(#[from] std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

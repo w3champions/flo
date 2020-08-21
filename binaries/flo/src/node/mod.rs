@@ -1,4 +1,3 @@
-mod lan;
 mod ping;
 
 use parking_lot::RwLock;

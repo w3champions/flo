@@ -34,6 +34,8 @@ async fn main() {
   game_info.set_port(port);
   game_info.data.settings.map_checksum = 3389385288;
 
+  dbg!(&game_info);
+
   let (inspect, rest) = W3Replay::inspect(flo_util::sample_path!("replay", "bn.w3g")).unwrap();
   let inspect = Arc::new(inspect);
 

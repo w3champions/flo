@@ -9,8 +9,15 @@ packet_type!(ControllerCreateGameReject, PacketControllerCreateGameReject);
 packet_type!(ClientConnect, PacketClientConnect);
 packet_type!(ClientConnectReject, PacketClientConnectReject);
 packet_type!(
-  ClientPlayerStatusUpdateRequest,
-  PacketClientPlayerStatusUpdateRequest
+  ClientUpdateSlotClientStatusRequest,
+  PacketClientUpdateSlotClientStatusRequest
 );
-packet_type!(ClientPlayerStatusUpdate, PacketClientPlayerStatusUpdate);
+packet_type!(
+  ClientUpdateSlotClientStatus,
+  PacketClientUpdateSlotClientStatus
+);
+packet_type!(
+  ClientUpdateSlotClientStatus,
+  PacketClientUpdateSlotClientStatusReject
+);
 packet_type!(NodeGameStatusUpdate, PacketNodeGameStatusUpdate);

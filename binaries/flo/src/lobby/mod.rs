@@ -17,7 +17,9 @@ use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
 use crate::platform::PlatformStateRef;
 
 pub use crate::lobby::stream::GameStartedEvent;
-use crate::lobby::stream::{LobbyStreamEvent, LobbyStreamEventSender};
+pub use crate::lobby::stream::PlayerInfo;
+use crate::lobby::stream::{LobbyStreamEvent, LobbyStreamEventSender, PlayerSessionUpdateEvent};
+use flo_lan::GameInfo;
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
 
@@ -59,6 +61,30 @@ impl Lobby {
       stream_event_handler,
       node_ping_update_handler,
     })
+  }
+
+  pub fn handle(&self) -> LobbyHandle {
+    LobbyHandle(self.state.clone())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct LobbyHandle(Arc<LobbyState>);
+
+impl LobbyHandle {
+  pub fn current_game_info(&self) -> Option<Arc<LobbyGameInfo>> {
+    self.0.current_game_info.read().clone()
+  }
+
+  pub fn with_player_session<F, R>(&self, f: F) -> Option<R>
+  where
+    F: FnOnce(&PlayerSession) -> R,
+  {
+    if let Some(session) = self.0.current_session.read().as_ref() {
+      Some(f(session))
+    } else {
+      None
+    }
   }
 }
 
@@ -149,7 +175,8 @@ struct LobbyState {
   event_sender: LobbyEventSender,
   stream_event_sender: Sender<LobbyStreamEvent>,
   conn: RwLock<Option<LobbyConn>>,
-  current_game_info: RwLock<Option<LobbyGameInfo>>,
+  current_game_info: RwLock<Option<Arc<LobbyGameInfo>>>,
+  current_session: RwLock<Option<PlayerSession>>,
 }
 
 impl LobbyState {
@@ -169,6 +196,7 @@ impl LobbyState {
       stream_event_sender,
       conn: RwLock::new(None),
       current_game_info: RwLock::new(None),
+      current_session: RwLock::new(None),
     }
   }
 
@@ -221,20 +249,55 @@ impl LobbyState {
 
   async fn handle_stream_event(self: Arc<Self>, event: LobbyStreamEvent) {
     match event {
-      LobbyStreamEvent::ConnectedEvent => {}
+      LobbyStreamEvent::ConnectedEvent => {
+        self
+          .event_sender
+          .clone()
+          .send_or_log_as_error(LobbyEvent::ConnectedEvent)
+          .await;
+      }
       LobbyStreamEvent::DisconnectedEvent(id) => {
-        let mut guard = self.conn.write();
-        if let Some(current_id) = guard.as_ref().map(|conn| conn.id) {
-          if id == current_id {
-            guard.take();
+        self.current_session.write().take();
+        self.remove_conn(id);
+        self
+          .event_sender
+          .clone()
+          .send_or_log_as_error(LobbyEvent::DisconnectedEvent)
+          .await;
+      }
+      LobbyStreamEvent::ConnectionErrorEvent(id, err) => {
+        tracing::error!("server connection: {}", err);
+        self.remove_conn(id);
+        self
+          .event_sender
+          .clone()
+          .send_or_log_as_error(LobbyEvent::DisconnectedEvent)
+          .await;
+      }
+      LobbyStreamEvent::PlayerSessionUpdateEvent(event) => match event {
+        PlayerSessionUpdateEvent::Full(session) => {
+          *self.current_session.write() = Some(session);
+        }
+        PlayerSessionUpdateEvent::Partial(update) => {
+          let mut guard = self.current_session.write();
+          if let Some(current) = guard.as_mut() {
+            current.game_id = update.game_id;
+            current.status = update.status;
+          } else {
+            tracing::error!(
+              "PlayerSessionUpdateEvent emitted by there is no active player session."
+            )
           }
         }
-      }
-      LobbyStreamEvent::ConnectionErrorEvent(err) => {
-        tracing::error!("server connection: {}", err);
-      }
+      },
       LobbyStreamEvent::GameInfoUpdateEvent(event) => {
-        *self.current_game_info.write() = event.game_info;
+        let game_info = event.game_info.map(Arc::new);
+        *self.current_game_info.write() = game_info.clone();
+        self
+          .event_sender
+          .clone()
+          .send_or_log_as_error(LobbyEvent::GameInfoUpdateEvent(game_info))
+          .await;
       }
       LobbyStreamEvent::GameStartingEvent(event) => {
         let game_id = event.game_id;
@@ -243,13 +306,32 @@ impl LobbyState {
         }
       }
       LobbyStreamEvent::GameStartedEvent(event) => {
-        self
-          .event_sender
-          .clone()
-          .send_or_log_as_error(LobbyEvent::GameStartedEvent(event))
-          .await;
+        let game_info = { self.current_game_info.read().clone() };
+        if let Some(game_info) = game_info {
+          self
+            .event_sender
+            .clone()
+            .send_or_log_as_error(LobbyEvent::GameStartedEvent(event, game_info))
+            .await;
+        } else {
+          tracing::error!(
+            node_id = event.node_id,
+            game_id = event.game_id,
+            "game info unavailable"
+          );
+        }
       }
     }
+  }
+
+  fn remove_conn(&self, id: u64) -> Option<LobbyConn> {
+    let mut guard = self.conn.write();
+    if let Some(current_id) = guard.as_ref().map(|conn| conn.id) {
+      if id == current_id {
+        return guard.take();
+      }
+    }
+    None
   }
 
   async fn handle_ping_update(self: Arc<Self>, update: PingUpdate) {
@@ -377,12 +459,19 @@ impl Drop for LobbyConn {
 pub struct LobbyGameInfo {
   pub game_id: i32,
   pub map_path: String,
+  pub map_sha1: [u8; 20],
+  pub map_checksum: u32,
+  pub players: HashMap<i32, PlayerInfo>,
+  pub host_player: Option<PlayerInfo>,
 }
 
 #[derive(Debug)]
 pub enum LobbyEvent {
+  ConnectedEvent,
+  DisconnectedEvent,
+  GameStartedEvent(GameStartedEvent, Arc<LobbyGameInfo>),
+  GameInfoUpdateEvent(Option<Arc<LobbyGameInfo>>),
   WsWorkerErrorEvent(Error),
-  GameStartedEvent(GameStartedEvent),
 }
 
 impl FloEvent for LobbyEvent {

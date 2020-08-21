@@ -1,0 +1,1 @@
+drop table game_used_slot;

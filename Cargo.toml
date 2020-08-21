@@ -16,13 +16,13 @@ members = [
   "crates/constants",
   "crates/event",
 
-  "crates/lobby",
+  "crates/controller",
   "crates/node",
   "crates/observer",
 
   "binaries/flo",
   "binaries/flo-cli",
-  "binaries/flo-lobby-service",
+  "binaries/flo-controller-service",
   "binaries/flo-node-service",
   "binaries/flo-map-checksum-dump",
   "binaries/flo-map-checksum-import",

@@ -85,7 +85,7 @@ impl LobbyStream {
               .await
               .ok();
             event_sender
-              .send_or_log_as_error(LobbyStreamEvent::ConnectionErrorEvent(err))
+              .send_or_log_as_error(LobbyStreamEvent::ConnectionErrorEvent(id, err))
               .await;
           }
 
@@ -145,6 +145,12 @@ impl LobbyStream {
 
     event_sender
       .send(LobbyStreamEvent::ConnectedEvent)
+      .await
+      .map_err(|_| Error::TaskCancelled)?;
+    event_sender
+      .send(LobbyStreamEvent::PlayerSessionUpdateEvent(
+        PlayerSessionUpdateEvent::Full(session.clone()),
+      ))
       .await
       .map_err(|_| Error::TaskCancelled)?;
     ws_sender
@@ -264,11 +270,32 @@ impl LobbyStream {
           }))?;
 
           let game: GameInfo = p.game.extract()?;
+          let map = game.map.clone().extract()?;
 
           event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
             game_info: Some(LobbyGameInfo {
               game_id: game.id,
-              map_path: game.map.clone().extract()?.path,
+              map_path: map.path,
+              map_sha1: {
+                if map.sha1.len() != 20 {
+                  return Err(Error::InvalidMapInfo)
+                }
+                let mut value = [0_u8; 20];
+                value.copy_from_slice(&map.sha1[..]);
+                value
+              },
+              map_checksum: map.checksum,
+              players: game.slots.iter().filter_map(|slot| {
+                slot.player.clone().map(|player| (
+                  player.id,
+                  PlayerInfo {
+                    id: player.id,
+                    name: player.name.clone(),
+                    source: PlayerSource::unpack_enum(player.source()),
+                  }
+                ))
+              }).collect(),
+              host_player: game.created_by.clone().map(PlayerInfo::unpack).transpose()?
             })
           })).await;
 
@@ -284,14 +311,16 @@ impl LobbyStream {
           OutgoingMessage::GameSlotUpdate(p)
         }
         p = PacketPlayerSessionUpdate => {
-          if p.game_id.is_none() {
+          let session = PlayerSessionUpdate::unpack(p)?;
+          event_sender.send_or_log_as_error(LobbyStreamEvent::PlayerSessionUpdateEvent(PlayerSessionUpdateEvent::Partial(session.clone()))).await;
+          if session.game_id.is_none() {
             nodes.set_selected_node(None)?;
           }
-          *current_game_id.write() = p.game_id.clone();
+          *current_game_id.write() = session.game_id.clone();
           event_sender.send_or_log_as_error(LobbyStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
             game_info: None
           })).await;
-          OutgoingMessage::PlayerSessionUpdate(S2ProtoUnpack::unpack(p)?)
+          OutgoingMessage::PlayerSessionUpdate(session)
         }
         p = PacketListNodes => {
           nodes.update_nodes(p.nodes.clone())?;
@@ -352,7 +381,7 @@ pub enum DisconnectReason {
   Maintenance = 2,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::Session")]
 pub struct PlayerSession {
   pub player: PlayerInfo,
@@ -360,7 +389,7 @@ pub struct PlayerSession {
   pub game_id: Option<i32>,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::PacketPlayerSessionUpdate")]
 pub struct PlayerSessionUpdate {
   pub status: PlayerStatus,
@@ -374,7 +403,7 @@ pub enum PlayerStatus {
   InGame = 1,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::PlayerInfo")]
 pub struct PlayerInfo {
   pub id: i32,
@@ -400,11 +429,18 @@ pub enum RejectReason {
 #[derive(Debug)]
 pub enum LobbyStreamEvent {
   ConnectedEvent,
-  ConnectionErrorEvent(Error),
+  ConnectionErrorEvent(u64, Error),
+  PlayerSessionUpdateEvent(PlayerSessionUpdateEvent),
   GameInfoUpdateEvent(GameInfoUpdateEvent),
   GameStartingEvent(GameStartingEvent),
   GameStartedEvent(GameStartedEvent),
   DisconnectedEvent(u64),
+}
+
+#[derive(Debug)]
+pub enum PlayerSessionUpdateEvent {
+  Full(PlayerSession),
+  Partial(PlayerSessionUpdate),
 }
 
 #[derive(Debug)]

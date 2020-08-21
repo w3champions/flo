@@ -2,9 +2,9 @@ use serde::Deserialize;
 use std::fs;
 use tonic::{transport::Channel, Request};
 
+use flo_grpc::controller::flo_controller_client::*;
+use flo_grpc::controller::ImportMapChecksumsRequest;
 use flo_grpc::game::MapChecksumImportItem;
-use flo_grpc::lobby::flo_lobby_client::*;
-use flo_grpc::lobby::ImportMapChecksumsRequest;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let channel = Channel::from_static("tcp://127.0.0.1:3549")
     .connect()
     .await?;
-  let mut client = FloLobbyClient::with_interceptor(channel, |mut req: Request<()>| {
+  let mut client = FloControllerClient::with_interceptor(channel, |mut req: Request<()>| {
     req
       .metadata_mut()
       .insert("x-flo-secret", "TEST".parse().unwrap());

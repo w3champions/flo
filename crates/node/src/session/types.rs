@@ -74,7 +74,7 @@ pub struct GameSlot {
   id: u32,
   settings: GameSlotSettings,
   player: GamePlayer,
-  client_status: GameClientStatus,
+  client_status: SlotClientStatus,
   sender: Option<PlayerSender>,
   disconnected_at_ms: Option<u32>,
 }
@@ -85,7 +85,7 @@ impl S2ProtoUnpack<proto::GameSlot> for GameSlot {
       id: value.id,
       settings: GameSlotSettings::unpack(value.settings)?,
       player: GamePlayer::unpack(value.player)?,
-      client_status: GameClientStatus::unpack(value.client_status)?,
+      client_status: SlotClientStatus::unpack(value.client_status)?,
       sender: None,
       disconnected_at_ms: None,
     })
@@ -95,10 +95,10 @@ impl S2ProtoUnpack<proto::GameSlot> for GameSlot {
 #[derive(Debug, S2ProtoUnpack)]
 #[s2_grpc(message_type(flo_net::proto::flo_node::SlotSettings))]
 pub struct GameSlotSettings {
-  team: u32,
-  color: u32,
+  team: i32,
+  color: i32,
   computer: Computer,
-  handicap: u32,
+  handicap: i32,
   race: Race,
 }
 
@@ -137,8 +137,8 @@ pub enum GameStatus {
 }
 
 #[derive(Debug, Copy, Clone, S2ProtoEnum)]
-#[s2_grpc(proto_enum_type(flo_net::proto::flo_node::GameClientStatus))]
-pub enum GameClientStatus {
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_node::SlotClientStatus))]
+pub enum SlotClientStatus {
   Pending,
   Connected,
   Loading,

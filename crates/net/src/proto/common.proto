@@ -16,10 +16,10 @@ message PacketPong {
 }
 
 message SlotSettings {
-  uint32 team = 1;
-  uint32 color = 2;
+  int32 team = 1;
+  int32 color = 2;
   Computer computer = 3;
-  uint32 handicap = 4;
+  int32 handicap = 4;
   SlotStatus status = 5;
   Race race = 6;
 }
@@ -42,4 +42,13 @@ enum Computer {
   ComputerEasy = 0;
   ComputerNormal = 1;
   ComputerInsane = 2;
+}
+
+enum SlotClientStatus {
+  SlotClientStatusPending = 0;
+  SlotClientStatusConnected = 1;
+  SlotClientStatusLoading = 2;
+  SlotClientStatusLoaded = 3;
+  SlotClientStatusLeft = 4;
+  SlotClientStatusDisconnected = 5;
 }

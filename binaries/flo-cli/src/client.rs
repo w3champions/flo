@@ -11,12 +11,12 @@ pub enum Command {
 impl Command {
   #[tracing::instrument(skip(self))]
   pub async fn run(&self, player_id: i32) -> Result<()> {
-    let token = flo_lobby::player::token::create_player_token(player_id)?;
+    let token = flo_controller::player::token::create_player_token(player_id)?;
     tracing::debug!("token generated: {}", token);
     match *self {
       Command::Token => println!("{}", token),
       Command::Connect => {
-        let token = flo_lobby::player::token::create_player_token(player_id)?;
+        let token = flo_controller::player::token::create_player_token(player_id)?;
         tracing::debug!("token generated: {}", token);
       }
     }

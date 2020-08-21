@@ -161,6 +161,12 @@ pub enum PacketTypeId {
   ControllerCreateGameAccept,
   #[bin(value = 0x35)]
   ControllerCreateGameReject,
+  #[bin(value = 0x36)]
+  PacketControllerUpdatePlayerGameClientStatus,
+  #[bin(value = 0x37)]
+  PacketControllerUpdatePlayerGameClientStatusAccept,
+  #[bin(value = 0x38)]
+  PacketControllerUpdatePlayerGameClientStatusReject,
 
   // Client <-> Node
   #[bin(value = 0x40)]
@@ -170,9 +176,11 @@ pub enum PacketTypeId {
   #[bin(value = 0x42)]
   ClientConnectReject,
   #[bin(value = 0x43)]
-  ClientPlayerStatusUpdateRequest,
+  ClientUpdateSlotClientStatusRequest,
   #[bin(value = 0x44)]
-  ClientPlayerStatusUpdate,
+  ClientUpdateSlotClientStatus,
+  #[bin(value = 0x45)]
+  ClientUpdateSlotClientStatusReject,
 
   // Node -> [Client, Controller]
   #[bin(value = 0x50)]

@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 flo-log = { path = "../../crates/log" }
-flo-lobby = { path = "../../crates/lobby" }
+flo-controller = { path = "../../crates/controller" }
 flo-net = { path = "../../crates/net" }
 
 dotenv = "0.15.0"

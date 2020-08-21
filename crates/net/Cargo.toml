@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 flo-util = { path = "../util" }
 flo-constants = { path = "../constants" }
-flo-grpc = { path = "../../deps/flo-grpc" }
 
 bytes = "0.5.6"
 thiserror = "1"

@@ -2,4 +2,4 @@
 # see diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "crates/lobby/src/schema.rs"
+file = "crates/controller/src/schema.rs"

@@ -22,7 +22,7 @@ pub mod proto {
     #[allow(unused)]
     use serde::{Deserialize, Serialize};
 
-    pub use super::flo_common::{Computer, Race, SlotSettings, SlotStatus};
+    pub use super::flo_common::{Computer, Race, SlotClientStatus, SlotSettings, SlotStatus};
 
     include!(concat!(env!("OUT_DIR"), "/flo_connect.rs"));
   }
@@ -31,7 +31,7 @@ pub mod proto {
     #[allow(unused)]
     use serde::{Deserialize, Serialize};
 
-    pub use super::flo_common::{Computer, Race, SlotSettings, SlotStatus};
+    pub use super::flo_common::{Computer, Race, SlotClientStatus, SlotSettings, SlotStatus};
 
     include!(concat!(env!("OUT_DIR"), "/flo_node.rs"));
   }

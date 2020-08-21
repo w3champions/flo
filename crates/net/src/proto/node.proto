@@ -36,10 +36,27 @@ message PacketControllerCreateGameReject {
   ControllerCreateGameRejectReason reason = 2;
 }
 
+message PacketControllerUpdateSlotStatus {
+  int32 game_id = 1;
+  int32 player_id = 2;
+  flo_common.SlotClientStatus game_client_status = 3;
+}
+
+message PacketControllerUpdateSlotStatusAccept {
+  int32 game_id = 1;
+  int32 player_id = 2;
+}
+
+message PacketControllerUpdateSlotStatusReject {
+  int32 game_id = 1;
+  int32 player_id = 2;
+  UpdateSlotStatusRejectReason reason = 3;
+}
+
 message PacketNodeGameStatusUpdate {
   int32 game_id = 1;
   GameStatus status = 2;
-  map<int32, GameClientStatus> updated_player_client_status_map = 3;
+  map<int32, flo_common.SlotClientStatus> updated_player_game_client_status_map = 3;
 }
 
 message PacketClientConnect {
@@ -57,13 +74,18 @@ message PacketClientConnectReject {
   string message = 2;
 }
 
-message PacketClientPlayerStatusUpdateRequest {
-  GameClientStatus status = 1;
+message PacketClientUpdateSlotClientStatusRequest {
+  flo_common.SlotClientStatus status = 1;
 }
 
-message PacketClientPlayerStatusUpdate {
+message PacketClientUpdateSlotClientStatus {
   int32 player_id = 1;
-  GameClientStatus status = 2;
+  flo_common.SlotClientStatus status = 2;
+}
+
+message PacketClientUpdateSlotClientStatusReject {
+  int32 player_id = 1;
+  UpdateSlotStatusRejectReason reason = 2;
 }
 
 enum ClientConnectRejectReason {
@@ -78,6 +100,13 @@ enum ControllerCreateGameRejectReason {
   ControllerCreateGameRejectReasonGameExists = 1;
   ControllerCreateGameRejectReasonPlayerBusy = 2;
   ControllerCreateGameRejectReasonMaintenance = 3;
+}
+
+enum UpdateSlotStatusRejectReason {
+  UpdateSlotStatusRejectReasonUnknown = 0;
+  UpdateSlotStatusRejectReasonNotFound = 1;
+  UpdateSlotStatusRejectReasonInvalidStatus = 2;
+  UpdateSlotStatusRejectReasonMaintenance = 3;
 }
 
 message PlayerToken {
@@ -114,14 +143,5 @@ message GameSlot {
   uint32 id = 1;
   GamePlayer player = 2;
   flo_common.SlotSettings settings = 3;
-  GameClientStatus client_status = 4;
-}
-
-enum GameClientStatus {
-  GameClientStatusPending = 0;
-  GameClientStatusConnected = 1;
-  GameClientStatusLoading = 2;
-  GameClientStatusLoaded = 3;
-  GameClientStatusLeft = 4;
-  GameClientStatusDisconnected = 5;
+  flo_common.SlotClientStatus client_status = 4;
 }

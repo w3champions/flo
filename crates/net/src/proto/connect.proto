@@ -60,6 +60,7 @@ message PacketGamePlayerLeave {
 
 message PacketGameSlotUpdateRequest {
   int32 game_id = 1;
+  int32 slot_index = 2;
   flo_common.SlotSettings slot_settings = 3;
 }
 
@@ -197,6 +198,7 @@ enum SelectedNodeType {
 message Slot {
   PlayerInfo player = 1;
   flo_common.SlotSettings settings = 2;
+  flo_common.SlotClientStatus client_status = 3;
 }
 
 message Map {
