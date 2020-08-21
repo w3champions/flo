@@ -94,7 +94,12 @@ impl MdnsPublisher {
         tokio::select! {
           _ = &mut drop_rx => {
             debug!("signal received");
-            broadcast_cancel(&sender, &name).ok();
+            tokio::spawn(async move {
+              let stream = stream;
+              broadcast_cancel(&sender, &name).ok();
+              // hack: wait 2 second to flush the mdns udp stream
+              tokio::time::timeout(Duration::from_secs(2), stream.collect::<Vec<_>>()).await.ok();
+            });
             break;
           },
           update = update_rx.recv() => {
@@ -317,9 +322,19 @@ fn broadcast(
 
 fn broadcast_cancel(sender: &BufStreamHandle, name: &Name) -> Result<()> {
   let mut msg = Message::new();
+
+  msg
+    .set_message_type(MessageType::Response)
+    .set_authoritative(true);
+
   let mut record = Record::with(constants::W3_SERVICE_NAME.clone(), RecordType::PTR, 0);
   record.set_rdata(RData::PTR(name.clone())).set_ttl(0);
   msg.add_answer(record);
+
+  let mut record = Record::with(constants::BLIZZARD_SERVICE_NAME.clone(), RecordType::PTR, 0);
+  record.set_rdata(RData::PTR(name.clone())).set_ttl(0);
+  msg.add_answer(record);
+
   let bytes = msg.to_vec()?;
 
   sender
