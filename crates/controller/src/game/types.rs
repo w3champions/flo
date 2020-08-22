@@ -1,17 +1,18 @@
 use bs_diesel_utils::BSDieselEnum;
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
 use flo_net::proto::flo_connect as packet;
 
 use crate::map::Map;
-use crate::node::NodeRef;
-use crate::player::PlayerRef;
-use crate::schema::game_used_slot;
+use crate::node::{NodeRef, NodeRefColumns};
+use crate::player::{PlayerRef, PlayerRefColumns};
+use crate::schema::{game, game_used_slot};
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
-#[s2_grpc(message_type = "flo_grpc::game::Game")]
+#[s2_grpc(message_type(flo_grpc::game::Game))]
 pub struct Game {
   pub id: i32,
   pub name: String,
@@ -30,6 +31,28 @@ pub struct Game {
   pub ended_at: Option<DateTime<Utc>>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
+}
+
+impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
+  fn pack(self) -> Result<flo_net::proto::flo_connect::GameInfo, s2_grpc_utils::result::Error> {
+    use flo_net::proto::flo_connect::*;
+    let status: flo_net::proto::flo_connect::GameStatus = self.status.into_proto_enum();
+    Ok(GameInfo {
+      id: self.id,
+      name: self.name,
+      status: status.into(),
+      map: Some(flo_net::proto::flo_connect::Map {
+        sha1: self.map.sha1.to_vec(),
+        checksum: self.map.checksum,
+        path: self.map.path,
+      }),
+      slots: self.slots.pack()?,
+      node: self.node.pack()?,
+      is_private: self.is_private,
+      is_live: self.is_live,
+      created_by: self.created_by.pack()?,
+    })
+  }
 }
 
 impl Game {
@@ -72,7 +95,7 @@ pub struct PlayerSlotInfo<'a> {
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Queryable)]
-#[s2_grpc(message_type = "flo_grpc::game::GameEntry")]
+#[s2_grpc(message_type(flo_grpc::game::GameEntry))]
 pub struct GameEntry {
   pub id: i32,
   pub name: String,
@@ -87,7 +110,46 @@ pub struct GameEntry {
   pub ended_at: Option<DateTime<Utc>>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
+  pub node: Option<NodeRef>,
   pub created_by: Option<PlayerRef>,
+}
+
+pub(crate) type GameEntryColumns = (
+  game::dsl::id,
+  game::dsl::name,
+  game::dsl::map_name,
+  game::dsl::status,
+  game::dsl::is_private,
+  game::dsl::is_live,
+  diesel::expression::SqlLiteral<diesel::sql_types::Integer>,
+  game::dsl::max_players,
+  game::dsl::started_at,
+  game::dsl::ended_at,
+  game::dsl::created_at,
+  game::dsl::updated_at,
+  diesel::helper_types::Nullable<NodeRefColumns>,
+  diesel::helper_types::Nullable<PlayerRefColumns>,
+);
+
+impl GameEntry {
+  pub(crate) fn columns() -> GameEntryColumns {
+    (
+      game::dsl::id,
+      game::dsl::name,
+      game::dsl::map_name,
+      game::dsl::status,
+      game::dsl::is_private,
+      game::dsl::is_live,
+      diesel::dsl::sql("0"),
+      game::dsl::max_players,
+      game::dsl::started_at,
+      game::dsl::ended_at,
+      game::dsl::created_at,
+      game::dsl::updated_at,
+      NodeRef::COLUMNS.nullable(),
+      PlayerRef::COLUMNS.nullable(),
+    )
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, BSDieselEnum, S2ProtoEnum)]
@@ -203,44 +265,6 @@ pub enum Computer {
   Easy = 0,
   Normal = 1,
   Insane = 2,
-}
-
-impl Game {
-  pub fn into_packet(self) -> packet::GameInfo {
-    packet::GameInfo {
-      id: self.id,
-      name: self.name,
-      status: match self.status {
-        GameStatus::Preparing => packet::GameStatus::Preparing,
-        GameStatus::Created => packet::GameStatus::Created,
-        GameStatus::Running => packet::GameStatus::Running,
-        GameStatus::Ended => packet::GameStatus::Ended,
-        GameStatus::Paused => packet::GameStatus::Paused,
-        GameStatus::Terminated => packet::GameStatus::Terminated,
-      }
-      .into(),
-      map: Some(packet::Map {
-        sha1: self.map.sha1.to_vec(),
-        checksum: self.map.checksum,
-        path: self.map.path,
-      }),
-      slots: self
-        .slots
-        .into_iter()
-        .map(|slot| packet::Slot {
-          player: slot.player.map(|player| player.pack().unwrap_or_default()),
-          settings: slot.settings.into_packet().into(),
-          client_status: slot.client_status.into_proto_enum() as i32,
-        })
-        .collect(),
-      node: self.node.map(|node| node.into_packet()),
-      is_private: self.is_private,
-      is_live: self.is_live,
-      created_by: self
-        .created_by
-        .map(|player| player.pack().unwrap_or_default()),
-    }
-  }
 }
 
 impl SlotSettings {

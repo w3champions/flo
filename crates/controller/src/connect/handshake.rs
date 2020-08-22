@@ -7,7 +7,7 @@ use crate::game::Game;
 use crate::player::token::validate_player_token;
 
 pub async fn handle_handshake(stream: &mut FloStream) -> Result<ConnectState> {
-  let req: PacketConnectLobby = stream.recv().await?;
+  let req: PacketClientConnect = stream.recv().await?;
   let client_version = req.connect_version.extract()?;
 
   tracing::debug!("client version = {}", client_version);

@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use diesel::helper_types::Nullable;
 use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
@@ -14,13 +13,16 @@ use crate::game::{
   Slots,
 };
 use crate::map::Map;
-use crate::node::{NodeRef, PlayerToken};
+use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
 use crate::player::{PlayerRef, PlayerRefColumns};
-use crate::schema::{game, game_used_slot};
+use crate::schema::{game, game_used_slot, node, player};
 
-pub fn get(conn: &DbConn, id: i32) -> Result<GameRow> {
+pub fn get(conn: &DbConn, id: i32) -> Result<GameRowWithRelated> {
   let row = game::table
     .find(id)
+    .left_outer_join(node::table)
+    .left_outer_join(player::table)
+    .select(GameRowWithRelated::columns())
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
@@ -62,25 +64,11 @@ impl Default for GameStatusFilter {
 }
 
 pub fn get_entry(conn: &DbConn, id: i32) -> Result<GameEntry> {
-  use crate::schema::player::{self};
-  use diesel::dsl::sql;
-  use game::dsl;
-
-  let q = game::table.find(id).left_outer_join(player::table).select((
-    dsl::id,
-    dsl::name,
-    dsl::map_name,
-    dsl::status,
-    dsl::is_private,
-    dsl::is_live,
-    sql::<diesel::sql_types::Integer>("0"),
-    dsl::max_players,
-    dsl::started_at,
-    dsl::ended_at,
-    dsl::created_at,
-    dsl::updated_at,
-    PlayerRef::COLUMNS.nullable(),
-  ));
+  let q = game::table
+    .find(id)
+    .left_outer_join(node::table)
+    .left_outer_join(player::table)
+    .select(GameEntry::columns());
 
   let entry: GameEntry = q
     .first(conn)
@@ -91,29 +79,15 @@ pub fn get_entry(conn: &DbConn, id: i32) -> Result<GameEntry> {
 }
 
 pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
-  use crate::schema::player::{self};
-  use diesel::dsl::sql;
   use game::dsl;
 
   let take = std::cmp::min(100, params.take.clone().unwrap_or(30));
 
   let mut q = game::table
+    .left_outer_join(node::table)
     .left_outer_join(player::table)
-    .select((
-      dsl::id,
-      dsl::name,
-      dsl::map_name,
-      dsl::status,
-      dsl::is_private,
-      dsl::is_live,
-      sql::<diesel::sql_types::Integer>("0"),
-      dsl::max_players,
-      dsl::started_at,
-      dsl::ended_at,
-      dsl::created_at,
-      dsl::updated_at,
-      PlayerRef::COLUMNS.nullable(),
-    ))
+    .select(GameEntry::columns())
+    .order(dsl::id.desc())
     .limit(take + 1)
     .into_boxed();
 
@@ -146,7 +120,7 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
   }
 
   if let Some(id) = params.since_id.clone() {
-    q = q.filter(dsl::id.gt(id))
+    q = q.filter(dsl::id.lt(id))
   }
 
   let mut games: Vec<GameEntry> = q.load(conn)?;
@@ -218,10 +192,11 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
   };
 
   let row = conn.transaction(|| -> Result<_> {
-    let row: GameRow = diesel::insert_into(game::table)
+    let id: i32 = diesel::insert_into(game::table)
       .values(&insert)
+      .returning(game::dsl::id)
       .get_result(conn)?;
-
+    let row = get(conn, id)?;
     upsert_used_slots(conn, row.id, slots.as_used())?;
     Ok(row)
   })?;
@@ -266,8 +241,7 @@ pub struct LeaveGame {
   pub slots: Vec<Slot>,
 }
 
-/// Removes a player from a game
-pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
+pub fn leave_lobby(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
   let GetSlots {
     mut slots,
     host_player_id,
@@ -277,7 +251,7 @@ pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
   if Some(params.player_id) == host_player_id {
     let removed = slots.release_all_player_slots();
     upsert_used_slots(conn, params.game_id, slots.as_used())?;
-    end_game(conn, params.game_id)?;
+    end_game(conn, params.game_id, GameStatus::Ended)?;
     Ok(LeaveGame {
       game_ended: true,
       removed_players: removed,
@@ -291,7 +265,7 @@ pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
       upsert_used_slots(conn, params.game_id, slots.as_used())?;
       if slots.is_empty() {
         ended = true;
-        end_game(conn, params.game_id)?;
+        end_game(conn, params.game_id, GameStatus::Ended)?;
       }
     }
     Ok(LeaveGame {
@@ -300,6 +274,16 @@ pub fn leave(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
       slots: slots.into_inner(),
     })
   }
+}
+
+pub fn leave_node(conn: &DbConn, game_id: i32, player_id: i32) -> Result<()> {
+  use game_used_slot::dsl;
+  diesel::update(
+    game_used_slot::table.filter(dsl::game_id.eq(game_id).and(dsl::player_id.eq(player_id))),
+  )
+  .set(dsl::client_status.eq(SlotClientStatus::Left))
+  .execute(conn)?;
+  Ok(())
 }
 
 #[derive(Debug, Queryable)]
@@ -405,7 +389,6 @@ struct GetSlots {
 }
 
 fn get_slots(conn: &DbConn, game_id: i32) -> Result<GetSlots> {
-  use crate::schema::player;
   use game_used_slot::dsl;
 
   let (host_player_id, max_players): (Option<i32>, i32) = {
@@ -432,7 +415,6 @@ fn get_slots(conn: &DbConn, game_id: i32) -> Result<GetSlots> {
 }
 
 fn get_used_slots(conn: &DbConn, game_id: i32) -> Result<Vec<UsedSlot>> {
-  use crate::schema::player;
   use game_used_slot::dsl;
   game_used_slot::table
     .left_outer_join(player::table)
@@ -443,8 +425,11 @@ fn get_used_slots(conn: &DbConn, game_id: i32) -> Result<Vec<UsedSlot>> {
 }
 
 pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
-  let row: GameRow = game::table
+  let row: GameRowWithRelated = game::table
     .find(id)
+    .left_outer_join(node::table)
+    .left_outer_join(player::table)
+    .select(GameRowWithRelated::columns())
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
@@ -460,8 +445,11 @@ pub fn get_full_and_node_token(
   player_id: i32,
 ) -> Result<(Game, Option<PlayerToken>)> {
   use game_used_slot::dsl as gus;
-  let row: GameRow = game::table
+  let row: GameRowWithRelated = game::table
     .find(game_id)
+    .left_outer_join(node::table)
+    .left_outer_join(player::table)
+    .select(GameRowWithRelated::columns())
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
@@ -486,8 +474,9 @@ pub fn get_full_and_node_token(
 #[derive(Debug)]
 pub struct GameStateFromDb {
   pub id: i32,
+  pub status: GameStatus,
   pub players: Vec<i32>,
-  pub node: Option<NodeRef>,
+  pub node_id: Option<i32>,
   pub created_by: Option<i32>,
 }
 
@@ -496,17 +485,18 @@ pub struct GameStateFromDb {
 pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> {
   use game::dsl;
 
-  let rows: Vec<(i32, Option<Value>, Option<i32>)> = game::table
+  let rows: Vec<(i32, GameStatus, Option<i32>, Option<i32>)> = game::table
+    .left_outer_join(node::table)
     .filter(dsl::status.eq_any(&[
       GameStatus::Preparing,
       GameStatus::Created,
       GameStatus::Running,
     ]))
     .order(dsl::created_at)
-    .select((dsl::id, dsl::node, dsl::created_by))
+    .select((dsl::id, dsl::status, dsl::node_id, dsl::created_by))
     .load(conn)?;
 
-  let game_ids: Vec<_> = rows.iter().map(|(id, _, _)| *id).collect();
+  let game_ids: Vec<_> = rows.iter().map(|(id, _, _, _)| *id).collect();
   let mut game_players_map: HashMap<i32, Vec<i32>> = {
     use diesel::pg::expression::dsl::{all, any};
     use game_used_slot::dsl;
@@ -531,13 +521,13 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
   };
 
   let mut games = Vec::with_capacity(rows.len());
-  for (id, node, created_by) in rows {
-    let node = node.map(serde_json::from_value).transpose()?;
+  for (id, status, node_id, created_by) in rows {
     let players = game_players_map.remove(&id).unwrap_or_default();
     games.push(GameStateFromDb {
       id,
+      status,
       players,
-      node,
+      node_id,
       created_by,
     });
   }
@@ -547,33 +537,28 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
 pub fn select_node(conn: &DbConn, id: i32, node_id: Option<i32>) -> Result<()> {
   use game::dsl;
 
-  let node = if let Some(id) = node_id {
-    let node = crate::node::db::get_node(conn, id)?;
-    Some(serde_json::to_value(&crate::node::NodeRef::from(node))?)
-  } else {
-    None
-  };
-
   diesel::update(game::table.find(id))
     .filter(dsl::status.eq(GameStatus::Preparing))
-    .set(dsl::node.eq(node))
+    .set(dsl::node_id.eq(node_id))
     .execute(conn)?;
   Ok(())
 }
 
-fn end_game(conn: &DbConn, id: i32) -> Result<()> {
+fn end_game(conn: &DbConn, id: i32, status: GameStatus) -> Result<()> {
   use diesel::dsl::sql;
   use game::dsl;
   conn.transaction(|| -> Result<_> {
     diesel::update(game::table.find(id))
-      .filter(dsl::status.ne(GameStatus::Ended))
-      .set((
-        dsl::status.eq(GameStatus::Ended),
-        dsl::ended_at.eq(sql("now()")),
-      ))
+      .filter(dsl::status.ne(status))
+      .set((dsl::status.eq(status), dsl::ended_at.eq(sql("now()"))))
       .execute(conn)?;
     Ok(())
   })?;
+  Ok(())
+}
+
+pub fn terminate_game(conn: &DbConn, id: i32) -> Result<()> {
+  end_game(conn, id, GameStatus::Terminated)?;
   Ok(())
 }
 
@@ -616,6 +601,40 @@ pub fn update_reset_created(conn: &DbConn, id: i32) -> Result<()> {
   })
 }
 
+/// Reset all instance specific states
+/// Should be called after every process start
+pub fn reset_instance_state(conn: &DbConn) -> Result<()> {
+  use diesel::pg::expression::dsl::{all, any};
+  use game::dsl as g;
+  use game_used_slot::dsl as gus;
+  // invalidate active games' slot client status
+  conn.transaction(|| {
+    let active_game_id = game::table
+      .select(g::id)
+      .filter(g::status.ne(all(&[GameStatus::Ended, GameStatus::Terminated] as &[_])));
+    diesel::update(game_used_slot::table.filter(gus::game_id.eq(any(active_game_id))))
+      .set(gus::client_status_synced_node_conn_id.eq(Option::<i64>::None))
+      .execute(conn)?;
+    Ok(())
+  })
+}
+
+pub fn get_node_active_game_ids(conn: &DbConn, node_id: i32) -> Result<Vec<i32>> {
+  use diesel::pg::expression::dsl::all;
+  use game::dsl as g;
+
+  game::table
+    .inner_join(game_used_slot::table)
+    .select(g::id)
+    .filter(
+      g::status
+        .ne(all(&[GameStatus::Ended, GameStatus::Terminated] as &[_]))
+        .and(g::node_id.eq(node_id)),
+    )
+    .load(conn)
+    .map_err(Into::into)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
   pub map: Map,
@@ -623,17 +642,17 @@ pub struct Meta {
 }
 
 #[derive(Debug, Queryable)]
-pub struct GameRow {
+pub struct GameRowWithRelated {
   pub id: i32,
   pub name: String,
   pub map_name: String,
   pub status: GameStatus,
-  pub node: Option<Value>,
+  pub node: Option<NodeRef>,
   pub is_private: bool,
   pub secret: Option<i32>,
   pub is_live: bool,
   pub max_players: i32,
-  pub created_by: Option<i32>,
+  pub created_by: Option<PlayerRef>,
   pub started_at: Option<DateTime<Utc>>,
   pub ended_at: Option<DateTime<Utc>>,
   pub meta: Value,
@@ -641,7 +660,45 @@ pub struct GameRow {
   pub updated_at: DateTime<Utc>,
 }
 
-impl GameRow {
+pub(crate) type GameRowWithRelatedColumns = (
+  game::dsl::id,
+  game::dsl::name,
+  game::dsl::map_name,
+  game::dsl::status,
+  diesel::helper_types::Nullable<NodeRefColumns>,
+  game::dsl::is_private,
+  game::dsl::secret,
+  game::dsl::is_live,
+  game::dsl::max_players,
+  diesel::helper_types::Nullable<PlayerRefColumns>,
+  game::dsl::started_at,
+  game::dsl::ended_at,
+  game::dsl::meta,
+  game::dsl::created_at,
+  game::dsl::updated_at,
+);
+
+impl GameRowWithRelated {
+  pub(crate) fn columns() -> GameRowWithRelatedColumns {
+    (
+      game::dsl::id,
+      game::dsl::name,
+      game::dsl::map_name,
+      game::dsl::status,
+      NodeRef::COLUMNS.nullable(),
+      game::dsl::is_private,
+      game::dsl::secret,
+      game::dsl::is_live,
+      game::dsl::max_players,
+      PlayerRef::COLUMNS.nullable(),
+      game::dsl::started_at,
+      game::dsl::ended_at,
+      game::dsl::meta,
+      game::dsl::created_at,
+      game::dsl::updated_at,
+    )
+  }
+
   pub(crate) fn into_game(self, meta: Meta, slots: Vec<Slot>) -> Result<Game> {
     let num_players = slots.iter().filter(|s| s.player.is_some()).count() as i32;
     Ok(Game {
@@ -650,7 +707,7 @@ impl GameRow {
       status: self.status,
       map: meta.map,
       slots,
-      node: self.node.map(serde_json::from_value).transpose()?,
+      node: self.node,
       is_private: self.is_private,
       secret: self.secret,
       is_live: self.is_live,
@@ -675,67 +732,6 @@ pub struct GameInsert<'a> {
   pub max_players: i32,
   pub created_by: Option<i32>,
   pub meta: Value,
-}
-
-#[allow(unused)]
-#[derive(Debug, Identifiable, Queryable, Associations)]
-#[belongs_to(GameRow, foreign_key = "game_id")]
-#[table_name = "game_used_slot"]
-pub struct UsedSlotRow {
-  pub id: i32,
-  pub game_id: i32,
-  pub slot_index: i32,
-  pub team: i32,
-  pub color: i32,
-  pub computer: Computer,
-  pub handicap: i32,
-  pub status: SlotStatus,
-  pub race: Race,
-  pub client_status: SlotClientStatus,
-  pub node_token: Option<Vec<u8>>,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
-  pub player: Option<PlayerRef>,
-}
-
-#[allow(unused)]
-type UsedSlotRowColumns = (
-  game_used_slot::dsl::id,
-  game_used_slot::dsl::game_id,
-  game_used_slot::dsl::slot_index,
-  game_used_slot::dsl::team,
-  game_used_slot::dsl::color,
-  game_used_slot::dsl::computer,
-  game_used_slot::dsl::handicap,
-  game_used_slot::dsl::status,
-  game_used_slot::dsl::race,
-  game_used_slot::dsl::client_status,
-  game_used_slot::dsl::node_token,
-  game_used_slot::dsl::created_at,
-  game_used_slot::dsl::updated_at,
-  Nullable<PlayerRefColumns>,
-);
-
-#[allow(unused)]
-impl UsedSlotRow {
-  fn columns() -> UsedSlotRowColumns {
-    (
-      game_used_slot::dsl::id,
-      game_used_slot::dsl::game_id,
-      game_used_slot::dsl::slot_index,
-      game_used_slot::dsl::team,
-      game_used_slot::dsl::color,
-      game_used_slot::dsl::computer,
-      game_used_slot::dsl::handicap,
-      game_used_slot::dsl::status,
-      game_used_slot::dsl::race,
-      game_used_slot::dsl::client_status,
-      game_used_slot::dsl::node_token,
-      game_used_slot::dsl::created_at,
-      game_used_slot::dsl::updated_at,
-      PlayerRef::COLUMNS.nullable(),
-    )
-  }
 }
 
 #[derive(Debug, Insertable)]

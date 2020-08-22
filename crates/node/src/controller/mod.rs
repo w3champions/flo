@@ -136,6 +136,9 @@ async fn handle_frame(mut tx: mpsc::Sender<Frame>, frame: Frame) -> Result<()> {
           }
         }
       }
+      pkt = PacketControllerUpdateSlotStatus => {
+
+      }
     }
   }
   Ok(())

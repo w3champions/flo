@@ -181,7 +181,7 @@ fn check_origin(
       .body(None)
       .unwrap()
   })?;
-  if !flo_constants::CONNECT_ORIGINS.contains(&origin) {
+  if !flo_constants::CLIENT_ORIGINS.contains(&origin) {
     return Err(
       Response::builder()
         .status(StatusCode::FORBIDDEN)

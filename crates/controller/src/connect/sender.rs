@@ -1,20 +1,23 @@
+use flo_net::packet::*;
+use flo_net::proto::flo_connect::*;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
-use flo_net::packet::*;
-use flo_net::proto::flo_connect::*;
-
 use crate::error::*;
 
-pub type PlayerReceiver = Receiver<Frame>;
+pub type PlayerReceiver = Receiver<PlayerSenderMessage>;
+pub enum PlayerSenderMessage {
+  Frame(Frame),
+  Disconnect(ClientDisconnectReason),
+}
 
 #[derive(Debug, Clone)]
 pub struct PlayerSender {
   sid: u64,
   player_id: i32,
-  sender: Sender<Frame>,
+  sender: Sender<PlayerSenderMessage>,
 }
 
 impl PlayerSender {
@@ -36,23 +39,22 @@ impl PlayerSender {
   }
 
   pub async fn disconnect_multi(&mut self) {
-    self.disconnect(LobbyDisconnectReason::Multi).await.ok();
+    self.disconnect(ClientDisconnectReason::Multi).await;
   }
 
   #[tracing::instrument]
-  async fn disconnect(&mut self, reason: LobbyDisconnectReason) -> Result<()> {
+  async fn disconnect(&mut self, reason: ClientDisconnectReason) {
     self
-      .send(PacketLobbyDisconnect {
-        reason: reason.into(),
-      })
-      .await?;
-    Ok(())
+      .sender
+      .send(PlayerSenderMessage::Disconnect(reason))
+      .await
+      .ok();
   }
 
   pub async fn send_frame(&mut self, frame: Frame) -> Result<()> {
     self
       .sender
-      .send(frame)
+      .send(PlayerSenderMessage::Frame(frame))
       .await
       .map_err(|_| Error::PlayerStreamClosed)?;
     Ok(())

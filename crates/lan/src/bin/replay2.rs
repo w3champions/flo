@@ -1,5 +1,4 @@
-use futures::sink::SinkExt;
-use futures::stream::{StreamExt, TryStreamExt};
+use futures::stream::TryStreamExt;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::net::SocketAddr;
@@ -83,8 +82,6 @@ async fn main() {
 enum LobbyError {
   #[error(transparent)]
   Protocol(#[from] flo_w3gs::error::Error),
-  #[error("invalid player id")]
-  InvalidPlayerId,
 }
 
 async fn run_lobby(
@@ -136,7 +133,7 @@ async fn run_lobby(
   }
 
   // <- ReqJoin
-  let req = {
+  let _req = {
     use flo_w3gs::protocol::join::ReqJoin;
     let packet: Packet = transport.recv().await?;
     let req_join: ReqJoin = packet.decode_simple_payload()?;
@@ -370,7 +367,7 @@ async fn run_lobby(
       let q = action_q.clone();
       let rest = rest.clone();
       let loaded = loaded.clone();
-      let ack = ack.clone();
+      let _ack = ack.clone();
       let checksum = checksum.clone();
       async move {
         use flo_w3gs::action::*;
@@ -384,7 +381,7 @@ async fn run_lobby(
           actions: vec![],
         };
 
-        for (i, record) in rest.iter().enumerate() {
+        for (_i, record) in rest.iter().enumerate() {
           match *record {
             Record::ChatMessage(ref msg) => {
               use flo_w3gs::chat::*;
@@ -646,8 +643,8 @@ async fn run_lobby(
             action_q.lock().unwrap().push(req.data);
           }
           PacketTypeId::OutgoingKeepAlive => {
-            let req: OutgoingKeepAlive = p.decode_simple_payload()?;
-            let checksum = checksum.load(Ordering::SeqCst);
+            let _req: OutgoingKeepAlive = p.decode_simple_payload()?;
+            let _checksum = checksum.load(Ordering::SeqCst);
             // tracing::debug!("ack: {:?}", req);
             // if checksum != req.checksum {
             //   tracing::error!("desync: 0x{:x} != 0x{:x}", req.checksum, checksum);

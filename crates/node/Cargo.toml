@@ -9,6 +9,7 @@ flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 flo-net = { path = "../net" }
 flo-constants = { path = "../constants" }
+flo-event = { path = "../event" }
 
 thiserror = "1.0.20"
 bytes = "0.5.6"

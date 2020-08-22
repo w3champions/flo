@@ -17,6 +17,8 @@ pub enum Error {
   },
   #[error("unexpected node response")]
   NodeResponseUnexpected,
+  #[error("node request processing")]
+  NodeRequestProcessing,
   #[error("node request timeout")]
   NodeRequestTimeout,
   #[error("node request cancelled")]
@@ -41,16 +43,18 @@ pub enum Error {
   GameDataInvalid,
   #[error("the game you are trying to join is full")]
   GameFull,
-  #[error("game is busy")]
-  GameBusy,
   #[error("create game request already exists")]
   GameCreating,
   #[error("create game request rejected: {0:?}")]
   GameCreateReject(flo_net::proto::flo_node::ControllerCreateGameRejectReason),
+  #[error("create game request rejected: {0:?}")]
+  GameLeaveRejected(flo_net::proto::flo_node::UpdateSlotClientStatusRejectReason),
   #[error("game node not selected")]
   GameNodeNotSelected,
   #[error("slot update denied")]
   GameSlotUpdateDenied,
+  #[error("game already started")]
+  GameStarted,
   #[error("this map has no player slot")]
   MapHasNoPlayer,
   #[error("you can only join one game at a time")]

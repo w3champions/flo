@@ -39,18 +39,27 @@ message PacketControllerCreateGameReject {
 message PacketControllerUpdateSlotStatus {
   int32 game_id = 1;
   int32 player_id = 2;
-  flo_common.SlotClientStatus game_client_status = 3;
+  flo_common.SlotClientStatus status = 3;
 }
 
 message PacketControllerUpdateSlotStatusAccept {
   int32 game_id = 1;
   int32 player_id = 2;
+  flo_common.SlotClientStatus status = 3;
 }
 
 message PacketControllerUpdateSlotStatusReject {
   int32 game_id = 1;
   int32 player_id = 2;
-  UpdateSlotStatusRejectReason reason = 3;
+  UpdateSlotClientStatusRejectReason reason = 3;
+}
+
+message PacketControllerQueryGameStatus {
+  repeated int32 game_ids = 1;
+}
+
+message PacketNodeGameStatusUpdateBulk {
+  repeated PacketNodeGameStatusUpdate games = 1;
 }
 
 message PacketNodeGameStatusUpdate {
@@ -75,17 +84,21 @@ message PacketClientConnectReject {
 }
 
 message PacketClientUpdateSlotClientStatusRequest {
-  flo_common.SlotClientStatus status = 1;
+  int32 player_id = 1;
+  int32 game_id = 2;
+  flo_common.SlotClientStatus status = 3;
 }
 
 message PacketClientUpdateSlotClientStatus {
   int32 player_id = 1;
-  flo_common.SlotClientStatus status = 2;
+  int32 game_id = 2;
+  flo_common.SlotClientStatus status = 3;
 }
 
 message PacketClientUpdateSlotClientStatusReject {
   int32 player_id = 1;
-  UpdateSlotStatusRejectReason reason = 2;
+  int32 game_id = 2;
+  UpdateSlotClientStatusRejectReason reason = 3;
 }
 
 enum ClientConnectRejectReason {
@@ -102,11 +115,11 @@ enum ControllerCreateGameRejectReason {
   ControllerCreateGameRejectReasonMaintenance = 3;
 }
 
-enum UpdateSlotStatusRejectReason {
-  UpdateSlotStatusRejectReasonUnknown = 0;
-  UpdateSlotStatusRejectReasonNotFound = 1;
-  UpdateSlotStatusRejectReasonInvalidStatus = 2;
-  UpdateSlotStatusRejectReasonMaintenance = 3;
+enum UpdateSlotClientStatusRejectReason {
+  UpdateSlotClientStatusRejectReasonUnknown = 0;
+  UpdateSlotClientStatusRejectReasonNotFound = 1;
+  UpdateSlotClientStatusRejectReasonInvalidStatus = 2;
+  UpdateSlotClientStatusRejectReasonMaintenance = 3;
 }
 
 message PlayerToken {

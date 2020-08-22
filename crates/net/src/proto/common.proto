@@ -49,6 +49,6 @@ enum SlotClientStatus {
   SlotClientStatusConnected = 1;
   SlotClientStatusLoading = 2;
   SlotClientStatusLoaded = 3;
-  SlotClientStatusLeft = 4;
-  SlotClientStatusDisconnected = 5;
+  SlotClientStatusDisconnected = 4;
+  SlotClientStatusLeft = 5;
 }

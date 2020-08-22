@@ -112,13 +112,13 @@ impl LobbyStream {
     mut ws_sender: WsMessageSender,
     token: String,
   ) -> Result<()> {
-    let addr = format!("{}:{}", domain, flo_constants::LOBBY_SOCKET_PORT);
+    let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
     tracing::debug!("connect addr: {}", addr);
 
     let mut stream = FloStream::connect(addr).await?;
 
     stream
-      .send(PacketConnectLobby {
+      .send(PacketClientConnect {
         connect_version: Some(crate::version::FLO_VERSION.into()),
         token,
       })
@@ -128,14 +128,14 @@ impl LobbyStream {
 
     let (session, nodes) = flo_net::try_flo_packet! {
       reply => {
-        p = PacketConnectLobbyAccept => {
+        p = PacketClientConnectAccept => {
           nodes_reg.update_nodes(p.nodes.clone())?;
           (
             PlayerSession::unpack(p.session)?,
             p.nodes
           )
         }
-        p = PacketConnectLobbyReject => {
+        p = PacketClientConnectReject => {
           return Err(Error::ConnectionRequestRejected(S2ProtoEnum::unpack_enum(p.reason())))
         }
       }
@@ -257,7 +257,7 @@ impl LobbyStream {
   ) -> Result<()> {
     let msg = flo_net::try_flo_packet! {
       frame => {
-        p = PacketLobbyDisconnect => {
+        p = PacketClientDisconnect => {
           message::OutgoingMessage::Disconnect(message::Disconnect {
             reason: S2ProtoEnum::unpack_i32(p.reason)?,
             message: "Server closed the connection".to_string()
@@ -265,8 +265,7 @@ impl LobbyStream {
         }
         p = PacketGameInfo => {
           nodes.set_selected_node(p.game.as_ref().and_then(|g| {
-            let node = g.node.as_ref()?;
-            node.id.clone()
+            g.node.as_ref().map(|node| node.id)
           }))?;
 
           let game: GameInfo = p.game.extract()?;
@@ -374,7 +373,7 @@ impl LobbyStream {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::LobbyDisconnectReason")]
+#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ClientDisconnectReason")]
 pub enum DisconnectReason {
   Unknown = 0,
   Multi = 1,
@@ -419,7 +418,7 @@ pub enum PlayerSource {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ConnectLobbyRejectReason")]
+#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ClientConnectRejectReason")]
 pub enum RejectReason {
   Unknown = 0,
   ClientVersionTooOld = 1,

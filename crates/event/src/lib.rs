@@ -52,11 +52,7 @@ impl<T> EventSender<T> {
     let result = self.inner.send(event).await;
 
     if let Err(err) = result {
-      let event = match TrySendError::from(err) {
-        TrySendError::Closed(event) => event,
-        TrySendError::Full(event) => event,
-      };
-      return Err(EventSendError::new(event));
+      return Err(EventSendError::new(err.0));
     }
 
     Ok(())

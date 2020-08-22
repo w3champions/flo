@@ -13,9 +13,9 @@ use crate::error::*;
 use crate::game::{
   db::{get_all_active_game_state, GameStateFromDb},
   start::StartGameState,
-  GameEntry, SlotClientStatus,
+  GameEntry, GameStatus, SlotClientStatus,
 };
-use crate::node::{conn::CreatedGameInfo, NodeRef, NodeRegistry, NodeRegistryRef};
+use crate::node::{conn::CreatedGameInfo, NodeRegistry, NodeRegistryRef};
 
 pub use config::ConfigClientStorageRef;
 use config::ConfigStorage;
@@ -66,6 +66,7 @@ impl ControllerStateRef {
 
 #[derive(Debug)]
 pub struct MemGameState {
+  pub status: GameStatus,
   pub host_player: Option<i32>,
   pub players: Vec<i32>,
   pub selected_node_id: Option<i32>,
@@ -74,8 +75,9 @@ pub struct MemGameState {
 }
 
 impl MemGameState {
-  fn new(host_player: Option<i32>, players: &[i32]) -> Self {
+  fn new(status: GameStatus, host_player: Option<i32>, players: &[i32]) -> Self {
     MemGameState {
+      status,
       host_player,
       players: players.to_vec(),
       selected_node_id: None,
@@ -160,10 +162,7 @@ impl MemStorageState {
 
       game_players.insert(item.id, item.players.clone());
 
-      let selected_node_id = match item.node {
-        Some(NodeRef::Public { id, .. }) => Some(id),
-        _ => None,
-      };
+      let selected_node_id = item.node_id;
 
       if let Some(node_id) = selected_node_id.clone() {
         game_selected_node.insert(item.id, node_id);
@@ -173,7 +172,7 @@ impl MemStorageState {
         item.id,
         Arc::new(Mutex::new(MemGameState {
           selected_node_id,
-          ..MemGameState::new(item.created_by, &item.players)
+          ..MemGameState::new(item.status, item.created_by, &item.players)
         })),
       );
     }
@@ -191,7 +190,13 @@ impl MemStorageState {
 }
 
 impl MemStorageRef {
-  pub async fn register_game(&self, id: i32, host_player: Option<i32>, players: &[i32]) {
+  pub async fn register_game(
+    &self,
+    id: i32,
+    status: GameStatus,
+    host_player: Option<i32>,
+    players: &[i32],
+  ) {
     let mut storage_lock = self.state.write();
     if storage_lock.games.contains_key(&id) {
       tracing::warn!("override game state: id = {}", id);
@@ -199,7 +204,7 @@ impl MemStorageRef {
     storage_lock.game_players.insert(id, players.to_vec());
     storage_lock.games.insert(
       id,
-      Arc::new(Mutex::new(MemGameState::new(host_player, players))),
+      Arc::new(Mutex::new(MemGameState::new(status, host_player, players))),
     );
   }
 
@@ -389,22 +394,22 @@ impl LockedPlayerState {
     self.guard.game_id = Some(game_id)
   }
 
-  pub fn leave_game(&mut self) {
-    self.guard.game_id = None;
+  pub fn leave_game(&mut self, game_id: i32) {
+    if self.guard.game_id == Some(game_id) {
+      self.guard.game_id = None;
+    }
   }
 
   #[tracing::instrument(skip(self, sender))]
-  pub fn replace_sender(&mut self, sender: PlayerSender) {
-    if let Some(mut sender) = self.sender_map.write().remove(&self.id) {
+  pub async fn replace_sender(&mut self, sender: PlayerSender) {
+    let replaced = { self.sender_map.write().insert(self.id, sender) };
+    if let Some(mut sender) = replaced {
       tracing::debug!("sender replaced");
-      tokio::spawn(async move {
-        sender.disconnect_multi().await;
-      });
+      sender.disconnect_multi().await;
     }
-    self.sender_map.write().insert(self.id, sender);
   }
 
-  pub fn remove_sender(&mut self, sid: u64) {
+  pub fn remove_closed_sender(&mut self, sid: u64) {
     let mut sender_map = self.sender_map.write();
     if sender_map
       .get(&self.id)
@@ -441,7 +446,15 @@ impl LockedGameState {
     self.id
   }
 
-  pub fn player_slots_locked(&self) -> bool {
+  pub fn status(&self) -> GameStatus {
+    self.guard.status
+  }
+
+  pub fn set_status(&mut self, status: GameStatus) {
+    self.guard.status = status
+  }
+
+  pub fn started(&self) -> bool {
     self.guard.start_state.is_some() || self.guard.player_tokens.is_some()
   }
 
@@ -497,6 +510,10 @@ impl LockedGameState {
     }
   }
 
+  pub fn selected_node_id(&self) -> Option<i32> {
+    self.guard.selected_node_id.clone()
+  }
+
   pub fn start(&mut self) -> bool {
     if self.guard.start_state.is_some() {
       return false;
@@ -515,7 +532,7 @@ impl LockedGameState {
     self.guard.start_state.take()
   }
 
-  pub fn start_ack(
+  pub fn start_player_ack(
     &mut self,
     player_id: i32,
     pkt: flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest,

@@ -57,7 +57,7 @@ impl Frame {
 /// ```no_run
 /// flo_net::try_flo_packet! {
 ///   frame => {
-///     p = PacketLobbyDisconnect => {
+///     p = PacketClientDisconnect => {
 ///       LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
 ///     },
 ///     p = PacketGameInfo => {
@@ -102,11 +102,11 @@ pub enum PacketTypeId {
 
   // Client <-> Lobby
   #[bin(value = 0x03)]
-  ConnectLobby,
+  ConnectController,
   #[bin(value = 0x04)]
-  ConnectLobbyAccept,
+  ConnectControllerAccept,
   #[bin(value = 0x05)]
-  ConnectLobbyReject,
+  ConnectControllerReject,
   #[bin(value = 0x06)]
   LobbyDisconnect,
   #[bin(value = 0x07)]
@@ -162,11 +162,13 @@ pub enum PacketTypeId {
   #[bin(value = 0x35)]
   ControllerCreateGameReject,
   #[bin(value = 0x36)]
-  PacketControllerUpdatePlayerGameClientStatus,
+  ControllerUpdateSlotStatus,
   #[bin(value = 0x37)]
-  PacketControllerUpdatePlayerGameClientStatusAccept,
+  ControllerUpdateSlotStatusAccept,
   #[bin(value = 0x38)]
-  PacketControllerUpdatePlayerGameClientStatusReject,
+  ControllerUpdateSlotStatusReject,
+  #[bin(value = 0x39)]
+  ControllerQueryGameStatus,
 
   // Client <-> Node
   #[bin(value = 0x40)]
@@ -185,6 +187,8 @@ pub enum PacketTypeId {
   // Node -> [Client, Controller]
   #[bin(value = 0x50)]
   NodeGameStatusUpdate,
+  #[bin(value = 0x51)]
+  NodeGameStatusUpdateBulk,
 
   // Controller <-> Observer
   #[bin(value = 0x60)]

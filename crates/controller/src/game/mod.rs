@@ -5,18 +5,57 @@ pub mod token;
 mod types;
 
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
-use s2_grpc_utils::S2ProtoPack;
+use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack};
 use std::collections::HashMap;
 
 use flo_net::proto;
 
 use crate::error::*;
-use crate::game::db::LeaveGameParams;
+use crate::game::db::{CreateGameParams, LeaveGameParams};
+use crate::node::conn::PlayerLeaveResponse;
 use crate::node::PlayerToken;
 use crate::state::event::FloEventContext;
-use crate::state::{ControllerStateRef, LockedGameState};
+use crate::state::{ControllerStateRef, LockedGameState, LockedPlayerState};
 pub use slots::Slots;
 pub use types::*;
+
+pub async fn create_game(state: ControllerStateRef, params: CreateGameParams) -> Result<Game> {
+  let player_id = params.player_id;
+  let game = {
+    let mut player_state = state.mem.lock_player_state(player_id).await;
+
+    if player_state.joined_game_id().is_some() {
+      return Err(Error::MultiJoin.into());
+    }
+
+    let game = state
+      .db
+      .exec(move |conn| crate::game::db::create(conn, params))
+      .await?;
+    state
+      .mem
+      .register_game(game.id, game.status, Some(player_id), &[player_id])
+      .await;
+
+    player_state.join_game(game.id);
+    let update = player_state.get_session_update();
+    if let Some(mut sender) = player_state.get_sender_cloned() {
+      let next_game = game.clone().pack()?;
+      sender.send(update).await.ok();
+      sender
+        .send({
+          use flo_net::proto::flo_connect::*;
+          PacketGameInfo {
+            game: Some(next_game),
+          }
+        })
+        .await
+        .ok();
+    }
+    game
+  };
+  Ok(game)
+}
 
 pub async fn join_game(state: ControllerStateRef, game_id: i32, player_id: i32) -> Result<Game> {
   use crate::game::db::JoinGameParams;
@@ -35,8 +74,8 @@ pub async fn join_game(state: ControllerStateRef, game_id: i32, player_id: i32) 
       .await
       .ok_or_else(|| Error::GameNotFound)?;
 
-    if game_guard.player_slots_locked() {
-      return Err(Error::GameBusy);
+    if game_guard.started() {
+      return Err(Error::GameStarted);
     }
 
     let game = state
@@ -53,11 +92,11 @@ pub async fn join_game(state: ControllerStateRef, game_id: i32, player_id: i32) 
     game_guard.add_player(player_id);
     let update = player_guard.get_session_update();
     if let Some(mut sender) = player_guard.get_sender_cloned() {
-      let next_game = game.clone().into_packet();
+      let next_game = game.clone().pack()?;
       sender.send(update).await?;
       sender
         .send(proto::flo_connect::PacketGameInfo {
-          game: next_game.into(),
+          game: Some(next_game),
         })
         .await?;
     }
@@ -97,8 +136,7 @@ pub async fn join_game(state: ControllerStateRef, game_id: i32, player_id: i32) 
 }
 
 pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32) -> Result<()> {
-  let mut player_guard = state.mem.lock_player_state(player_id).await;
-
+  let player_guard = state.mem.lock_player_state(player_id).await;
   let player_state_game_id = if let Some(id) = player_guard.joined_game_id() {
     id
   } else {
@@ -113,27 +151,43 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
       );
   }
 
-  let mut game_guard = state
+  let game_guard = state
     .mem
     .lock_game_state(player_state_game_id)
     .await
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if game_guard.player_slots_locked() {
-    return Err(Error::GameBusy);
+  match game_guard.status() {
+    GameStatus::Preparing => leave_game_lobby(state, game_guard, player_guard).await?,
+    GameStatus::Created | GameStatus::Running | GameStatus::Paused => {
+      leave_game_abort(state, game_guard, player_guard).await?;
+    }
+    GameStatus::Ended => {
+      tracing::error!(game_id, player_id, "player requested to leave a Ended game");
+    }
+    GameStatus::Terminated => {
+      tracing::error!(
+        game_id,
+        player_id,
+        "player requested to leave a Terminated game"
+      );
+    }
   }
+
+  Ok(())
+}
+
+async fn leave_game_lobby(
+  state: ControllerStateRef,
+  mut game_guard: LockedGameState,
+  mut player_guard: LockedPlayerState,
+) -> Result<()> {
+  let game_id = game_guard.id();
+  let player_id = player_guard.id();
 
   let leave = state
     .db
-    .exec(move |conn| {
-      crate::game::db::leave(
-        conn,
-        LeaveGameParams {
-          player_id,
-          game_id: player_state_game_id,
-        },
-      )
-    })
+    .exec(move |conn| crate::game::db::leave_lobby(conn, LeaveGameParams { player_id, game_id }))
     .await?;
 
   let broadcast_futures = FuturesUnordered::new();
@@ -141,7 +195,7 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
     for removed_player_id in leave.removed_players {
       game_guard.remove_player(player_id);
       if removed_player_id == player_id {
-        player_guard.leave_game();
+        player_guard.leave_game(game_id);
         // send to self
         let update = player_guard.get_session_update();
         if let Some(mut sender) = player_guard.get_sender_cloned() {
@@ -149,7 +203,7 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
         }
       } else {
         let mut other_player_guard = state.mem.lock_player_state(removed_player_id).await;
-        other_player_guard.leave_game();
+        other_player_guard.leave_game(game_id);
         // kick self
         let update = other_player_guard.get_session_update();
         if let Some(mut sender) = other_player_guard.get_sender_cloned() {
@@ -159,7 +213,7 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
     }
     game_guard.close();
   } else {
-    player_guard.leave_game();
+    player_guard.leave_game(game_id);
     game_guard.remove_player(player_id);
 
     // send to self
@@ -181,7 +235,7 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
           .broadcast({
             use proto::flo_connect::*;
             PacketGamePlayerLeave {
-              game_id: player_state_game_id,
+              game_id,
               player_id,
               reason: PlayerLeaveReason::Left.into(),
             }
@@ -193,7 +247,86 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
     );
   }
 
+  drop(game_guard);
+  drop(player_guard);
+
   broadcast_futures.collect::<Vec<_>>().await;
+  Ok(())
+}
+
+// Game has been created on node, force quit game
+async fn leave_game_abort(
+  state: ControllerStateRef,
+  game_guard: LockedGameState,
+  player_guard: LockedPlayerState,
+) -> Result<()> {
+  let game_id = game_guard.id();
+  let player_id = player_guard.id();
+
+  let node_id = if let Some(node_id) = game_guard.selected_node_id() {
+    node_id
+  } else {
+    return Err(Error::GameNodeNotSelected);
+  };
+
+  // because node conn request could take 5s to timeout
+  // drop game guard early to allow other player to send leave request
+  drop(game_guard);
+
+  // drop player guard to not block other player actions
+  drop(player_guard);
+
+  let conn = state.nodes.get_conn(node_id)?;
+
+  match conn.player_leave(game_id, player_id).await {
+    Ok(PlayerLeaveResponse::Accepted(_)) => {}
+    Ok(PlayerLeaveResponse::Rejected(reason)) => {
+      tracing::error!(
+        game_id,
+        node_id,
+        player_id,
+        "force leave node rejected: {:?}",
+        reason
+      );
+    }
+    Err(err) => {
+      tracing::error!(
+        game_id,
+        node_id,
+        player_id,
+        "force leave node error: {}",
+        err
+      );
+    }
+  }
+
+  let mut game_guard = match state.mem.lock_game_state(game_id).await {
+    Some(guard) => guard,
+    None => {
+      // game already ended
+      return Ok(());
+    }
+  };
+
+  let mut player_guard = state.mem.lock_player_state(player_id).await;
+  game_guard.remove_player(player_id);
+
+  state
+    .db
+    .exec(move |conn| crate::game::db::leave_node(conn, game_id, player_id))
+    .await?;
+  game_guard
+    .get_broadcaster()
+    .broadcast(
+      flo_net::proto::flo_node::PacketClientUpdateSlotClientStatus {
+        game_id,
+        player_id,
+        status: SlotClientStatus::Left.into_proto_enum().into(),
+      },
+    )
+    .await
+    .ok();
+  player_guard.leave_game(game_id);
 
   Ok(())
 }
@@ -299,8 +432,8 @@ pub async fn start_game(state: ControllerStateRef, game_id: i32, player_id: i32)
     .await
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if game_guard.player_slots_locked() {
-    return Err(Error::GameBusy);
+  if game_guard.started() {
+    return Err(Error::GameStarted);
   }
 
   if game_guard.get_host_player() != Some(player_id) {
@@ -384,7 +517,7 @@ pub async fn create_node_game(
     .exec(move |conn| crate::game::db::get_full(conn, game_id))
     .await?;
 
-  let node_id = if let Some(id) = game.node.as_ref().and_then(|node| node.get_node_id()) {
+  let node_id = if let Some(id) = game.node.as_ref().map(|node| node.id) {
     id
   } else {
     return Err(Error::GameNodeNotSelected);
@@ -468,6 +601,7 @@ pub async fn create_node_game(
     .db
     .exec(move |conn| crate::game::db::update_created(conn, game_id, token_map))
     .await?;
+  game_guard.set_status(GameStatus::Created);
 
   Ok(())
 }

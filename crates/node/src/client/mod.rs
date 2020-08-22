@@ -1,3 +1,6 @@
+mod event;
+pub use event::{ClientEvent, ClientEventSender};
+
 use futures::stream::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;

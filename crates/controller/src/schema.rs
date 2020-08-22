@@ -13,7 +13,7 @@ table! {
         name -> Text,
         map_name -> Text,
         status -> Int4,
-        node -> Nullable<Jsonb>,
+        node_id -> Nullable<Int4>,
         is_private -> Bool,
         secret -> Nullable<Int4>,
         is_live -> Bool,
@@ -43,6 +43,7 @@ table! {
         node_token -> Nullable<Bytea>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        client_status_synced_node_conn_id -> Nullable<Int8>,
     }
 }
 
@@ -81,6 +82,7 @@ table! {
     }
 }
 
+joinable!(game -> node (node_id));
 joinable!(game -> player (created_by));
 joinable!(game_used_slot -> game (game_id));
 joinable!(game_used_slot -> player (player_id));

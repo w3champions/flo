@@ -1,3 +1,5 @@
+mod event;
+pub use event::{handle_events, NodeEvent, NodeEventSender};
 mod types;
 pub use types::*;
 
@@ -5,22 +7,29 @@ use dashmap::DashMap;
 use lazy_static::lazy_static;
 use parking_lot::RwLockWriteGuard;
 use parking_lot::{Mutex, RwLock};
+use s2_grpc_utils::S2ProtoEnum;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
+use tracing_futures::Instrument;
 
+use flo_event::FloEvent;
 use flo_net::packet::{FloPacket, Frame, OptionalFieldExt};
 use flo_net::proto::flo_node::{
   ClientConnectRejectReason, ControllerCreateGameRejectReason, Game, PacketClientConnect,
   PacketClientConnectAccept, PacketClientConnectReject, PacketControllerConnectReject,
   PacketControllerCreateGame, PacketControllerCreateGameAccept, PacketControllerCreateGameReject,
+  PacketControllerUpdateSlotStatus, PacketControllerUpdateSlotStatusAccept,
+  PacketControllerUpdateSlotStatusReject,
 };
 
 use crate::error::*;
+use crate::game::{GameEventSender, GameSessionRef, GameStatus};
 use crate::metrics;
 
 #[derive(Debug)]
 pub struct SessionStore {
+  event_sender: NodeEventSender,
   pending_players: PendingPlayerRegistry,
   connected_players: DashMap<i32, ConnectedPlayer>,
   games: GameRegistry,
@@ -36,11 +45,22 @@ impl SessionStore {
   }
 
   fn new() -> Self {
+    let (event_sender, event_receiver) = NodeEvent::channel(100);
+
+    tokio::spawn(
+      handle_events(event_receiver).instrument(tracing::debug_span!("event_handler_worker")),
+    );
+
     SessionStore {
+      event_sender,
       pending_players: PendingPlayerRegistry::new(),
       connected_players: DashMap::new(),
       games: GameRegistry::new(),
     }
+  }
+
+  pub fn get_pending_player(&self, token: &PlayerToken) -> Option<PendingPlayer> {
+    self.pending_players.get_by_token(token)
   }
 
   pub fn handle_controller_create_game(&self, packet: PacketControllerCreateGame) -> Result<Frame> {
@@ -84,7 +104,10 @@ impl SessionStore {
         .collect()
     };
 
-    if let Err(err) = self.games.register(game) {
+    if let Err(err) = self
+      .games
+      .register_game(self.event_sender.clone().into(), game)
+    {
       let reason = match err {
         Error::GameExists => ControllerCreateGameRejectReason::GameExists,
         Error::PlayerBusy(_) => ControllerCreateGameRejectReason::PlayerBusy,
@@ -118,7 +141,6 @@ impl SessionStore {
       }
     }
 
-    metrics::GAME_SESSIONS.inc();
     metrics::PENDING_PLAYER_TOKENS.add(player_tokens.len() as i64);
 
     Ok(
@@ -130,8 +152,76 @@ impl SessionStore {
     )
   }
 
-  pub fn get_pending_player(&self, token: &PlayerToken) -> Option<PendingPlayer> {
-    self.pending_players.get_by_token(token)
+  pub async fn handle_controller_update_slot_client_status(
+    &self,
+    packet: PacketControllerUpdateSlotStatus,
+  ) -> Result<Frame> {
+    use flo_net::proto::flo_common::SlotClientStatus;
+    use flo_net::proto::flo_node::UpdateSlotClientStatusRejectReason;
+    let game_id = packet.game_id;
+    let player_id = packet.player_id;
+    let client_status = packet.status();
+
+    if client_status != SlotClientStatus::Left {
+      tracing::error!("controller can only change client status to leave");
+      return Ok(
+        PacketControllerUpdateSlotStatusReject {
+          player_id,
+          game_id,
+          reason: UpdateSlotClientStatusRejectReason::InvalidStatus.into(),
+        }
+        .encode_as_frame()?,
+      );
+    }
+
+    let game = match self.games.get(game_id) {
+      Some(game) => game,
+      None => {
+        return Ok(
+          PacketControllerUpdateSlotStatusReject {
+            player_id,
+            game_id,
+            reason: UpdateSlotClientStatusRejectReason::NotFound.into(),
+          }
+          .encode_as_frame()?,
+        );
+      }
+    };
+
+    match game
+      .update_player_client_status(player_id, S2ProtoEnum::unpack_enum(client_status))
+      .await
+    {
+      Ok(_) => Ok(
+        PacketControllerUpdateSlotStatusAccept {
+          player_id,
+          game_id,
+          status: client_status.into(),
+        }
+        .encode_as_frame()?,
+      ),
+      Err(err) => match err {
+        Error::InvalidClientStatusTransition => Ok(
+          PacketControllerUpdateSlotStatusReject {
+            player_id,
+            game_id,
+            reason: UpdateSlotClientStatusRejectReason::InvalidStatus.into(),
+          }
+          .encode_as_frame()?,
+        ),
+        err => {
+          tracing::error!(game_id, player_id, "update client status: {}", err);
+          Ok(
+            PacketControllerUpdateSlotStatusReject {
+              player_id,
+              game_id,
+              reason: UpdateSlotClientStatusRejectReason::Unknown.into(),
+            }
+            .encode_as_frame()?,
+          )
+        }
+      },
+    }
   }
 }
 
@@ -190,7 +280,7 @@ impl PendingPlayerRegistry {
 
 #[derive(Debug)]
 struct GameRegistry {
-  map: DashMap<i32, Arc<RwLock<GameSession>>>,
+  map: DashMap<i32, GameSessionRef>,
 }
 
 impl GameRegistry {
@@ -201,21 +291,21 @@ impl GameRegistry {
   }
 
   // for controller
-  fn register(&self, game: Game) -> Result<()> {
+  fn register_game(&self, event_sender: GameEventSender, game: Game) -> Result<()> {
+    use dashmap::mapref::entry::Entry;
     let game_id = game.id;
 
-    if let Some(game) = self.map.get(&game_id) {
-      if game.read().status != GameStatus::Created {
-        return Err(Error::GameExists);
+    match self.map.entry(game_id) {
+      Entry::Vacant(entry) => {
+        entry.insert(GameSessionRef::new(event_sender, game)?);
+        metrics::GAME_SESSIONS.inc();
       }
+      Entry::Occupied(_) => {}
     }
-
-    let session = Arc::new(RwLock::new(GameSession::new(game)?));
-
-    if self.map.insert(game_id, session).is_none() {
-      metrics::GAME_SESSIONS.inc();
-    }
-
     Ok(())
+  }
+
+  fn get(&self, game_id: i32) -> Option<GameSessionRef> {
+    self.map.get(&game_id).map(|r| r.value().clone())
   }
 }

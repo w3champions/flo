@@ -8,10 +8,14 @@ pub enum Error {
   NoPlayer,
   #[error("player busy: {0}")]
   PlayerBusy(i32),
+  #[error("player not found in game")]
+  PlayerNotFoundInGame,
   #[error("invalid secret")]
   InvalidSecret,
   #[error("invalid token")]
   InvalidToken,
+  #[error("invalid client status transition")]
+  InvalidClientStatusTransition,
   #[error("tokio io: {0}")]
   Tokio(#[from] tokio::io::Error),
   #[error("operation timeout")]

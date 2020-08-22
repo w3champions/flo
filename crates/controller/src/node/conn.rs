@@ -1,4 +1,3 @@
-use futures::FutureExt;
 use parking_lot::RwLock;
 use s2_grpc_utils::S2ProtoUnpack;
 use std::collections::HashMap;
@@ -93,9 +92,6 @@ impl NodeConn {
     let game_id = game.id;
 
     let req_id = RequestId::CreateGame(game_id);
-    if self.state.has_pending_request(req_id) {
-      return Err(Error::GameCreating);
-    }
 
     if *self.state.status.read() != NodeConnStatus::Connected {
       return Err(Error::NodeNotReady);
@@ -139,10 +135,10 @@ impl NodeConn {
       .request(req_id, {
         let mut sender = self.state.sender.clone();
         async move {
-          sender.send(pkt.encode_as_frame()?).await.map_err(|_| {
-            tracing::error!("node frame receiver dropped");
-            Error::NodeRequestCancelled
-          })
+          sender
+            .send(pkt.encode_as_frame()?)
+            .await
+            .map_err(|_| Error::NodeRequestCancelled)
         }
       })
       .await?;
@@ -150,6 +146,37 @@ impl NodeConn {
     if let Response::GameCreated(game_info) = res {
       Ok(game_info)
     } else {
+      tracing::error!(game_id, "unexpected node response: {:?}", res);
+      Err(Error::NodeResponseUnexpected)
+    }
+  }
+
+  pub async fn player_leave(&self, game_id: i32, player_id: i32) -> Result<PlayerLeaveResponse> {
+    let req = RequestId::PlayerLeave(PlayerLeaveRequestId { game_id, player_id });
+    let res = self
+      .state
+      .clone()
+      .request(req, {
+        let mut sender = self.state.sender.clone();
+        async move {
+          let pkt = PacketClientUpdateSlotClientStatusRequest {
+            player_id,
+            game_id,
+            status: SlotClientStatus::Left.into(),
+          };
+
+          sender
+            .send(pkt.encode_as_frame()?)
+            .await
+            .map_err(|_| Error::NodeRequestCancelled)
+        }
+      })
+      .await?;
+
+    if let Response::PlayerLeave(res) = res {
+      Ok(res)
+    } else {
+      tracing::error!(game_id, player_id, "unexpected node response: {:?}", res);
       Err(Error::NodeResponseUnexpected)
     }
   }
@@ -283,13 +310,25 @@ impl Drop for PendingRequest {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 enum RequestId {
   CreateGame(i32),
-  PlayerAbort(i32),
+  PlayerLeave(PlayerLeaveRequestId),
 }
 
 #[derive(Debug)]
 enum Response {
   GameCreated(CreatedGameInfo),
-  PlayerAborted,
+  PlayerLeave(PlayerLeaveResponse),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PlayerLeaveRequestId {
+  game_id: i32,
+  player_id: i32,
+}
+
+#[derive(Debug)]
+pub enum PlayerLeaveResponse {
+  Accepted(SlotClientStatus),
+  Rejected(UpdateSlotClientStatusRejectReason),
 }
 
 #[derive(Debug)]
@@ -304,21 +343,25 @@ struct NodeConnState {
 }
 
 impl NodeConnState {
-  pub fn has_pending_request(&self, id: RequestId) -> bool {
-    self.pending_requests.read().contains_key(&id)
-  }
-
   pub async fn request<Fut>(self: Arc<Self>, id: RequestId, action: Fut) -> Result<Response>
   where
     Fut: Future<Output = Result<()>> + Send + 'static,
   {
-    let (sender, receiver) = oneshot::channel();
-    let dropper = Arc::new(Notify::new());
-    let pending = PendingRequest {
-      sender: Some(sender),
-      dropper: dropper.clone(),
+    let (dropper, receiver) = {
+      let mut guard = self.pending_requests.write();
+      if guard.contains_key(&id) {
+        return Err(Error::NodeRequestProcessing);
+      }
+
+      let dropper = Arc::new(Notify::new());
+      let (sender, receiver) = oneshot::channel();
+      let pending = PendingRequest {
+        sender: Some(sender),
+        dropper: dropper.clone(),
+      };
+      guard.insert(id, pending);
+      (dropper, receiver)
     };
-    self.pending_requests.write().insert(id, pending);
     tokio::spawn(
       {
         let state = self.clone();
@@ -388,28 +431,41 @@ impl NodeConnState {
       frame => {
         packet = PacketControllerCreateGameAccept => {
           let game_id = packet.game_id;
-          self.reply_create_game(
-            game_id,
-            CreatedGameInfo::unpack(packet).map_err(Into::into),
+          self.request_callback(
+            RequestId::CreateGame(game_id),
+            CreatedGameInfo::unpack(packet).map_err(Into::into).map(Response::GameCreated),
           )
         }
         packet = PacketControllerCreateGameReject => {
           let game_id = packet.game_id;
-          self.reply_create_game(
-            game_id,
-            Err(Error::GameCreateReject(packet.reason())),
+          self.request_callback(
+            RequestId::CreateGame(game_id),
+            Err(Error::GameCreateReject(packet.reason()))
+          )
+        }
+        packet = PacketClientUpdateSlotClientStatus => {
+          let req = RequestId::PlayerLeave(PlayerLeaveRequestId {
+            game_id: packet.game_id,
+            player_id: packet.player_id,
+          });
+          self.request_callback(
+            req,
+            Ok(Response::PlayerLeave(PlayerLeaveResponse::Accepted(packet.status())))
+          )
+        }
+        packet = PacketClientUpdateSlotClientStatusReject => {
+          let req = RequestId::PlayerLeave(PlayerLeaveRequestId {
+            game_id: packet.game_id,
+            player_id: packet.player_id,
+          });
+          self.request_callback(
+            req,
+            Ok(Response::PlayerLeave(PlayerLeaveResponse::Rejected(packet.reason())))
           )
         }
       }
     }
     Ok(())
-  }
-
-  fn reply_create_game(&self, game_id: i32, result: Result<CreatedGameInfo>) {
-    self.request_callback(
-      RequestId::CreateGame(game_id),
-      result.map(Response::GameCreated),
-    )
   }
 }
 

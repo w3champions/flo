@@ -4,37 +4,37 @@ package flo_connect;
 import "google/protobuf/wrappers.proto";
 import "proto/common.proto";
 
-message PacketConnectLobby {
+message PacketClientConnect {
   flo_common.Version connect_version = 1;
   string token = 2;
 }
 
-message PacketConnectLobbyAccept {
+message PacketClientConnectAccept {
   flo_common.Version lobby_version = 1;
   Session session = 2;
   repeated Node nodes = 3;
 }
 
-enum ConnectLobbyRejectReason {
-  ConnectLobbyRejectReasonUnknown = 0;
-  ConnectLobbyRejectReasonClientVersionTooOld = 1;
-  ConnectLobbyRejectReasonInvalidToken = 2;
+enum ClientConnectRejectReason {
+  ClientConnectRejectReasonUnknown = 0;
+  ClientConnectRejectReasonClientVersionTooOld = 1;
+  ClientConnectRejectReasonInvalidToken = 2;
 }
 
-message PacketConnectLobbyReject {
+message PacketClientConnectReject {
   flo_common.Version lobby_version = 1;
-  ConnectLobbyRejectReason reason = 2;
+  ClientConnectRejectReason reason = 2;
 }
 
 
-enum LobbyDisconnectReason {
-  LobbyDisconnectReasonUnknown = 0;
-  LobbyDisconnectReasonMulti = 1;
-  LobbyDisconnectReasonMaintenance = 2;
+enum ClientDisconnectReason {
+  ClientDisconnectReasonUnknown = 0;
+  ClientDisconnectReasonMulti = 1;
+  ClientDisconnectReasonMaintenance = 2;
 }
 
-message PacketLobbyDisconnect {
-  LobbyDisconnectReason reason = 1;
+message PacketClientDisconnect {
+  ClientDisconnectReason reason = 1;
 }
 
 message PacketPlayerSessionUpdate {
@@ -173,26 +173,10 @@ message GameInfo {
   GameStatus status = 3;
   Map map = 4;
   repeated Slot slots = 5;
-  SelectedNode node = 6;
+  Node node = 6;
   bool is_private = 7;
   bool is_live = 9;
   PlayerInfo created_by = 12;
-}
-
-message SelectedNode {
-  SelectedNodeType type = 1;
-  google.protobuf.Int32Value id = 2;
-  string name = 3;
-  string location = 4;
-  string ip_addr = 5;
-  string country_id = 6;
-  // for private node type
-  google.protobuf.StringValue secret = 7;
-}
-
-enum SelectedNodeType {
-  SelectedNodeTypePublic = 0;
-  SelectedNodeTypePrivate = 1;
 }
 
 message Slot {

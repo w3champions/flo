@@ -115,44 +115,8 @@ impl FloController for FloControllerService {
   ) -> Result<Response<CreateGameReply>, Status> {
     let params =
       crate::game::db::CreateGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
-    let player_id = params.player_id;
 
-    let game = {
-      let mut player_state = self.state.mem.lock_player_state(player_id).await;
-
-      if player_state.joined_game_id().is_some() {
-        return Err(Error::MultiJoin.into());
-      }
-
-      let game = self
-        .state
-        .db
-        .exec(move |conn| crate::game::db::create(conn, params))
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
-      self
-        .state
-        .mem
-        .register_game(game.id, Some(player_id), &[player_id])
-        .await;
-
-      player_state.join_game(game.id);
-      let update = player_state.get_session_update();
-      if let Some(mut sender) = player_state.get_sender_cloned() {
-        let next_game = game.clone().into_packet();
-        sender.send(update).await.ok();
-        sender
-          .send({
-            use flo_net::proto::flo_connect::*;
-            PacketGameInfo {
-              game: next_game.into(),
-            }
-          })
-          .await
-          .ok();
-      }
-      game
-    };
+    let game = crate::game::create_game(self.state.clone(), params).await?;
 
     Ok(Response::new(CreateGameReply {
       game: game.pack().map_err(Status::internal)?,
@@ -186,7 +150,7 @@ impl FloController for FloControllerService {
       .await
       .map_err(Error::from)?;
 
-    if game.created_by != Some(params.player_id) {
+    if game.created_by.as_ref().map(|p| p.id) != Some(params.player_id) {
       return Err(Error::PlayerNotHost.into());
     }
 
@@ -251,7 +215,7 @@ impl FloController for FloControllerService {
       .map_err(Error::from)?;
     for player in state.players() {
       let mut player_state = self.state.mem.lock_player_state(*player).await;
-      player_state.leave_game();
+      player_state.leave_game(game_id);
       let update = player_state.get_session_update();
       player_state.get_sender_cloned().map(|mut sender| {
         tokio::spawn(async move {

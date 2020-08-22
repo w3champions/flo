@@ -42,7 +42,6 @@ impl NodeRegistry {
         async move {
           while let Some(event) = event_receiver.recv().await {
             let node_id = event.node_id;
-            tracing::debug!("event: {:?}", event);
             match event.data {
               NodeConnEventData::WorkerErrorEvent(err) => {
                 tracing::error!(node_id, "worker: {}", err);

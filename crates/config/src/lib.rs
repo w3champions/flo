@@ -17,10 +17,10 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
   fn default() -> Self {
     ClientConfig {
-      local_port: flo_constants::CONNECT_WS_PORT,
+      local_port: flo_constants::CLIENT_WS_PORT,
       user_data_path: None,
       installation_path: None,
-      lobby_domain: flo_constants::LOBBY_DOMAIN.to_string(),
+      lobby_domain: flo_constants::CONTROLLER_DOMAIN.to_string(),
     }
   }
 }

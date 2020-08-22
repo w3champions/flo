@@ -40,7 +40,7 @@ pub fn spawn_event_handler(ctx: FloEventContext, mut receiver: Receiver<FloLobby
           FloLobbyEvent::PlayerStreamClosedEvent(PlayerStreamClosedEvent { sid, player_id }) => {
             tracing::debug!(sid, player_id, "player stream closed");
             let mut guard = ctx.mem.lock_player_state(player_id).await;
-            guard.remove_sender(sid);
+            guard.remove_closed_sender(sid);
           }
           FloLobbyEvent::GameStartEvent(GameStartEvent { game_id, data }) => match data {
             GameStartEventData::Timeout => {

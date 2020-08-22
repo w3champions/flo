@@ -882,6 +882,7 @@ dependencies = [
  "bytes 0.5.6",
  "dashmap",
  "flo-constants",
+ "flo-event",
  "flo-net",
  "flo-util",
  "flo-w3gs",

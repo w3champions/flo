@@ -21,12 +21,17 @@ use crate::state::{ControllerStateRef, LockedPlayerState};
 mod handshake;
 mod sender;
 use crate::game::SlotSettings;
-pub use sender::{PlayerBroadcaster, PlayerReceiver, PlayerSender};
+pub use sender::{PlayerBroadcaster, PlayerReceiver, PlayerSender, PlayerSenderMessage};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn serve(state: ControllerStateRef) -> Result<()> {
+  state
+    .db
+    .exec(|conn| crate::game::db::reset_instance_state(conn))
+    .await?;
+
   let mut listener = FloListener::bind_v4(crate::constants::LOBBY_SOCKET_PORT).await?;
   tracing::info!("listening on port {}", listener.port());
 
@@ -52,7 +57,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
       let receiver = {
         let (sender, r) = PlayerSender::new(sid, player_id);
         let mut player_state = state.mem.lock_player_state(player_id).await;
-        player_state.replace_sender(sender);
+        player_state.replace_sender(sender).await;
         r
       };
 
@@ -106,11 +111,24 @@ async fn handle_stream(
           tracing::debug!("ping timeout");
           break;
       }
-      outgoing = receiver.recv() => {
-        if let Some(frame) = outgoing {
-          if let Err(e) = stream.send_frame(frame).await {
-            tracing::debug!("send error: {}", e);
-            break;
+      next = receiver.recv() => {
+        if let Some(msg) = next {
+          match msg {
+            PlayerSenderMessage::Frame(frame) => {
+              if let Err(e) = stream.send_frame(frame).await {
+                tracing::debug!("send error: {}", e);
+                break;
+              }
+            }
+            PlayerSenderMessage::Disconnect(reason) => {
+              use flo_net::proto::flo_connect::PacketClientDisconnect;
+              if let Err(e) = stream.send(PacketClientDisconnect {
+                reason: reason.into()
+              }).await {
+                tracing::debug!("send error: {}", e);
+              }
+              break;
+            }
           }
         } else {
           tracing::debug!("sender dropped");
@@ -174,7 +192,7 @@ async fn send_initial_state(
     player.joined_game_id()
   };
 
-  let mut frames = vec![connect::PacketConnectLobbyAccept {
+  let mut frames = vec![connect::PacketClientConnectAccept {
     lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
     session: Some({
       use proto::flo_connect::*;
@@ -198,8 +216,8 @@ async fn send_initial_state(
       .exec(move |conn| crate::game::db::get_full_and_node_token(conn, game_id, player_id))
       .await?;
 
-    let node_id = game.node.as_ref().and_then(|node| node.get_node_id());
-    let game = game.into_packet();
+    let node_id = game.node.as_ref().map(|node| node.id);
+    let game = game.pack()?;
     let frame = connect::PacketGameInfo { game: Some(game) }.encode_as_frame()?;
     frames.push(frame);
 
@@ -363,7 +381,7 @@ async fn handle_game_start_player_client_info_request(
   packet: proto::flo_connect::PacketGameStartPlayerClientInfoRequest,
 ) -> Result<()> {
   if let Some(mut game) = state.mem.lock_game_state(packet.game_id).await {
-    game.start_ack(player_id, packet);
+    game.start_player_ack(player_id, packet);
   }
   Ok(())
 }
