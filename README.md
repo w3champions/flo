@@ -1,13 +1,13 @@
 # Flo
 
-## Prerequisites
+## Build
 
-- Postgres Database
+### Prerequisites
+
 - C++ Compiler
 - CMake
 - Latest Stable Rust
- 
-## Build
+
 
 ```
 git submodule update --init --recursive
