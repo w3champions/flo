@@ -3,4 +3,4 @@
 	url = https://github.com/wc3tools/wc3-samples.git
 [submodule "deps/flo-grpc"]
 	path = deps/flo-grpc
-	url = https://github.com/wc3tools/flo-grpc.git
+	url = https://github.com/w3champions/flo-grpc.git
