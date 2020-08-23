@@ -35,6 +35,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/observer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/event/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-controller-service/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/log-subscriber/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/build/release" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>

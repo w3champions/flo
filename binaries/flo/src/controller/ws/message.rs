@@ -10,9 +10,11 @@ use flo_net::proto::flo_connect::{
   PacketGameStartReject, PacketGameStartRequest, PacketGameStarting,
 };
 
+use flo_net::proto::flo_node::PacketClientUpdateSlotClientStatus;
+
 use crate::error::{Error, Result};
 
-pub use crate::lobby::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
+pub use crate::controller::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
 use crate::node::PingUpdate;
 use crate::platform::PlatformStateError;
 
@@ -55,6 +57,7 @@ pub enum OutgoingMessage {
   GameStartReject(PacketGameStartReject),
   GameStarting(PacketGameStarting),
   GameStarted(GameStarted),
+  GameSlotClientStatusUpdate(PacketClientUpdateSlotClientStatus),
 }
 
 impl FromStr for IncomingMessage {

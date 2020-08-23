@@ -4,9 +4,9 @@ use tokio::sync::Notify;
 use flo_event::*;
 use flo_lan::{GameInfo, MdnsPublisher};
 
+use crate::controller::LobbyGameInfo;
 use crate::error::*;
 use crate::lan::LanEvent;
-use crate::lobby::LobbyGameInfo;
 
 #[derive(Debug)]
 pub struct LanProxy {

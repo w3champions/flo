@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::state::ControllerStateRef;
 
 pub async fn serve(state: ControllerStateRef) -> Result<()> {
-  let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, crate::constants::LOBBY_GRPC_PORT);
+  let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, flo_constants::CONTROLLER_GRPC_PORT);
   let server_impl = FloControllerService::new(state.clone());
   let server = FloControllerServer::with_interceptor(server_impl, state.config.into_interceptor());
   let server = Server::builder().add_service(server);

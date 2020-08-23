@@ -17,7 +17,7 @@ pub enum Error {
   #[error("Warcraft ||| not located")]
   War3NotLocated,
   #[error("connection request rejected by server: {0:?}")]
-  ConnectionRequestRejected(crate::lobby::RejectReason),
+  ConnectionRequestRejected(crate::controller::RejectReason),
   #[error("task cancelled")]
   TaskCancelled,
   #[error("lan: {0}")]

@@ -4,7 +4,7 @@ use flo_controller::{serve_grpc, serve_socket, ControllerStateRef};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
   dotenv::dotenv()?;
 
-  flo_log::init_env("flo_controller_service=debug,flo_controller=debug,flo_event=debug");
+  flo_log_subscriber::init_env("flo_controller_service=debug,flo_controller=debug,flo_event=debug");
 
   let state = ControllerStateRef::init().await?;
 

@@ -8,6 +8,7 @@ members = [
   "crates/blp",
   "crates/lan",
   "crates/log",
+  "crates/log-subscriber",
   "crates/config",
   "crates/net",
   "crates/w3storage",

@@ -32,7 +32,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
     .exec(|conn| crate::game::db::reset_instance_state(conn))
     .await?;
 
-  let mut listener = FloListener::bind_v4(crate::constants::LOBBY_SOCKET_PORT).await?;
+  let mut listener = FloListener::bind_v4(flo_constants::CONTROLLER_SOCKET_PORT).await?;
   tracing::info!("listening on port {}", listener.port());
 
   let mut sid_counter = 0_u64;

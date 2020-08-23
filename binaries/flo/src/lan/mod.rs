@@ -6,8 +6,8 @@ use std::sync::Arc;
 use flo_event::*;
 use proxy::LanProxy;
 
+use crate::controller::LobbyGameInfo;
 use crate::error::*;
-use crate::lobby::LobbyGameInfo;
 
 #[derive(Debug)]
 pub struct Lan {

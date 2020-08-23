@@ -177,22 +177,20 @@ pub async fn leave_game(state: ControllerStateRef, game_id: i32, player_id: i32)
   Ok(())
 }
 
-async fn leave_game_lobby(
+async fn leave_game_update_state_and_broadcast(
   state: ControllerStateRef,
   mut game_guard: LockedGameState,
   mut player_guard: LockedPlayerState,
+  ended: bool,
+  left_players: &[i32],
+  recipient_players: &[i32],
 ) -> Result<()> {
   let game_id = game_guard.id();
   let player_id = player_guard.id();
 
-  let leave = state
-    .db
-    .exec(move |conn| crate::game::db::leave_lobby(conn, LeaveGameParams { player_id, game_id }))
-    .await?;
-
   let broadcast_futures = FuturesUnordered::new();
-  if leave.game_ended {
-    for removed_player_id in leave.removed_players {
+  if ended {
+    for removed_player_id in left_players.into_iter().cloned() {
       game_guard.remove_player(player_id);
       if removed_player_id == player_id {
         player_guard.leave_game(game_id);
@@ -222,13 +220,7 @@ async fn leave_game_lobby(
       broadcast_futures.push(async move { sender.send(update).await.ok() }.boxed());
     }
 
-    let player_ids: Vec<i32> = leave
-      .slots
-      .iter()
-      .filter_map(|s| s.player.as_ref().map(|p| p.id))
-      .collect();
-
-    let broadcaster = state.mem.get_broadcaster(&player_ids);
+    let broadcaster = state.mem.get_broadcaster(&recipient_players);
     broadcast_futures.push(
       async move {
         broadcaster
@@ -251,6 +243,38 @@ async fn leave_game_lobby(
   drop(player_guard);
 
   broadcast_futures.collect::<Vec<_>>().await;
+  Ok(())
+}
+
+async fn leave_game_lobby(
+  state: ControllerStateRef,
+  game_guard: LockedGameState,
+  player_guard: LockedPlayerState,
+) -> Result<()> {
+  let game_id = game_guard.id();
+  let player_id = player_guard.id();
+
+  let leave = state
+    .db
+    .exec(move |conn| crate::game::db::leave_lobby(conn, LeaveGameParams { player_id, game_id }))
+    .await?;
+
+  let recipient_player_ids: Vec<i32> = leave
+    .slots
+    .iter()
+    .filter_map(|s| s.player.as_ref().map(|p| p.id))
+    .collect();
+
+  leave_game_update_state_and_broadcast(
+    state,
+    game_guard,
+    player_guard,
+    leave.game_ended,
+    &leave.removed_players,
+    &recipient_player_ids,
+  )
+  .await?;
+
   Ok(())
 }
 
@@ -300,7 +324,7 @@ async fn leave_game_abort(
     }
   }
 
-  let mut game_guard = match state.mem.lock_game_state(game_id).await {
+  let game_guard = match state.mem.lock_game_state(game_id).await {
     Some(guard) => guard,
     None => {
       // game already ended
@@ -309,12 +333,15 @@ async fn leave_game_abort(
   };
 
   let mut player_guard = state.mem.lock_player_state(player_id).await;
-  game_guard.remove_player(player_id);
 
-  state
+  let active_player_ids = state
     .db
-    .exec(move |conn| crate::game::db::leave_node(conn, game_id, player_id))
+    .exec(move |conn| {
+      crate::game::db::leave_node(conn, game_id, player_id)?;
+      crate::game::db::get_node_active_player_ids(conn, game_id)
+    })
     .await?;
+
   game_guard
     .get_broadcaster()
     .broadcast(
@@ -327,6 +354,16 @@ async fn leave_game_abort(
     .await
     .ok();
   player_guard.leave_game(game_id);
+
+  leave_game_update_state_and_broadcast(
+    state,
+    game_guard,
+    player_guard,
+    false, // only change game status by node packet
+    &[player_id],
+    &active_player_ids,
+  )
+  .await?;
 
   Ok(())
 }

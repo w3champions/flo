@@ -21,7 +21,7 @@ use flo_w3storage::W3Storage;
 
 #[tokio::main]
 async fn main() {
-  flo_log::init_env("replay=debug");
+  flo_log_subscriber::init_env("replay=debug");
 
   use flo_w3gs::net::W3GSListener;
 

@@ -159,7 +159,7 @@ impl NodeConn {
       .request(req, {
         let mut sender = self.state.sender.clone();
         async move {
-          let pkt = PacketClientUpdateSlotClientStatusRequest {
+          let pkt = PacketControllerUpdateSlotStatus {
             player_id,
             game_id,
             status: SlotClientStatus::Left.into(),
@@ -443,23 +443,23 @@ impl NodeConnState {
             Err(Error::GameCreateReject(packet.reason()))
           )
         }
-        packet = PacketClientUpdateSlotClientStatus => {
-          let req = RequestId::PlayerLeave(PlayerLeaveRequestId {
+        packet = PacketControllerUpdateSlotStatusAccept => {
+          let id = RequestId::PlayerLeave(PlayerLeaveRequestId {
             game_id: packet.game_id,
             player_id: packet.player_id,
           });
           self.request_callback(
-            req,
+            id,
             Ok(Response::PlayerLeave(PlayerLeaveResponse::Accepted(packet.status())))
           )
         }
-        packet = PacketClientUpdateSlotClientStatusReject => {
-          let req = RequestId::PlayerLeave(PlayerLeaveRequestId {
+        packet = PacketControllerUpdateSlotStatusReject => {
+          let id = RequestId::PlayerLeave(PlayerLeaveRequestId {
             game_id: packet.game_id,
             player_id: packet.player_id,
           });
           self.request_callback(
-            req,
+            id,
             Ok(Response::PlayerLeave(PlayerLeaveResponse::Rejected(packet.reason())))
           )
         }

@@ -125,19 +125,12 @@ async fn handle_frame(mut tx: mpsc::Sender<Frame>, frame: Frame) -> Result<()> {
   try_flo_packet! {
     frame => {
       pkt = PacketControllerCreateGame => {
-        match SessionStore::get().handle_controller_create_game(pkt) {
-          Ok(frame) => {
-            if let Err(_) = tx.send(frame).await {
-              tracing::warn!("connection dropped")
-            }
-          },
-          Err(e) => {
-            tracing::error!("create game error: {:?}", e);
-          }
-        }
+        let frame = SessionStore::get().handle_controller_create_game(pkt)?;
+        flo_log::result_ok!("create game", tx.send(frame).await);
       }
       pkt = PacketControllerUpdateSlotStatus => {
-
+        let frame = SessionStore::get().handle_controller_update_slot_client_status(pkt).await?;
+        flo_log::result_ok!("update slot status", tx.send(frame).await);
       }
     }
   }

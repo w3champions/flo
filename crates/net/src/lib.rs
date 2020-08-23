@@ -23,6 +23,7 @@ pub mod proto {
     use serde::{Deserialize, Serialize};
 
     pub use super::flo_common::{Computer, Race, SlotClientStatus, SlotSettings, SlotStatus};
+    pub use super::flo_node::PacketClientUpdateSlotClientStatus;
 
     include!(concat!(env!("OUT_DIR"), "/flo_connect.rs"));
   }

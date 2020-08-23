@@ -16,25 +16,27 @@ use crate::error::*;
 use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
 use crate::platform::PlatformStateRef;
 
-pub use crate::lobby::stream::GameStartedEvent;
-pub use crate::lobby::stream::PlayerInfo;
-use crate::lobby::stream::{LobbyStreamEvent, LobbyStreamEventSender, PlayerSessionUpdateEvent};
+pub use crate::controller::stream::GameStartedEvent;
+pub use crate::controller::stream::PlayerInfo;
+use crate::controller::stream::{
+  ControllerStreamEvent, ControllerStreamEventSender, PlayerSessionUpdateEvent,
+};
 use flo_lan::GameInfo;
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
 
-pub type LobbyEventSender = Sender<LobbyEvent>;
+pub type ControllerEventSender = Sender<ControllerEvent>;
 
 #[derive(Debug)]
-pub struct Lobby {
-  state: Arc<LobbyState>,
+pub struct ControllerClient {
+  state: Arc<State>,
   ws_event_handler: WsEventHandler,
-  stream_event_handler: LobbyStreamEventHandler,
+  stream_event_handler: ControllerStreamEventHandler,
   node_ping_update_handler: NodePingUpdateHandler,
 }
 
-impl Lobby {
-  pub async fn init(platform: PlatformStateRef, sender: LobbyEventSender) -> Result<Self> {
+impl ControllerClient {
+  pub async fn init(platform: PlatformStateRef, sender: ControllerEventSender) -> Result<Self> {
     let (ping_sender, ping_receiver) = channel(1);
     let nodes = NodeRegistry::new(ping_sender).into_ref();
 
@@ -43,16 +45,11 @@ impl Lobby {
 
     let (stream_event_sender, stream_event_receiver) = channel(1);
 
-    let state = Arc::new(LobbyState::new(
-      platform,
-      nodes,
-      ws,
-      sender,
-      stream_event_sender,
-    ));
+    let state = Arc::new(State::new(platform, nodes, ws, sender, stream_event_sender));
 
     let ws_event_handler = WsEventHandler::new(state.clone(), ws_event_receiver);
-    let stream_event_handler = LobbyStreamEventHandler::new(state.clone(), stream_event_receiver);
+    let stream_event_handler =
+      ControllerStreamEventHandler::new(state.clone(), stream_event_receiver);
     let node_ping_update_handler = NodePingUpdateHandler::new(state.clone(), ping_receiver);
 
     Ok(Self {
@@ -63,15 +60,15 @@ impl Lobby {
     })
   }
 
-  pub fn handle(&self) -> LobbyHandle {
-    LobbyHandle(self.state.clone())
+  pub fn handle(&self) -> ControllerClientHandle {
+    ControllerClientHandle(self.state.clone())
   }
 }
 
 #[derive(Debug, Clone)]
-pub struct LobbyHandle(Arc<LobbyState>);
+pub struct ControllerClientHandle(Arc<State>);
 
-impl LobbyHandle {
+impl ControllerClientHandle {
   pub fn current_game_info(&self) -> Option<Arc<LobbyGameInfo>> {
     self.0.current_game_info.read().clone()
   }
@@ -92,7 +89,7 @@ impl LobbyHandle {
 struct WsEventHandler;
 
 impl WsEventHandler {
-  fn new(state: Arc<LobbyState>, mut receiver: Receiver<WsEvent>) -> Self {
+  fn new(state: Arc<State>, mut receiver: Receiver<WsEvent>) -> Self {
     tokio::spawn(
       {
         async move {
@@ -115,10 +112,10 @@ impl WsEventHandler {
 }
 
 #[derive(Debug)]
-struct LobbyStreamEventHandler;
+struct ControllerStreamEventHandler;
 
-impl LobbyStreamEventHandler {
-  fn new(state: Arc<LobbyState>, mut receiver: Receiver<LobbyStreamEvent>) -> Self {
+impl ControllerStreamEventHandler {
+  fn new(state: Arc<State>, mut receiver: Receiver<ControllerStreamEvent>) -> Self {
     tokio::spawn(
       {
         async move {
@@ -136,7 +133,7 @@ impl LobbyStreamEventHandler {
       .instrument(tracing::debug_span!("worker")),
     );
 
-    LobbyStreamEventHandler
+    ControllerStreamEventHandler
   }
 }
 
@@ -144,7 +141,7 @@ impl LobbyStreamEventHandler {
 struct NodePingUpdateHandler;
 
 impl NodePingUpdateHandler {
-  fn new(state: Arc<LobbyState>, mut receiver: Receiver<PingUpdate>) -> Self {
+  fn new(state: Arc<State>, mut receiver: Receiver<PingUpdate>) -> Self {
     tokio::spawn(
       {
         async move {
@@ -167,27 +164,27 @@ impl NodePingUpdateHandler {
 }
 
 #[derive(Debug)]
-struct LobbyState {
+struct State {
   id_counter: AtomicU64,
   platform: PlatformStateRef,
   nodes: NodeRegistryRef,
   ws: Ws,
-  event_sender: LobbyEventSender,
-  stream_event_sender: Sender<LobbyStreamEvent>,
+  event_sender: ControllerEventSender,
+  stream_event_sender: Sender<ControllerStreamEvent>,
   conn: RwLock<Option<LobbyConn>>,
   current_game_info: RwLock<Option<Arc<LobbyGameInfo>>>,
   current_session: RwLock<Option<PlayerSession>>,
 }
 
-impl LobbyState {
+impl State {
   fn new(
     platform: PlatformStateRef,
     nodes: NodeRegistryRef,
     ws: Ws,
-    event_sender: LobbyEventSender,
-    stream_event_sender: Sender<LobbyStreamEvent>,
+    event_sender: ControllerEventSender,
+    stream_event_sender: Sender<ControllerStreamEvent>,
   ) -> Self {
-    LobbyState {
+    State {
       id_counter: AtomicU64::new(0),
       platform,
       nodes,
@@ -241,40 +238,40 @@ impl LobbyState {
         self
           .event_sender
           .clone()
-          .send_or_log_as_error(LobbyEvent::WsWorkerErrorEvent(err))
+          .send_or_log_as_error(ControllerEvent::WsWorkerErrorEvent(err))
           .await;
       }
     }
   }
 
-  async fn handle_stream_event(self: Arc<Self>, event: LobbyStreamEvent) {
+  async fn handle_stream_event(self: Arc<Self>, event: ControllerStreamEvent) {
     match event {
-      LobbyStreamEvent::ConnectedEvent => {
+      ControllerStreamEvent::ConnectedEvent => {
         self
           .event_sender
           .clone()
-          .send_or_log_as_error(LobbyEvent::ConnectedEvent)
+          .send_or_log_as_error(ControllerEvent::ConnectedEvent)
           .await;
       }
-      LobbyStreamEvent::DisconnectedEvent(id) => {
+      ControllerStreamEvent::DisconnectedEvent(id) => {
         self.current_session.write().take();
         self.remove_conn(id);
         self
           .event_sender
           .clone()
-          .send_or_log_as_error(LobbyEvent::DisconnectedEvent)
+          .send_or_log_as_error(ControllerEvent::DisconnectedEvent)
           .await;
       }
-      LobbyStreamEvent::ConnectionErrorEvent(id, err) => {
+      ControllerStreamEvent::ConnectionErrorEvent(id, err) => {
         tracing::error!("server connection: {}", err);
         self.remove_conn(id);
         self
           .event_sender
           .clone()
-          .send_or_log_as_error(LobbyEvent::DisconnectedEvent)
+          .send_or_log_as_error(ControllerEvent::DisconnectedEvent)
           .await;
       }
-      LobbyStreamEvent::PlayerSessionUpdateEvent(event) => match event {
+      ControllerStreamEvent::PlayerSessionUpdateEvent(event) => match event {
         PlayerSessionUpdateEvent::Full(session) => {
           *self.current_session.write() = Some(session);
         }
@@ -290,28 +287,28 @@ impl LobbyState {
           }
         }
       },
-      LobbyStreamEvent::GameInfoUpdateEvent(event) => {
+      ControllerStreamEvent::GameInfoUpdateEvent(event) => {
         let game_info = event.game_info.map(Arc::new);
         *self.current_game_info.write() = game_info.clone();
         self
           .event_sender
           .clone()
-          .send_or_log_as_error(LobbyEvent::GameInfoUpdateEvent(game_info))
+          .send_or_log_as_error(ControllerEvent::GameInfoUpdateEvent(game_info))
           .await;
       }
-      LobbyStreamEvent::GameStartingEvent(event) => {
+      ControllerStreamEvent::GameStartingEvent(event) => {
         let game_id = event.game_id;
         if let Err(err) = self.handle_game_start(game_id).await {
           tracing::error!("get client info: {}", err);
         }
       }
-      LobbyStreamEvent::GameStartedEvent(event) => {
+      ControllerStreamEvent::GameStartedEvent(event) => {
         let game_info = { self.current_game_info.read().clone() };
         if let Some(game_info) = game_info {
           self
             .event_sender
             .clone()
-            .send_or_log_as_error(LobbyEvent::GameStartedEvent(event, game_info))
+            .send_or_log_as_error(ControllerEvent::GameStartedEvent(event, game_info))
             .await;
         } else {
           tracing::error!(
@@ -417,7 +414,7 @@ impl LobbyState {
 pub struct LobbyConn {
   id: u64,
   stream: LobbyStream,
-  event_sender: LobbyStreamEventSender,
+  event_sender: ControllerStreamEventSender,
   ws_sender: WsMessageSender,
 }
 
@@ -425,7 +422,7 @@ impl LobbyConn {
   fn new(
     id: u64,
     platform: PlatformStateRef,
-    event_sender: LobbyStreamEventSender,
+    event_sender: ControllerStreamEventSender,
     nodes: NodeRegistryRef,
     ws_sender: WsMessageSender,
     token: String,
@@ -466,7 +463,7 @@ pub struct LobbyGameInfo {
 }
 
 #[derive(Debug)]
-pub enum LobbyEvent {
+pub enum ControllerEvent {
   ConnectedEvent,
   DisconnectedEvent,
   GameStartedEvent(GameStartedEvent, Arc<LobbyGameInfo>),
@@ -474,6 +471,6 @@ pub enum LobbyEvent {
   WsWorkerErrorEvent(Error),
 }
 
-impl FloEvent for LobbyEvent {
+impl FloEvent for ControllerEvent {
   const NAME: &'static str = "LobbyEvent";
 }

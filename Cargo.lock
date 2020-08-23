@@ -670,6 +670,7 @@ dependencies = [
  "flo-event",
  "flo-lan",
  "flo-log",
+ "flo-log-subscriber",
  "flo-net",
  "flo-platform",
  "flo-w3map",
@@ -701,7 +702,7 @@ dependencies = [
  "clap",
  "dotenv",
  "flo-controller",
- "flo-log",
+ "flo-log-subscriber",
  "flo-net",
  "structopt",
  "tokio",
@@ -775,7 +776,7 @@ dependencies = [
  "bs-diesel-utils",
  "dotenv",
  "flo-controller",
- "flo-log",
+ "flo-log-subscriber",
  "tokio",
 ]
 
@@ -833,6 +834,13 @@ name = "flo-log"
 version = "0.1.0"
 dependencies = [
  "tracing",
+]
+
+[[package]]
+name = "flo-log-subscriber"
+version = "0.1.0"
+dependencies = [
+ "tracing",
  "tracing-futures",
  "tracing-subscriber",
 ]
@@ -883,6 +891,7 @@ dependencies = [
  "dashmap",
  "flo-constants",
  "flo-event",
+ "flo-log",
  "flo-net",
  "flo-util",
  "flo-w3gs",
@@ -904,7 +913,7 @@ name = "flo-node-service"
 version = "0.1.0"
 dependencies = [
  "dotenv",
- "flo-log",
+ "flo-log-subscriber",
  "flo-node",
  "tokio",
 ]

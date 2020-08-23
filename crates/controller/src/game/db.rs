@@ -286,6 +286,22 @@ pub fn leave_node(conn: &DbConn, game_id: i32, player_id: i32) -> Result<()> {
   Ok(())
 }
 
+pub fn get_node_active_player_ids(conn: &DbConn, game_id: i32) -> Result<Vec<i32>> {
+  use diesel::pg::expression::dsl::all;
+  use game_used_slot::dsl;
+  game_used_slot::table
+    .filter(
+      dsl::game_id
+        .eq(game_id)
+        .and(dsl::player_id.is_not_null())
+        .and(dsl::client_status.ne(all(&[SlotClientStatus::Left] as &[_]))),
+    )
+    .select(dsl::player_id)
+    .load::<Option<i32>>(conn)
+    .map(|rows| rows.into_iter().filter_map(|id| id).collect())
+    .map_err(Into::into)
+}
+
 #[derive(Debug, Queryable)]
 pub struct SlotOwnerInfo {
   pub host_player_id: Option<i32>,

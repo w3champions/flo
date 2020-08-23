@@ -1,0 +1,12 @@
+[package]
+name = "flo-log-subscriber"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = "0.1"
+tracing-futures = "0.2.4"
+tracing-subscriber = "0.2"

@@ -5,7 +5,6 @@ mod version;
 #[macro_use]
 extern crate diesel;
 
-pub mod constants;
 mod db;
 mod schema;
 

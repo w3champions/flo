@@ -5,7 +5,7 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-flo-log = { path = "../../crates/log" }
+flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-controller = { path = "../../crates/controller" }
 
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
