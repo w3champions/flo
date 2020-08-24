@@ -122,7 +122,7 @@ pub async fn join_game(state: ControllerStateRef, game_id: i32, player_id: i32) 
           slot_index: slot_info.slot_index as i32,
           slot: Slot {
             player: Some(player),
-            settings: Some(slot_info.slot.settings.clone().into_packet()),
+            settings: Some(slot_info.slot.settings.clone().pack()?),
             ..Default::default()
           }
           .into(),
@@ -624,6 +624,7 @@ pub async fn create_node_game(
         Some(proto::flo_connect::PacketGamePlayerToken {
           node_id,
           game_id,
+          player_id,
           player_token: token.to_vec(),
         })
       } else {

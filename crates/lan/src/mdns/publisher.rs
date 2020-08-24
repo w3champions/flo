@@ -87,8 +87,6 @@ impl MdnsPublisher {
         return;
       }
 
-      debug!("initial update broadcasted");
-
       tokio::pin!(drop_rx);
       loop {
         tokio::select! {

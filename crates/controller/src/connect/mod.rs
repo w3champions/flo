@@ -217,7 +217,9 @@ async fn send_initial_state(
       .await?;
 
     let node_id = game.node.as_ref().map(|node| node.id);
+
     let game = game.pack()?;
+
     let frame = connect::PacketGameInfo { game: Some(game) }.encode_as_frame()?;
     frames.push(frame);
 
@@ -225,6 +227,7 @@ async fn send_initial_state(
       let frame = connect::PacketGamePlayerToken {
         node_id: node_id.ok_or_else(|| Error::GameNodeNotSelected)?,
         game_id,
+        player_id,
         player_token: player_token.to_vec(),
       }
       .encode_as_frame()?;

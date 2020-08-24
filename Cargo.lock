@@ -673,10 +673,14 @@ dependencies = [
  "flo-log-subscriber",
  "flo-net",
  "flo-platform",
+ "flo-util",
+ "flo-w3gs",
  "flo-w3map",
  "flo-w3storage",
  "futures 0.3.5",
+ "hash-ids",
  "http",
+ "lazy_static",
  "parking_lot",
  "s2-grpc-utils",
  "serde",
@@ -759,6 +763,7 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "prometheus",
+ "rand",
  "s2-grpc-utils",
  "serde",
  "serde_json",
@@ -1193,6 +1198,12 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
+
+[[package]]
+name = "hash-ids"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9289cbc8064a1c2f505c92d4d17f7fe5050d487728c19cee7936bd204069bc9d"
 
 [[package]]
 name = "hashbrown"
@@ -2130,7 +2141,7 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "s2-grpc-utils"
 version = "0.2.0"
-source = "git+https://github.com/Ventmere/s2-grpc-utils.git?branch=0.2#a3485976c22dc51562d9374ef360a32de3b1fd6e"
+source = "git+https://github.com/Ventmere/s2-grpc-utils.git?branch=0.2#ed22a77d266a6e9a308790744feaff05ec94dca4"
 dependencies = [
  "bigdecimal 0.0.15",
  "chrono",
@@ -2144,7 +2155,7 @@ dependencies = [
 [[package]]
 name = "s2-grpc-utils-derive"
 version = "0.1.0"
-source = "git+https://github.com/Ventmere/s2-grpc-utils.git?branch=0.2#a3485976c22dc51562d9374ef360a32de3b1fd6e"
+source = "git+https://github.com/Ventmere/s2-grpc-utils.git?branch=0.2#ed22a77d266a6e9a308790744feaff05ec94dca4"
 dependencies = [
  "darling",
  "proc-macro2",

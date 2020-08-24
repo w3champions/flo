@@ -13,6 +13,17 @@ pub struct ChatToHost {
   pub message: ChatMessage,
 }
 
+impl ChatToHost {
+  pub fn chat(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
+    ChatToHost {
+      to_players_len: to.len() as u8,
+      to_players: to.to_vec(),
+      from_player: from,
+      message: ChatMessage::Chat(message.into_c_string_lossy()),
+    }
+  }
+}
+
 impl PacketPayload for ChatToHost {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ChatToHost;
 }
@@ -95,9 +106,10 @@ impl ChatMessage {
       ChatMessage::ColorChange(_v) => size_of::<u8>(),
       ChatMessage::RaceChange(_v) => size_of::<u8>(),
       ChatMessage::HandicapChange(_v) => size_of::<u8>(),
-      ChatMessage::Scoped { scope: _, ref message } => {
-        MessageScope::MIN_SIZE + message.as_bytes_with_nul().len()
-      }
+      ChatMessage::Scoped {
+        scope: _,
+        ref message,
+      } => MessageScope::MIN_SIZE + message.as_bytes_with_nul().len(),
     }
   }
 }
@@ -143,9 +155,15 @@ impl BinEncode for MessageScope {
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct ChatFromHost(ChatToHost);
 
+impl From<ChatToHost> for ChatFromHost {
+  fn from(inner: ChatToHost) -> Self {
+    Self(inner)
+  }
+}
+
 impl ChatFromHost {
-  pub fn new(msg: ChatToHost) -> Self {
-    Self(msg)
+  pub fn chat(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
+    ChatToHost::chat(from, to, message).into()
   }
 }
 

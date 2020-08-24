@@ -7,28 +7,62 @@ use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use flo_event::*;
-pub use flo_net::connect::*;
 use flo_net::packet::*;
+use flo_net::proto::flo_connect as proto;
 use flo_net::stream::FloStream;
 
 use super::ws::{message, WsMessageSender};
-use crate::controller::ws::message::OutgoingMessage;
-use crate::controller::LobbyGameInfo;
+use crate::controller::ws::message::{GamePlayerEnter, OutgoingMessage};
+use crate::controller::LocalGameInfo;
 use crate::error::*;
 use crate::node::NodeRegistryRef;
+use crate::types::*;
 
 pub type ControllerStreamEventSender = EventSender<ControllerStreamEvent>;
 
 #[derive(Debug)]
 pub struct LobbyStream {
   frame_sender: Sender<Frame>,
-  current_game_id: Arc<RwLock<Option<i32>>>,
+  state: Arc<State>,
   dropper: Arc<Notify>,
 }
 
 impl Drop for LobbyStream {
   fn drop(&mut self) {
     self.dropper.notify();
+  }
+}
+
+#[derive(Debug)]
+struct State {
+  event_sender: ControllerStreamEventSender,
+  nodes_reg: NodeRegistryRef,
+  current_game_info: Arc<RwLock<Option<Arc<LocalGameInfo>>>>,
+  ws_sender: WsMessageSender,
+}
+
+impl State {
+  async fn mutate_local_game_info<F, R>(&self, f: F) -> Option<R>
+  where
+    F: FnOnce(&mut LocalGameInfo) -> R,
+  {
+    let r = { self.current_game_info.read().clone() }?;
+    let mut mutated = r.clone();
+
+    let res = f(Arc::make_mut(&mut mutated));
+    if !Arc::ptr_eq(&r, &mutated) {
+      self.current_game_info.write().replace(mutated);
+    }
+    self
+      .event_sender
+      .clone()
+      .send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(
+        GameInfoUpdateEvent {
+          game_info: Some(r.clone()),
+        },
+      ))
+      .await;
+    Some(res)
   }
 }
 
@@ -41,27 +75,23 @@ impl LobbyStream {
     nodes_reg: NodeRegistryRef,
     token: String,
   ) -> Self {
-    let current_game_id = Arc::new(RwLock::new(None));
     let (frame_sender, frame_receiver) = channel(5);
     let dropper = Arc::new(Notify::new());
+    let state = Arc::new(State {
+      event_sender: event_sender.clone(),
+      nodes_reg,
+      current_game_info: Arc::new(RwLock::new(None)),
+      ws_sender: ws_sender.clone(),
+    });
 
     tokio::spawn(
       {
-        let current_game_id = current_game_id.clone();
+        let state = state.clone();
         let domain = domain.to_string();
         let mut event_sender = event_sender.clone();
         let dropper = dropper.clone();
         async move {
-          let serve = Self::connect_and_serve(
-            id,
-            &domain,
-            event_sender.clone(),
-            nodes_reg,
-            frame_receiver,
-            current_game_id,
-            ws_sender.clone(),
-            token,
-          );
+          let serve = Self::connect_and_serve(id, &domain, token, frame_receiver, state);
 
           let result = tokio::select! {
             _ = dropper.notified() => {
@@ -97,7 +127,7 @@ impl LobbyStream {
 
     Self {
       frame_sender,
-      current_game_id,
+      state,
       dropper,
     }
   }
@@ -105,20 +135,20 @@ impl LobbyStream {
   async fn connect_and_serve(
     id: u64,
     domain: &str,
-    mut event_sender: ControllerStreamEventSender,
-    nodes_reg: NodeRegistryRef,
-    mut frame_receiver: Receiver<Frame>,
-    current_game_id: Arc<RwLock<Option<i32>>>,
-    mut ws_sender: WsMessageSender,
     token: String,
+    mut frame_receiver: Receiver<Frame>,
+    state: Arc<State>,
   ) -> Result<()> {
+    let mut event_sender = state.event_sender.clone();
+    let mut ws_sender = state.ws_sender.clone();
+
     let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
     tracing::debug!("connect addr: {}", addr);
 
     let mut stream = FloStream::connect(addr).await?;
 
     stream
-      .send(PacketClientConnect {
+      .send(proto::PacketClientConnect {
         connect_version: Some(crate::version::FLO_VERSION.into()),
         token,
       })
@@ -126,22 +156,22 @@ impl LobbyStream {
 
     let reply = stream.recv_frame().await?;
 
-    let (session, nodes) = flo_net::try_flo_packet! {
+    let (session, nodes): (PlayerSession, _) = flo_net::try_flo_packet! {
       reply => {
-        p = PacketClientConnectAccept => {
-          nodes_reg.update_nodes(p.nodes.clone())?;
+        p = proto::PacketClientConnectAccept => {
+          state.nodes_reg.update_nodes(p.nodes.clone())?;
           (
             PlayerSession::unpack(p.session)?,
             p.nodes
           )
         }
-        p = PacketClientConnectReject => {
+        p = proto::PacketClientConnectReject => {
           return Err(Error::ConnectionRequestRejected(S2ProtoEnum::unpack_enum(p.reason())))
         }
       }
     };
 
-    *current_game_id.write() = session.game_id.clone();
+    let player_id = session.player.id;
 
     event_sender
       .send(ControllerStreamEvent::ConnectedEvent)
@@ -164,7 +194,7 @@ impl LobbyStream {
             name: node.name,
             location: node.location,
             country_id: node.country_id,
-            ping: nodes_reg.get_current_ping(node.id),
+            ping: state.nodes_reg.get_current_ping(node.id),
           })
         }
         message::OutgoingMessage::ListNodes(list)
@@ -206,7 +236,7 @@ impl LobbyStream {
                 }
               }
 
-              match Self::dispatch(&mut event_sender, &mut ws_sender, &nodes_reg, current_game_id.clone(), frame).await {
+              match Self::dispatch(player_id, &mut event_sender, &mut ws_sender, &state, frame).await {
                 Ok(_) => {},
                 Err(e) => {
                   tracing::debug!("exiting: dispatch: {}", e);
@@ -244,85 +274,107 @@ impl LobbyStream {
   }
 
   pub fn current_game_id(&self) -> Option<i32> {
-    self.current_game_id.read().clone()
+    self
+      .state
+      .current_game_info
+      .read()
+      .as_ref()
+      .map(|info| info.game_id)
   }
 
-  // forward server packets to the websocket connection
+  // handle controller packets
   async fn dispatch(
+    player_id: i32,
     event_sender: &mut ControllerStreamEventSender,
     ws_sender: &mut WsMessageSender,
-    nodes: &NodeRegistryRef,
-    current_game_id: Arc<RwLock<Option<i32>>>,
+    state: &State,
     frame: Frame,
   ) -> Result<()> {
     let msg = flo_net::try_flo_packet! {
       frame => {
-        p = PacketClientDisconnect => {
+        p = proto::PacketClientDisconnect => {
           message::OutgoingMessage::Disconnect(message::Disconnect {
             reason: S2ProtoEnum::unpack_i32(p.reason)?,
-            message: "Server closed the connection".to_string()
+            message: format!("Server closed the connection: {:?}", p.reason)
           })
         }
-        p = PacketGameInfo => {
-          nodes.set_selected_node(p.game.as_ref().and_then(|g| {
+        p = proto::PacketGameInfo => {
+          state.nodes_reg.set_selected_node(p.game.as_ref().and_then(|g| {
             g.node.as_ref().map(|node| node.id)
           }))?;
 
-          let game: GameInfo = p.game.extract()?;
-          let map = game.map.clone().extract()?;
+          let game = GameInfo::unpack(p.game)?;
 
-          event_sender.send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
-            game_info: Some(LobbyGameInfo {
-              game_id: game.id,
-              map_path: map.path,
-              map_sha1: {
-                if map.sha1.len() != 20 {
-                  return Err(Error::InvalidMapInfo)
-                }
-                let mut value = [0_u8; 20];
-                value.copy_from_slice(&map.sha1[..]);
-                value
-              },
-              map_checksum: map.checksum,
-              players: game.slots.iter().filter_map(|slot| {
-                slot.player.clone().map(|player| (
-                  player.id,
-                  PlayerInfo {
-                    id: player.id,
-                    name: player.name.clone(),
-                    source: PlayerSource::unpack_enum(player.source()),
-                  }
-                ))
-              }).collect(),
-              host_player: game.created_by.clone().map(PlayerInfo::unpack).transpose()?
-            })
-          })).await;
+          let local_game_info = Arc::new(LocalGameInfo::from_game_info(player_id, &game)?);
+          state.current_game_info.write().replace(local_game_info.clone());
+
+          let evt = ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
+            game_info: Some(local_game_info)
+          });
+
+          event_sender.send_or_log_as_error(evt).await;
 
           OutgoingMessage::CurrentGameInfo(game)
         }
-        p = PacketGamePlayerEnter => {
-          OutgoingMessage::GamePlayerEnter(p)
+        p = proto::PacketGamePlayerEnter => {
+          state.mutate_local_game_info(|info| -> Result<_> {
+            if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
+              *slot = Slot::unpack(p.slot.clone())?;
+              Ok(())
+            } else {
+              tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", p.slot_index);
+              Err(Error::InvalidMapInfo)
+            }
+          }).await.ok_or_else(|| {
+            tracing::error!("PacketGamePlayerEnter came before PacketGameInfo");
+            Error::UnexpectedControllerPacket
+          })??;
+          OutgoingMessage::GamePlayerEnter(S2ProtoUnpack::unpack(p)?)
         }
-        p = PacketGamePlayerLeave => {
+        p = proto::PacketGamePlayerLeave => {
+          state.mutate_local_game_info(|info| -> Result<_> {
+            if let Some(slot) = info.slots.iter_mut().find(|s| s.player.as_ref().map(|p| p.id) == Some(p.player_id)) {
+              *slot = Slot::default();
+              Ok(())
+            } else {
+              tracing::error!(game_id = p.game_id, player_id = p.player_id, "PacketGamePlayerLeave: player slot not found");
+              Err(Error::InvalidMapInfo)
+            }
+          }).await.ok_or_else(|| {
+            tracing::error!(game_id = p.game_id, player_id = p.player_id, "PacketGamePlayerLeave came before PacketGameInfo");
+            Error::UnexpectedControllerPacket
+          })??;
           OutgoingMessage::GamePlayerLeave(p)
         }
-        p = PacketGameSlotUpdate => {
-          OutgoingMessage::GameSlotUpdate(p)
+        p = proto::PacketGameSlotUpdate => {
+          state.mutate_local_game_info(|info| -> Result<_> {
+            if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
+              slot.settings = SlotSettings::unpack(p.slot_settings.clone())?;
+              Ok(())
+            } else {
+              tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", p.slot_index);
+              Err(Error::InvalidMapInfo)
+            }
+          }).await.ok_or_else(|| {
+            tracing::error!("PacketGamePlayerEnter came before PacketGameInfo");
+            Error::UnexpectedControllerPacket
+          })??;
+          OutgoingMessage::GameSlotUpdate(S2ProtoUnpack::unpack(p)?)
         }
-        p = PacketPlayerSessionUpdate => {
+        p = proto::PacketPlayerSessionUpdate => {
           let session = PlayerSessionUpdate::unpack(p)?;
           event_sender.send_or_log_as_error(ControllerStreamEvent::PlayerSessionUpdateEvent(PlayerSessionUpdateEvent::Partial(session.clone()))).await;
           if session.game_id.is_none() {
-            nodes.set_selected_node(None)?;
+            state.nodes_reg.set_selected_node(None)?;
+            state.current_game_info.write().take();
+            event_sender.send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
+              game_info: None
+            })).await;
           }
-          *current_game_id.write() = session.game_id.clone();
-          event_sender.send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
-            game_info: None
-          })).await;
           OutgoingMessage::PlayerSessionUpdate(session)
         }
-        p = PacketListNodes => {
-          nodes.update_nodes(p.nodes.clone())?;
+        p = proto::PacketListNodes => {
+          state.nodes_reg.update_nodes(p.nodes.clone())?;
           let mut list = message::NodeList {
             nodes: Vec::with_capacity(p.nodes.len())
           };
@@ -332,40 +384,49 @@ impl LobbyStream {
               name: node.name,
               location: node.location,
               country_id: node.country_id,
-              ping: nodes.get_current_ping(node.id),
+              ping: state.nodes_reg.get_current_ping(node.id),
             })
           }
           OutgoingMessage::ListNodes(list)
         }
-        p = PacketGameSelectNode => {
-          nodes.set_selected_node(p.node_id)?;
+        p = proto::PacketGameSelectNode => {
+          state.nodes_reg.set_selected_node(p.node_id)?;
+          state.mutate_local_game_info(|info| info.node_id = p.node_id).await.ok_or_else(|| {
+            tracing::error!("PacketGameSelectNode came before PacketGameInfo");
+            Error::UnexpectedControllerPacket
+          })?;
           OutgoingMessage::GameSelectNode(p)
         }
-        p = PacketGamePlayerPingMapUpdate => {
+        p = proto::PacketGamePlayerPingMapUpdate => {
           OutgoingMessage::GamePlayerPingMapUpdate(p)
         }
-        p = PacketGamePlayerPingMapSnapshot => {
+        p = proto::PacketGamePlayerPingMapSnapshot => {
           OutgoingMessage::GamePlayerPingMapSnapshot(p)
         }
-        p = PacketGameStartReject => {
+        p = proto::PacketGameStartReject => {
           OutgoingMessage::GameStartReject(p)
         }
-        p = PacketGameStarting => {
-           event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartingEvent(GameStartingEvent {
+        p = proto::PacketGameStarting => {
+          event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartingEvent(GameStartingEvent {
             game_id: p.game_id,
           })).await;
           OutgoingMessage::GameStarting(p)
         }
-        p = PacketGamePlayerToken => {
+        p = proto::PacketGamePlayerToken => {
           event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartedEvent(GameStartedEvent {
             node_id: p.node_id,
             game_id: p.game_id,
             player_token: p.player_token,
           })).await;
-          OutgoingMessage::GameStarted(message::GameStarted{ game_id: p.game_id })
+          OutgoingMessage::GameStarted(message::GameStarted{
+            game_id: p.game_id,
+            lan_game_name: {
+              crate::lan::get_lan_game_name(p.game_id, p.player_id)
+            }
+          })
         }
-        p = PacketClientUpdateSlotClientStatus => {
-          OutgoingMessage::GameSlotClientStatusUpdate(p)
+        p = proto::PacketClientUpdateSlotClientStatus => {
+          OutgoingMessage::GameSlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)
         }
       }
     };
@@ -373,59 +434,6 @@ impl LobbyStream {
     ws_sender.send(msg).await?;
     Ok(())
   }
-}
-
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ClientDisconnectReason")]
-pub enum DisconnectReason {
-  Unknown = 0,
-  Multi = 1,
-  Maintenance = 2,
-}
-
-#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
-#[s2_grpc(message_type = "flo_net::proto::flo_connect::Session")]
-pub struct PlayerSession {
-  pub player: PlayerInfo,
-  pub status: PlayerStatus,
-  pub game_id: Option<i32>,
-}
-
-#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
-#[s2_grpc(message_type = "flo_net::proto::flo_connect::PacketPlayerSessionUpdate")]
-pub struct PlayerSessionUpdate {
-  pub status: PlayerStatus,
-  pub game_id: Option<i32>,
-}
-
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::PlayerStatus")]
-pub enum PlayerStatus {
-  Idle = 0,
-  InGame = 1,
-}
-
-#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
-#[s2_grpc(message_type = "flo_net::proto::flo_connect::PlayerInfo")]
-pub struct PlayerInfo {
-  pub id: i32,
-  pub name: String,
-  pub source: PlayerSource,
-}
-
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::PlayerSource")]
-pub enum PlayerSource {
-  Test = 0,
-  BNet = 1,
-}
-
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ClientConnectRejectReason")]
-pub enum RejectReason {
-  Unknown = 0,
-  ClientVersionTooOld = 1,
-  InvalidToken = 2,
 }
 
 #[derive(Debug)]
@@ -447,7 +455,7 @@ pub enum PlayerSessionUpdateEvent {
 
 #[derive(Debug)]
 pub struct GameInfoUpdateEvent {
-  pub game_info: Option<LobbyGameInfo>,
+  pub game_info: Option<Arc<LocalGameInfo>>,
 }
 
 #[derive(Debug)]

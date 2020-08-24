@@ -2,6 +2,16 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("map checksum mismatch")]
+  MapChecksumMismatch,
+  #[error("unexpected controller packet")]
+  UnexpectedControllerPacket,
+  #[error("unexpected w3gs packet: {0:?}")]
+  UnexpectedW3GSPacket(flo_w3gs::packet::Packet),
+  #[error("slot not resolved")]
+  SlotNotResolved,
+  #[error("stream closed unexpectedly")]
+  StreamClosed,
   #[error("set ping interval failed")]
   SetPingIntervalFailed,
   #[error("invalid selected node id: {0}")]
@@ -17,13 +27,15 @@ pub enum Error {
   #[error("Warcraft ||| not located")]
   War3NotLocated,
   #[error("connection request rejected by server: {0:?}")]
-  ConnectionRequestRejected(crate::controller::RejectReason),
+  ConnectionRequestRejected(crate::types::RejectReason),
   #[error("task cancelled")]
   TaskCancelled,
   #[error("lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
   #[error("websocket: {0}")]
   Websocket(#[from] async_tungstenite::tungstenite::error::Error),
+  #[error("W3GS: {0}")]
+  W3GS(#[from] flo_w3gs::error::Error),
   #[error("map: {0}")]
   War3Map(#[from] flo_w3map::error::Error),
   #[error("war3 data: {0}")]

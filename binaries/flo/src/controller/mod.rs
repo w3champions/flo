@@ -1,6 +1,6 @@
 mod stream;
+use stream::LobbyStream;
 mod ws;
-pub use stream::{DisconnectReason, LobbyStream, PlayerSession, PlayerSessionUpdate, RejectReason};
 
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -12,16 +12,19 @@ use tracing_futures::Instrument;
 use flo_event::*;
 use flo_net::packet::{FloPacket, Frame};
 
-use crate::error::*;
-use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
-use crate::platform::PlatformStateRef;
-
 pub use crate::controller::stream::GameStartedEvent;
-pub use crate::controller::stream::PlayerInfo;
 use crate::controller::stream::{
   ControllerStreamEvent, ControllerStreamEventSender, PlayerSessionUpdateEvent,
 };
-use flo_lan::GameInfo;
+use crate::error::*;
+use crate::lan::game::slot::LanSlotInfo;
+use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
+use crate::platform::PlatformStateRef;
+use crate::types::{
+  DisconnectReason, PlayerInfo, PlayerSession, PlayerSessionUpdate, RejectReason,
+};
+use crate::types::{GameInfo, Slot};
+
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
 
@@ -69,7 +72,7 @@ impl ControllerClient {
 pub struct ControllerClientHandle(Arc<State>);
 
 impl ControllerClientHandle {
-  pub fn current_game_info(&self) -> Option<Arc<LobbyGameInfo>> {
+  pub fn current_game_info(&self) -> Option<Arc<LocalGameInfo>> {
     self.0.current_game_info.read().clone()
   }
 
@@ -82,6 +85,10 @@ impl ControllerClientHandle {
     } else {
       None
     }
+  }
+
+  pub fn node_registry(&self) -> NodeRegistryRef {
+    self.0.nodes.clone()
   }
 }
 
@@ -172,7 +179,7 @@ struct State {
   event_sender: ControllerEventSender,
   stream_event_sender: Sender<ControllerStreamEvent>,
   conn: RwLock<Option<LobbyConn>>,
-  current_game_info: RwLock<Option<Arc<LobbyGameInfo>>>,
+  current_game_info: RwLock<Option<Arc<LocalGameInfo>>>,
   current_session: RwLock<Option<PlayerSession>>,
 }
 
@@ -288,7 +295,7 @@ impl State {
         }
       },
       ControllerStreamEvent::GameInfoUpdateEvent(event) => {
-        let game_info = event.game_info.map(Arc::new);
+        let game_info = event.game_info;
         *self.current_game_info.write() = game_info.clone();
         self
           .event_sender
@@ -453,21 +460,53 @@ impl Drop for LobbyConn {
 }
 
 #[derive(Debug, Clone)]
-pub struct LobbyGameInfo {
+pub struct LocalGameInfo {
   pub game_id: i32,
+  pub random_seed: i32,
+  pub node_id: Option<i32>,
+  pub player_id: i32,
   pub map_path: String,
   pub map_sha1: [u8; 20],
   pub map_checksum: u32,
   pub players: HashMap<i32, PlayerInfo>,
+  pub slots: Vec<Slot>,
   pub host_player: Option<PlayerInfo>,
+}
+
+impl LocalGameInfo {
+  pub fn from_game_info(player_id: i32, game: &GameInfo) -> Result<Self> {
+    Ok(Self {
+      game_id: game.id,
+      random_seed: game.random_seed,
+      node_id: game.node.as_ref().map(|node| node.id),
+      player_id,
+      map_path: game.map.path.clone(),
+      map_sha1: {
+        if game.map.sha1.len() != 20 {
+          return Err(Error::InvalidMapInfo);
+        }
+        let mut value = [0_u8; 20];
+        value.copy_from_slice(&game.map.sha1[..]);
+        value
+      },
+      map_checksum: game.map.checksum,
+      players: game
+        .slots
+        .iter()
+        .filter_map(|slot| slot.player.clone().map(|player| (player.id, player)))
+        .collect(),
+      slots: game.slots.clone(),
+      host_player: game.created_by.clone(),
+    })
+  }
 }
 
 #[derive(Debug)]
 pub enum ControllerEvent {
   ConnectedEvent,
   DisconnectedEvent,
-  GameStartedEvent(GameStartedEvent, Arc<LobbyGameInfo>),
-  GameInfoUpdateEvent(Option<Arc<LobbyGameInfo>>),
+  GameStartedEvent(GameStartedEvent, Arc<LocalGameInfo>),
+  GameInfoUpdateEvent(Option<Arc<LocalGameInfo>>),
   WsWorkerErrorEvent(Error),
 }
 

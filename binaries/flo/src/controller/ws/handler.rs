@@ -1,3 +1,4 @@
+use s2_grpc_utils::S2ProtoPack;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Notify;
@@ -146,7 +147,7 @@ impl ServeState {
           .await?;
       }
       IncomingMessage::GameSlotUpdateRequest(req) => {
-        self.handle_slot_update(req).await?;
+        self.handle_slot_update(req.pack()?).await?;
       }
       IncomingMessage::ListNodesRequest => {
         self.handle_list_nodes_request().await?;

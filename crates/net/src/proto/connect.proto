@@ -109,7 +109,8 @@ message PacketGamePlayerPingMapSnapshot {
 message PacketGamePlayerToken {
   int32 node_id = 1;
   int32 game_id = 2;
-  bytes player_token = 3;
+  int32 player_id = 3;
+  bytes player_token = 4;
 }
 
 message PacketGameStartRequest {
@@ -176,7 +177,8 @@ message GameInfo {
   Node node = 6;
   bool is_private = 7;
   bool is_live = 9;
-  PlayerInfo created_by = 12;
+  int32 random_seed = 10;
+  PlayerInfo created_by = 11;
 }
 
 message Slot {

@@ -17,27 +17,50 @@ pub struct SlotInfo {
   pub num_players: u8,
 }
 
-impl SlotInfo {
-  pub fn new(num_slots: u8, num_players: u8) -> Self {
-    let slots = (0..(num_slots as usize))
-      .map(|i| SlotData::new(i))
-      .collect();
-    Self {
-      _length_of_slot_data: 7 + (SlotData::MIN_SIZE as u16) * (num_slots as u16),
-      _num_slots: num_slots,
-      slots,
-      random_seed: rand::random(),
+impl Default for SlotInfo {
+  fn default() -> Self {
+    SlotInfo {
+      _length_of_slot_data: (7 + (SlotData::MIN_SIZE * 24)) as u16,
+      _num_slots: 24,
+      slots: {
+        let mut slots = Vec::with_capacity(24);
+        slots.resize_with(24, SlotData::default);
+        slots
+      },
+      random_seed: 0,
       slot_layout: SlotLayout::Melee,
-      num_players,
+      num_players: 0,
     }
   }
+}
+
+impl SlotInfo {
+  pub fn build() -> SlotInfoBuilder {
+    SlotInfoBuilder {
+      inner: Default::default(),
+    }
+  }
+
+  // pub fn new(num_slots: u8, num_players: u8) -> Self {
+  //   let slots = (0..(num_slots as usize))
+  //     .map(|i| SlotData::new(i))
+  //     .collect();
+  //   Self {
+  //     _length_of_slot_data: 7 + (SlotData::MIN_SIZE as u16) * (num_slots as u16),
+  //     _num_slots: num_slots,
+  //     slots,
+  //     random_seed: rand::random(),
+  //     slot_layout: SlotLayout::Melee,
+  //     num_players,
+  //   }
+  // }
 
   pub fn slots(&self) -> &[SlotData] {
     &self.slots
   }
 
-  pub fn slot_mut(&mut self, index: u8) -> Option<&mut SlotData> {
-    self.slots.get_mut(index as usize)
+  pub fn slot_mut(&mut self, index: usize) -> Option<&mut SlotData> {
+    self.slots.get_mut(index)
   }
 
   pub fn find_active_player_slot_mut(&mut self, player_id: u8) -> Option<&mut SlotData> {
@@ -52,20 +75,53 @@ impl SlotInfo {
   }
 
   // TODO: handle teams, forces
-  pub fn join(&mut self) -> Option<&mut SlotData> {
-    let (i, slot) = self
-      .slots
-      .iter_mut()
-      .enumerate()
-      .find(|(_, s)| s.slot_status == SlotStatus::Open)?;
-    slot.player_id = (i + 1) as u8;
-    slot.slot_status = SlotStatus::Occupied;
-    let race_selectable = RacePref::SELECTABLE;
-    slot.race = RacePref::RANDOM | race_selectable;
-    slot.computer = false;
-    slot.computer_type = AI::ComputerNormal;
-    slot.handicap = 100;
-    Some(slot)
+  // pub fn join(&mut self) -> Option<&mut SlotData> {
+  //   let (i, slot) = self
+  //     .slots
+  //     .iter_mut()
+  //     .enumerate()
+  //     .find(|(_, s)| s.slot_status == SlotStatus::Open)?;
+  //   slot.player_id = (i + 1) as u8;
+  //   slot.slot_status = SlotStatus::Occupied;
+  //   let race_selectable = RacePref::SELECTABLE;
+  //   slot.race = RacePref::RANDOM | race_selectable;
+  //   slot.computer = false;
+  //   slot.computer_type = AI::ComputerNormal;
+  //   slot.handicap = 100;
+  //   Some(slot)
+  // }
+}
+
+#[derive(Debug)]
+pub struct SlotInfoBuilder {
+  inner: SlotInfo,
+}
+impl SlotInfoBuilder {
+  pub fn num_slots(&mut self, value: usize) -> &mut Self {
+    self.inner.slots.resize_with(value, || SlotData::default());
+    self.inner._length_of_slot_data = (7 + (SlotData::MIN_SIZE * value)) as u16;
+    self.inner._num_slots = 24;
+    self
+  }
+
+  pub fn num_players(&mut self, value: usize) -> &mut Self {
+    self.inner.num_players = value as u8;
+    self
+  }
+
+  pub fn random_seed(&mut self, value: i32) -> &mut Self {
+    let bytes = value.to_le_bytes();
+    self.inner.random_seed = u32::from_le_bytes(bytes);
+    self
+  }
+
+  pub fn slot_layout(&mut self, value: SlotLayout) -> &mut Self {
+    self.inner.slot_layout = value;
+    self
+  }
+
+  pub fn build(&mut self) -> SlotInfo {
+    std::mem::replace(&mut self.inner, SlotInfo::default())
   }
 }
 
@@ -87,12 +143,10 @@ pub struct SlotData {
   pub handicap: u8,
 }
 
-impl SlotData {
-  fn new(index: usize) -> Self {
-    assert!(index < 24);
-    let id = (index + 1) as u8;
+impl Default for SlotData {
+  fn default() -> Self {
     Self {
-      player_id: id,
+      player_id: 0,
       download_status: 0xFF,
       slot_status: SlotStatus::Open,
       computer: false,

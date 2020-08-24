@@ -117,3 +117,10 @@ fn test_inspect2() {
   let (info, _) = W3Replay::inspect(&path).unwrap();
   dbg!(info);
 }
+
+#[test]
+fn test_inspect_computers() {
+  let path = flo_util::sample_path!("replay", "computers.w3g");
+  let (info, _) = W3Replay::inspect(&path).unwrap();
+  dbg!(info);
+}

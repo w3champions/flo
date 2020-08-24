@@ -73,6 +73,19 @@ impl W3Map {
     Ok((map, checksum))
   }
 
+  pub fn calc_checksum(storage: &W3Storage, path: &str) -> Result<MapChecksum> {
+    use flo_w3storage::Data;
+    let file = storage
+      .resolve_file(path)?
+      .ok_or_else(|| Error::StorageFileNotFound(path.to_string()))?;
+    let mut archive = match *file.data() {
+      Data::Path(ref path) => Self::open_archive_file(path),
+      Data::Bytes(ref bytes) => Self::open_archive_memory(bytes),
+    }?;
+    let checksum = MapChecksum::compute(&storage, &mut archive)?;
+    Ok(checksum)
+  }
+
   pub fn render_preview_jpeg(&self) -> Vec<u8> {
     let mut bg = self.image.clone();
     for icon in self.minimap_icons.iter() {
@@ -367,6 +380,7 @@ fn test_open_storage_with_checksum() {
       sha1: [
         201, 228, 110, 214, 86, 255, 142, 141, 140, 96, 141, 57, 3, 110, 63, 27, 250, 11, 28, 194,
       ],
+      file_size: 0
     }
   )
 }

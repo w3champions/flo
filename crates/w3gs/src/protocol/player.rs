@@ -22,11 +22,11 @@ pub struct PlayerInfo {
 }
 
 impl PlayerInfo {
-  pub fn new(player_id: u8, player_name: CString) -> Self {
+  pub fn new(player_id: u8, player_name: impl IntoCStringLossy) -> Self {
     PlayerInfo {
       join_counter: 1,
       player_id,
-      player_name,
+      player_name: player_name.into_c_string_lossy(),
       _num_unknown_1: 2,
       _unknown_1: vec![0, 0],
       external_addr: SockAddr::new_null(),

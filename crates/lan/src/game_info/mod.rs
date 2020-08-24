@@ -40,7 +40,7 @@ impl GameInfo {
       create_time: SystemTime::now(),
       secret: 0,
       name: name.clone(),
-      players_num: 0,
+      players_num: 1,
       players_max: 24,
       data: GameData {
         name,

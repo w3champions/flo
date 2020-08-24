@@ -1,22 +1,24 @@
+use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use flo_net::proto::flo_connect::{
-  GameInfo, PacketGamePlayerEnter, PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot,
-  PacketGamePlayerPingMapSnapshotRequest, PacketGamePlayerPingMapUpdate, PacketGameSelectNode,
-  PacketGameSelectNodeRequest, PacketGameSlotUpdate, PacketGameSlotUpdateRequest,
-  PacketGameStartReject, PacketGameStartRequest, PacketGameStarting,
+  PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshotRequest,
+  PacketGamePlayerPingMapUpdate, PacketGameSelectNode, PacketGameSelectNodeRequest,
+  PacketGameSlotUpdate, PacketGameSlotUpdateRequest, PacketGameStartReject, PacketGameStartRequest,
+  PacketGameStarting,
 };
 
 use flo_net::proto::flo_node::PacketClientUpdateSlotClientStatus;
 
 use crate::error::{Error, Result};
-
-pub use crate::controller::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
 use crate::node::PingUpdate;
 use crate::platform::PlatformStateError;
+pub use crate::types::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
+use crate::types::{GameInfo, Slot, SlotClientStatus, SlotSettings};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -25,7 +27,7 @@ pub enum IncomingMessage {
   Connect(Connect),
   ListMaps,
   GetMapDetail(MapPath),
-  GameSlotUpdateRequest(PacketGameSlotUpdateRequest),
+  GameSlotUpdateRequest(GameSlotUpdate),
   GameSelectNodeRequest(PacketGameSelectNodeRequest),
   GamePlayerPingMapSnapshotRequest(PacketGamePlayerPingMapSnapshotRequest),
   ListNodesRequest,
@@ -45,9 +47,9 @@ pub enum OutgoingMessage {
   GetMapDetail(MapDetail),
   GetMapDetailError(ErrorMessage),
   CurrentGameInfo(GameInfo),
-  GamePlayerEnter(PacketGamePlayerEnter),
+  GamePlayerEnter(GamePlayerEnter),
   GamePlayerLeave(PacketGamePlayerLeave),
-  GameSlotUpdate(PacketGameSlotUpdate),
+  GameSlotUpdate(GameSlotUpdate),
   PlayerSessionUpdate(PlayerSessionUpdate),
   ListNodes(NodeList),
   PingUpdate(PingUpdate),
@@ -57,7 +59,7 @@ pub enum OutgoingMessage {
   GameStartReject(PacketGameStartReject),
   GameStarting(PacketGameStarting),
   GameStarted(GameStarted),
-  GameSlotClientStatusUpdate(PacketClientUpdateSlotClientStatus),
+  GameSlotClientStatusUpdate(ClientUpdateSlotClientStatus),
 }
 
 impl FromStr for IncomingMessage {
@@ -170,4 +172,32 @@ pub struct Node {
 #[derive(Debug, Serialize)]
 pub struct GameStarted {
   pub game_id: i32,
+  pub lan_game_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+#[s2_grpc(message_type(
+  flo_net::proto::flo_connect::PacketGameSlotUpdateRequest,
+  flo_net::proto::flo_connect::PacketGameSlotUpdate
+))]
+pub struct GameSlotUpdate {
+  pub game_id: i32,
+  pub slot_index: i32,
+  pub slot_settings: SlotSettings,
+}
+
+#[derive(Debug, Serialize, S2ProtoUnpack)]
+#[s2_grpc(message_type(flo_net::proto::flo_connect::PacketClientUpdateSlotClientStatus))]
+pub struct ClientUpdateSlotClientStatus {
+  pub player_id: i32,
+  pub game_id: i32,
+  pub status: SlotClientStatus,
+}
+
+#[derive(Debug, Serialize, S2ProtoUnpack)]
+#[s2_grpc(message_type(flo_net::proto::flo_connect::PacketGamePlayerEnter))]
+pub struct GamePlayerEnter {
+  pub game_id: i32,
+  pub slot_index: i32,
+  pub slot: Slot,
 }

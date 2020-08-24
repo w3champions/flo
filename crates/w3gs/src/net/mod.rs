@@ -72,13 +72,15 @@ impl W3GSStream {
     Ok(())
   }
 
-  pub async fn recv(&mut self) -> Result<Packet> {
-    let packet = self
-      .transport
-      .try_next()
-      .await?
-      .ok_or_else(|| Error::StreamClosed)?;
+  pub async fn recv(&mut self) -> Result<Option<Packet>> {
+    let packet = self.transport.try_next().await?;
     Ok(packet)
+  }
+
+  pub async fn flush(&mut self) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
+    self.transport.get_mut().flush().await?;
+    Ok(())
   }
 }
 

@@ -90,7 +90,7 @@ impl Packet {
     })
   }
 
-  pub fn with_simple_payload<T>(payload: T) -> Result<Packet>
+  pub fn simple<T>(payload: T) -> Result<Packet>
   where
     T: PacketPayload + BinEncode + std::fmt::Debug,
   {

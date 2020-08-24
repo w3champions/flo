@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use s2_grpc_utils::S2ProtoUnpack;
+use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -97,6 +97,21 @@ impl NodeConn {
       return Err(Error::NodeNotReady);
     }
 
+    let mut slots = Vec::with_capacity(game.slots.len());
+    for (i, slot) in game.slots.iter().enumerate() {
+      if slot.settings.status == SlotStatus::Occupied {
+        slots.push(flo_net::proto::flo_node::GameSlot {
+          id: i as u32,
+          player: slot.player.as_ref().map(|player| GamePlayer {
+            player_id: player.id,
+            name: player.name.clone(),
+          }),
+          settings: Some(slot.settings.clone().pack()?),
+          client_status: Default::default(),
+        });
+      }
+    }
+
     let pkt = PacketControllerCreateGame {
       game: Some(flo_net::proto::flo_node::Game {
         id: game_id,
@@ -105,26 +120,7 @@ impl NodeConn {
           map_sha1: game.map.sha1.to_vec(),
           map_checksum: game.map.checksum,
         }),
-        slots: game
-          .slots
-          .iter()
-          .enumerate()
-          .filter_map(|(i, slot)| {
-            if slot.settings.status == SlotStatus::Occupied {
-              Some(flo_net::proto::flo_node::GameSlot {
-                id: i as u32,
-                player: slot.player.as_ref().map(|player| GamePlayer {
-                  player_id: player.id,
-                  name: player.name.clone(),
-                }),
-                settings: slot.settings.clone().into_packet().into(),
-                client_status: Default::default(),
-              })
-            } else {
-              None
-            }
-          })
-          .collect(),
+        slots,
         status: Default::default(),
       }),
     };

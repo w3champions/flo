@@ -189,6 +189,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     max_players: max_players as i32,
     created_by: Some(params.player_id),
     meta: meta_value,
+    random_seed: rand::random(),
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -478,6 +479,7 @@ pub fn get_full_and_node_token(
     .optional()?
     .ok_or_else(|| Error::PlayerNotInGame)?;
   let max_players = row.max_players;
+
   Ok((
     row.into_game(
       meta,
@@ -618,7 +620,7 @@ pub fn update_reset_created(conn: &DbConn, id: i32) -> Result<()> {
 }
 
 /// Reset all instance specific states
-/// Should be called after every process start
+/// Should be called after process start
 pub fn reset_instance_state(conn: &DbConn) -> Result<()> {
   use diesel::pg::expression::dsl::{all, any};
   use game::dsl as g;
@@ -674,6 +676,7 @@ pub struct GameRowWithRelated {
   pub meta: Value,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
+  pub random_seed: i32,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -692,6 +695,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::meta,
   game::dsl::created_at,
   game::dsl::updated_at,
+  game::dsl::random_seed,
 );
 
 impl GameRowWithRelated {
@@ -712,6 +716,7 @@ impl GameRowWithRelated {
       game::dsl::meta,
       game::dsl::created_at,
       game::dsl::updated_at,
+      game::dsl::random_seed,
     )
   }
 
@@ -734,6 +739,7 @@ impl GameRowWithRelated {
       ended_at: self.ended_at,
       created_at: self.created_at,
       updated_at: self.updated_at,
+      random_seed: self.random_seed,
     })
   }
 }
@@ -748,6 +754,7 @@ pub struct GameInsert<'a> {
   pub max_players: i32,
   pub created_by: Option<i32>,
   pub meta: Value,
+  pub random_seed: i32,
 }
 
 #[derive(Debug, Insertable)]

@@ -3,6 +3,7 @@ mod error;
 mod lan;
 mod node;
 mod platform;
+mod types;
 mod version;
 use tokio::sync::mpsc::channel;
 
@@ -22,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let (ctrl_sender, mut ctrl_receiver) = channel(1);
   let ctrl = ControllerClient::init(platform.clone(), ctrl_sender).await?;
   let (lan_sender, mut lan_receiver) = LanEvent::channel(1);
-  let lan = Lan::new(lan_sender.into());
+  let lan = Lan::new(platform.clone(), lan_sender.into());
   tokio::spawn({
     let ctrl = ctrl.handle();
     let lan = lan.handle();
@@ -39,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ControllerEvent::GameInfoUpdateEvent(game_info) => {
                   match game_info {
                     Some(game_info) => {
-                      tracing::info!(game_id = game_info.game_id, "joined game: {:?}", game_info);
+                      tracing::info!(game_id = game_info.game_id, "game info update");
                     },
                     None => {
                       lan.stop_game();
@@ -47,12 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                   }
                 },
                 ControllerEvent::GameStartedEvent(event, game_info) => {
-                  tracing::info!(
-                    game_id = event.game_id,
-                    "node token = {:?}, game = {:?}",
-                    event.player_token,
-                    game_info
-                  );
                   if let Some(my_player_id) = ctrl.with_player_session(|s| s.player.id) {
                     flo_log::result_ok!(
                       "replace lan game",

@@ -24,6 +24,7 @@ table! {
         meta -> Jsonb,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        random_seed -> Int4,
     }
 }
 

@@ -126,6 +126,40 @@ impl BinDecode for CString {
   }
 }
 
+pub trait IntoCStringLossy {
+  fn into_c_string_lossy(self) -> CString;
+}
+
+impl IntoCStringLossy for CString {
+  fn into_c_string_lossy(self) -> CString {
+    self
+  }
+}
+
+impl<'a> IntoCStringLossy for &'a String {
+  fn into_c_string_lossy(self) -> CString {
+    (self as &str).into_c_string_lossy()
+  }
+}
+
+impl IntoCStringLossy for String {
+  fn into_c_string_lossy(self) -> CString {
+    (&self as &str).into_c_string_lossy()
+  }
+}
+
+impl<'a> IntoCStringLossy for &'a str {
+  fn into_c_string_lossy(self) -> CString {
+    use std::num::NonZeroU8;
+    self
+      .bytes()
+      .into_iter()
+      .filter_map(NonZeroU8::new)
+      .collect::<Vec<_>>()
+      .into()
+  }
+}
+
 impl<'a, T: BinEncode> BinEncode for &'a [T] {
   #[inline]
   fn encode<TBuf: BufMut>(&self, buf: &mut TBuf) {
@@ -141,6 +175,13 @@ impl<T: BinEncode> BinEncode for Vec<T> {
     for v in self {
       v.encode(buf);
     }
+  }
+}
+
+impl<'a, T: BinEncode> BinEncode for &'a T {
+  #[inline]
+  fn encode<TBuf: BufMut>(&self, buf: &mut TBuf) {
+    <T as BinEncode>::encode(self, buf)
   }
 }
 

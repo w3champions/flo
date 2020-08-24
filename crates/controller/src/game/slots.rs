@@ -2,9 +2,7 @@ use diesel::helper_types::Nullable;
 use diesel::prelude::*;
 use std::collections::HashMap;
 
-use crate::game::{
-  Computer, Race, Slot, SlotClientStatus, SlotSettings, SlotSettingsColumns, SlotStatus,
-};
+use crate::game::{Slot, SlotClientStatus, SlotSettings, SlotSettingsColumns, SlotStatus};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::game_used_slot;
 
@@ -69,20 +67,15 @@ impl Slots {
 
   fn make_unused_slot(map_players: usize, idx: usize) -> Slot {
     Slot {
-      player: None,
       settings: SlotSettings {
         team: if idx >= map_players {
           24 // Referees
         } else {
           0
         },
-        color: 0,
-        computer: Computer::Easy,
-        handicap: 100,
-        status: SlotStatus::Open,
-        race: Race::Human,
+        ..Default::default()
       },
-      client_status: SlotClientStatus::Pending,
+      ..Default::default()
     }
   }
 }

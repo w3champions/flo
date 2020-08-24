@@ -4,8 +4,6 @@ use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
-use flo_net::proto::flo_connect as packet;
-
 use crate::map::Map;
 use crate::node::{NodeRef, NodeRefColumns};
 use crate::player::{PlayerRef, PlayerRefColumns};
@@ -26,6 +24,7 @@ pub struct Game {
   pub is_live: bool,
   pub num_players: i32,
   pub max_players: i32,
+  pub random_seed: i32,
   pub created_by: Option<PlayerRef>,
   pub started_at: Option<DateTime<Utc>>,
   pub ended_at: Option<DateTime<Utc>>,
@@ -50,6 +49,7 @@ impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
       node: self.node.pack()?,
       is_private: self.is_private,
       is_live: self.is_live,
+      random_seed: self.random_seed,
       created_by: self.created_by.pack()?,
     })
   }
@@ -265,36 +265,6 @@ pub enum Computer {
   Easy = 0,
   Normal = 1,
   Insane = 2,
-}
-
-impl SlotSettings {
-  pub fn into_packet(self) -> packet::SlotSettings {
-    packet::SlotSettings {
-      team: self.team,
-      color: self.color,
-      computer: match self.computer {
-        Computer::Easy => packet::Computer::Easy,
-        Computer::Normal => packet::Computer::Normal,
-        Computer::Insane => packet::Computer::Insane,
-      }
-      .into(),
-      handicap: self.handicap,
-      status: match self.status {
-        SlotStatus::Open => packet::SlotStatus::Open,
-        SlotStatus::Closed => packet::SlotStatus::Closed,
-        SlotStatus::Occupied => packet::SlotStatus::Occupied,
-      }
-      .into(),
-      race: match self.race {
-        Race::Human => packet::Race::Human,
-        Race::Orc => packet::Race::Orc,
-        Race::NightElf => packet::Race::NightElf,
-        Race::Undead => packet::Race::Undead,
-        Race::Random => packet::Race::Random,
-      }
-      .into(),
-    }
-  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum, BSDieselEnum)]
