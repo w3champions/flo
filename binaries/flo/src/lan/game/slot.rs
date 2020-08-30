@@ -1,8 +1,7 @@
-use flo_w3gs::protocol::player::PlayerInfo;
 use flo_w3gs::slot::{SlotData, SlotInfo};
 
 use crate::error::*;
-use crate::types::{GameInfo, Race, Slot, SlotStatus};
+use crate::types::{Slot, SlotStatus};
 
 #[derive(Debug)]
 pub struct LanSlotInfo {
@@ -14,8 +13,9 @@ pub struct LanSlotInfo {
 
 #[derive(Debug)]
 pub struct LanSlotPlayerInfo {
-  pub id: u8,
+  pub slot_player_id: u8,
   pub slot_index: usize,
+  pub player_id: i32,
   pub name: String,
 }
 
@@ -50,7 +50,7 @@ pub fn build_player_slot_info(
   };
 
   for (i, player_slot) in &player_slots {
-    use flo_w3gs::slot::{RacePref, SlotStatus};
+    use flo_w3gs::slot::SlotStatus;
     let slot = slot_info.slot_mut(*i).expect("always has 24 slots");
 
     if player_slot.player.is_some() {
@@ -78,8 +78,9 @@ pub fn build_player_slot_info(
     .filter_map(|(i, slot)| {
       if let Some(player) = slot.player.as_ref() {
         Some(LanSlotPlayerInfo {
-          id: index_to_player_id(i),
+          slot_player_id: index_to_player_id(i),
           slot_index: i,
+          player_id: player.id,
           name: player.name.clone(),
         })
       } else {

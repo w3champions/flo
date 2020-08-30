@@ -1,7 +1,6 @@
 use s2_grpc_utils::S2ProtoPack;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use flo_net::packet::FloPacket;
@@ -9,6 +8,7 @@ use flo_net::proto::flo_connect::{
   PacketGamePlayerPingMapSnapshotRequest, PacketGameSelectNodeRequest, PacketGameSlotUpdateRequest,
   PacketGameStartRequest, PacketListNodesRequest,
 };
+use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapDetail, MapForceOwned, MapList, MapPath,
@@ -19,24 +19,25 @@ use super::{ConnectLobbyEvent, WsEvent, WsEventSender};
 use crate::error::{Error, Result};
 use crate::platform::PlatformStateRef;
 
-#[derive(Debug, Clone)]
-pub struct WsHandlerRef {
-  state: Arc<State>,
+#[derive(Debug)]
+pub struct WsHandler {
+  scope: SpawnScope,
+  ws_sender: Sender<OutgoingMessage>,
 }
 
-impl WsHandlerRef {
+impl WsHandler {
   pub fn new(platform: PlatformStateRef, event_sender: WsEventSender, stream: WsStream) -> Self {
     let (ws_sender, ws_receiver) = channel(3);
-    let dropper = Arc::new(Notify::new());
+    let scope = SpawnScope::new();
     let serve_state = Arc::new(ServeState {
       platform,
       event_sender,
     });
     tokio::spawn(
       {
-        let dropper = dropper.clone();
+        let scope = scope.handle();
         async move {
-          if let Err(e) = serve_stream(serve_state.clone(), ws_receiver, dropper, stream).await {
+          if let Err(e) = serve_stream(serve_state.clone(), ws_receiver, scope, stream).await {
             tracing::error!("serve stream: {}", e);
           } else {
             tracing::debug!("exiting");
@@ -45,32 +46,27 @@ impl WsHandlerRef {
       }
       .instrument(tracing::debug_span!("worker")),
     );
-    Self {
-      state: Arc::new(State { ws_sender, dropper }),
-    }
+    Self { scope, ws_sender }
   }
 
-  pub async fn send_or_discard(&self, msg: OutgoingMessage) -> bool {
-    self.state.ws_sender.clone().send(msg).await.ok().is_some()
+  pub fn sender(&self) -> WsSender {
+    WsSender(self.ws_sender.clone())
   }
 }
 
-#[derive(Debug)]
-struct State {
-  ws_sender: Sender<OutgoingMessage>,
-  dropper: Arc<Notify>,
-}
+#[derive(Debug, Clone)]
+pub struct WsSender(Sender<OutgoingMessage>);
 
-impl Drop for State {
-  fn drop(&mut self) {
-    self.dropper.notify()
+impl WsSender {
+  pub async fn send_or_discard(&self, msg: OutgoingMessage) {
+    self.0.clone().send(msg).await.ok();
   }
 }
 
 async fn serve_stream(
   state: Arc<ServeState>,
   mut ws_receiver: Receiver<OutgoingMessage>,
-  dropper: Arc<Notify>,
+  mut scope: SpawnScopeHandle,
   mut stream: WsStream,
 ) -> Result<()> {
   let msg = state.get_client_info_message();
@@ -81,7 +77,7 @@ async fn serve_stream(
 
   loop {
     tokio::select! {
-      _ = dropper.notified() => {
+      _ = scope.left() => {
         ws_receiver.close();
         while let Some(msg) = ws_receiver.try_recv().ok() {
           stream.send(msg).await?;

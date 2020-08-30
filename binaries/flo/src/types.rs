@@ -1,5 +1,7 @@
+pub use flo_types::node::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
 #[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::ClientDisconnectReason")]
@@ -144,17 +146,6 @@ impl Default for SlotSettings {
   }
 }
 
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::SlotClientStatus")]
-pub enum SlotClientStatus {
-  Pending = 0,
-  Connected = 1,
-  Loading = 2,
-  Loaded = 3,
-  Disconnected = 4,
-  Left = 5,
-}
-
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
 #[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::Computer")]
 pub enum Computer {
@@ -203,4 +194,32 @@ pub enum SlotStatus {
   Open = 0,
   Closed = 1,
   Occupied = 2,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct GameStatusUpdate {
+  pub game_id: i32,
+  pub status: NodeGameStatus,
+  pub updated_player_game_client_status_map: HashMap<i32, SlotClientStatus>,
+}
+
+impl From<flo_net::proto::flo_node::PacketNodeGameStatusUpdate> for GameStatusUpdate {
+  fn from(pkt: flo_net::proto::flo_node::PacketNodeGameStatusUpdate) -> Self {
+    GameStatusUpdate {
+      game_id: pkt.game_id,
+      status: NodeGameStatus::unpack_enum(pkt.status()),
+      updated_player_game_client_status_map: pkt
+        .updated_player_game_client_status_map
+        .into_iter()
+        .map(|(k, v)| {
+          (
+            k,
+            flo_net::proto::flo_connect::SlotClientStatus::from_i32(v)
+              .map(|v| SlotClientStatus::unpack_enum(v))
+              .unwrap_or(SlotClientStatus::Pending),
+          )
+        })
+        .collect(),
+    }
+  }
 }

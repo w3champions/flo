@@ -1,6 +1,9 @@
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
+use futures::Stream;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::time::timeout;
@@ -119,6 +122,14 @@ impl FloStream {
       .map_err(|_elapsed| Error::StreamTimeout)??
       .ok_or_else(|| Error::StreamClosed)?;
     Ok(frame)
+  }
+}
+
+impl Stream for FloStream {
+  type Item = Result<Frame>;
+
+  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    Pin::new(&mut self.transport).poll_next(cx)
   }
 }
 

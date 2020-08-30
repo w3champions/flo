@@ -5,12 +5,14 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+flo-types = { path = "../types" }
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 flo-net = { path = "../net" }
 flo-constants = { path = "../constants" }
 flo-event = { path = "../event" }
 flo-log = { path = "../log" }
+flo-task = { path = "../task" }
 
 thiserror = "1.0.20"
 bytes = "0.5.6"

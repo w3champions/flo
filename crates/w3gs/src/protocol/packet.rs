@@ -66,6 +66,7 @@ pub struct Packet {
 }
 
 impl Packet {
+  #[inline]
   pub fn with_payload<T>(payload: T) -> Result<Packet>
   where
     T: PacketPayload + PacketPayloadEncode + std::fmt::Debug,
@@ -90,6 +91,7 @@ impl Packet {
     })
   }
 
+  #[inline]
   pub fn simple<T>(payload: T) -> Result<Packet>
   where
     T: PacketPayload + BinEncode + std::fmt::Debug,
@@ -97,10 +99,12 @@ impl Packet {
     Self::with_payload(SimplePayload(payload))
   }
 
+  #[inline]
   pub fn decode_header(buf: &mut BytesMut) -> Result<Header> {
     Header::decode(buf).map_err(Into::into)
   }
 
+  #[inline]
   pub fn decode(header: Header, buf: &mut BytesMut) -> Result<Self> {
     let payload_len = header.get_payload_len()?;
     buf.check_size(payload_len)?;
@@ -110,6 +114,7 @@ impl Packet {
     })
   }
 
+  #[inline]
   pub fn decode_payload<T>(&self) -> Result<T>
   where
     T: PacketPayload + PacketPayloadDecode,
@@ -128,7 +133,8 @@ impl Packet {
     Ok(payload)
   }
 
-  pub fn decode_simple_payload<T>(&self) -> Result<T>
+  #[inline]
+  pub fn decode_simple<T>(&self) -> Result<T>
   where
     T: PacketPayload + BinDecode,
   {
@@ -137,32 +143,38 @@ impl Packet {
       .map(SimplePayload::into_inner)
   }
 
+  #[inline]
   pub fn decode_protobuf<T>(&self) -> Result<T>
   where
     T: PacketProtoBufMessage,
   {
-    let payload: ProtoBufPayload = self.decode_simple_payload()?;
+    let payload: ProtoBufPayload = self.decode_simple()?;
     payload.decode_message()
   }
 
+  #[inline]
   pub fn get_encode_len(&self) -> usize {
     4 + self.payload.len()
   }
 
+  #[inline]
   pub fn encode(&self, buf: &mut BytesMut) {
     buf.reserve(self.get_encode_len());
     self.header.encode(buf);
     buf.put_slice(&self.payload);
   }
 
+  #[inline]
   pub fn type_id(&self) -> PacketTypeId {
     self.header.type_id
   }
 
+  #[inline]
   pub fn len(&self) -> u16 {
     self.header.len
   }
 
+  #[inline]
   pub fn payload_len(&self) -> usize {
     self.payload.len()
   }
@@ -177,7 +189,7 @@ pub struct Header {
 }
 
 impl Header {
-  fn new(type_id: PacketTypeId, len: u16) -> Self {
+  pub fn new(type_id: PacketTypeId, len: u16) -> Self {
     Header {
       _sig: 0xF7,
       type_id,
@@ -318,7 +330,7 @@ where
   assert!(!bytes.has_remaining());
 
   let payload: T = packet
-    .decode_simple_payload()
+    .decode_simple()
     .map_err(|e| {
       if let Error::ExtraPayloadBytes(len) = e {
         let extra = &packet.payload[(packet.payload.len() - len)..];
@@ -351,7 +363,7 @@ pub(crate) fn test_protobuf_payload_type<
 
   assert!(!bytes.has_remaining());
 
-  let payload: ProtoBufPayload = packet.decode_simple_payload().unwrap();
+  let payload: ProtoBufPayload = packet.decode_simple().unwrap();
   dbg!(&payload);
 
   let message: T = payload.decode_message().unwrap();

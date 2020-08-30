@@ -64,7 +64,7 @@ message PacketNodeGameStatusUpdateBulk {
 
 message PacketNodeGameStatusUpdate {
   int32 game_id = 1;
-  GameStatus status = 2;
+  NodeGameStatus status = 2;
   map<int32, flo_common.SlotClientStatus> updated_player_game_client_status_map = 3;
 }
 
@@ -75,7 +75,10 @@ message PacketClientConnect {
 
 message PacketClientConnectAccept {
   flo_common.Version version = 1;
-  Game game = 2;
+  int32 game_id = 2;
+  int32 player_id = 3;
+  NodeGameStatus game_status = 4;
+  map<int32, flo_common.SlotClientStatus> player_game_client_status_map = 5;
 }
 
 message PacketClientConnectReject {
@@ -84,8 +87,6 @@ message PacketClientConnectReject {
 }
 
 message PacketClientUpdateSlotClientStatusRequest {
-  int32 player_id = 1;
-  int32 game_id = 2;
   flo_common.SlotClientStatus status = 3;
 }
 
@@ -129,16 +130,17 @@ message PlayerToken {
 
 message Game {
   int32 id = 1;
-  GameStatus status = 2;
+  NodeGameStatus status = 2;
   GameSettings settings = 3;
   repeated GameSlot slots = 4;
 }
 
-enum GameStatus {
-  GameStatusCreated = 0;
-  GameStatusWaiting = 1;
-  GameStatusRunning = 2;
-  GameStatusEnded = 3;
+enum NodeGameStatus {
+  NodeGameStatusCreated = 0;
+  NodeGameStatusWaiting = 1;
+  NodeGameStatusLoading = 2;
+  NodeGameStatusRunning = 3;
+  NodeGameStatusEnded = 4;
 }
 
 message GameSettings {

@@ -133,6 +133,12 @@ message PacketGameStartPlayerClientInfoRequest {
   bytes map_sha1 = 3;
 }
 
+message PacketGameSlotClientStatusUpdate {
+  int32 player_id = 1;
+  int32 game_id = 2;
+  flo_common.SlotClientStatus status = 3;
+}
+
 message NodePingMap {
   map<int32, uint32> player_ping_map = 2;
 }

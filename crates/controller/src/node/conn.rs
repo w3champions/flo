@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -15,23 +15,25 @@ use flo_event::*;
 use flo_net::packet::*;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
+use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
-use crate::game::{Game, SlotStatus};
+use crate::game::{Game, SlotClientStatus, SlotStatus};
 use crate::node::PlayerToken;
+use crate::state::event::{FloControllerEvent, GameStatusUpdate};
 
 pub type HandlerSender = Sender<Frame>;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NodeConn {
+  scope: SpawnScope,
   state: Arc<NodeConnState>,
 }
 
 impl Drop for NodeConn {
   fn drop(&mut self) {
     self.state.event_sender.close();
-    self.state.dropper.notify();
   }
 }
 
@@ -41,8 +43,10 @@ impl NodeConn {
     addr: &str,
     secret: &str,
     event_sender: EventSender<NodeConnEvent>,
+    ctrl_event_sender: Sender<FloControllerEvent>,
     delay: Option<Duration>,
   ) -> Result<Self> {
+    let scope = SpawnScope::new();
     let (sender, receiver) = channel(1);
 
     let (ip, port) = parse_addr(addr)?;
@@ -51,9 +55,9 @@ impl NodeConn {
       id,
       event_sender: event_sender.clone(),
       sender,
+      ctrl_event_sender,
       secret: secret.to_string(),
       status: RwLock::new(NodeConnStatus::Connecting),
-      dropper: Notify::new(),
       pending_requests: RwLock::new(HashMap::new()),
     });
 
@@ -61,22 +65,20 @@ impl NodeConn {
       {
         let state = state.clone();
         let mut event_sender = event_sender.clone();
+        let mut scope = scope.handle();
         async move {
           if let Some(delay) = delay {
             tokio::select! {
-              _ = state.dropper.notified() => {
+              _ = scope.left() => {
                 return;
               }
               _ = delay_for(delay) => {}
             }
           }
 
-          if let Err(err) = Self::worker(state.clone(), ip, port, receiver).await {
+          if let Err(err) = Self::worker(state.clone(), ip, port, receiver, scope.clone()).await {
             event_sender
-              .send_or_log_as_error(NodeConnEvent::new(
-                id,
-                NodeConnEventData::WorkerErrorEvent(err),
-              ))
+              .send_or_log_as_error(NodeConnEvent::new(id, NodeConnEventData::WorkerError(err)))
               .await;
           }
           tracing::debug!("exiting");
@@ -85,7 +87,7 @@ impl NodeConn {
       .instrument(tracing::debug_span!("node conn worker", addr)),
     );
 
-    Ok(Self { state })
+    Ok(Self { scope, state })
   }
 
   pub async fn create_game(&self, game: &Game) -> Result<CreatedGameInfo> {
@@ -155,11 +157,13 @@ impl NodeConn {
       .request(req, {
         let mut sender = self.state.sender.clone();
         async move {
-          let pkt = PacketControllerUpdateSlotStatus {
+          let mut pkt = PacketControllerUpdateSlotStatus {
             player_id,
             game_id,
-            status: SlotClientStatus::Left.into(),
+            ..Default::default()
           };
+
+          pkt.set_status(flo_net::proto::flo_common::SlotClientStatus::Left);
 
           sender
             .send(pkt.encode_as_frame()?)
@@ -182,6 +186,7 @@ impl NodeConn {
     ip: Ipv4Addr,
     port: u16,
     mut receiver: Receiver<Frame>,
+    mut scope: SpawnScopeHandle,
   ) -> Result<()> {
     let addr = SocketAddrV4::new(ip, port);
     let mut stream = FloStream::connect(addr).await?;
@@ -197,10 +202,10 @@ impl NodeConn {
 
     flo_net::try_flo_packet! {
       res => {
-        packet = PacketControllerConnectAccept => {
+        packet: PacketControllerConnectAccept => {
           tracing::debug!("node connected: version = {:?}", packet.version);
         }
-        packet = PacketControllerConnectReject => {
+        packet: PacketControllerConnectReject => {
           return Err(Error::NodeConnectionRejected {
             addr,
             reason: packet.reason(),
@@ -213,15 +218,12 @@ impl NodeConn {
     state
       .event_sender
       .clone()
-      .send_or_discard(NodeConnEvent::new(
-        state.id,
-        NodeConnEventData::ConnectedEvent,
-      ))
+      .send_or_discard(NodeConnEvent::new(state.id, NodeConnEventData::Connected))
       .await;
 
     loop {
       tokio::select! {
-        _ = state.dropper.notified() => {
+        _ = scope.left() => {
           break;
         }
         frame = receiver.recv() => {
@@ -256,7 +258,7 @@ impl NodeConn {
       .clone()
       .send_or_discard(NodeConnEvent::new(
         state.id,
-        NodeConnEventData::DisconnectedEvent,
+        NodeConnEventData::Disconnected,
       ))
       .await;
     tracing::debug!("exiting");
@@ -292,7 +294,8 @@ impl S2ProtoUnpack<flo_net::proto::flo_node::PlayerToken> for PlayerToken {
 #[derive(Debug)]
 struct PendingRequest {
   sender: Option<oneshot::Sender<Result<Response>>>,
-  dropper: Arc<Notify>,
+  done: Arc<Notify>,
+  scope: SpawnScope,
 }
 
 impl Drop for PendingRequest {
@@ -331,10 +334,10 @@ pub enum PlayerLeaveResponse {
 struct NodeConnState {
   id: i32,
   event_sender: EventSender<NodeConnEvent>,
+  ctrl_event_sender: Sender<FloControllerEvent>,
   sender: Sender<Frame>,
   secret: String,
   status: RwLock<NodeConnStatus>,
-  dropper: Notify,
   pending_requests: RwLock<HashMap<RequestId, PendingRequest>>,
 }
 
@@ -343,20 +346,23 @@ impl NodeConnState {
   where
     Fut: Future<Output = Result<()>> + Send + 'static,
   {
-    let (dropper, receiver) = {
+    let done = Arc::new(Notify::new());
+    let (mut scope_handle, receiver) = {
       let mut guard = self.pending_requests.write();
       if guard.contains_key(&id) {
         return Err(Error::NodeRequestProcessing);
       }
 
-      let dropper = Arc::new(Notify::new());
+      let scope = SpawnScope::new();
+      let scope_handle = scope.handle();
       let (sender, receiver) = oneshot::channel();
       let pending = PendingRequest {
         sender: Some(sender),
-        dropper: dropper.clone(),
+        done: done.clone(),
+        scope,
       };
       guard.insert(id, pending);
-      (dropper, receiver)
+      (scope_handle, receiver)
     };
     tokio::spawn(
       {
@@ -367,13 +373,13 @@ impl NodeConnState {
           tokio::pin!(timeout);
 
           let exit = tokio::select! {
-            _ = dropper.notified() => {
+            _ = scope_handle.left() => {
               state.request_callback(id, Err(Error::NodeRequestCancelled));
               true
             }
             _ = &mut timeout => {
               state.request_callback(id, Err(Error::NodeRequestTimeout));
-              tracing::debug!("action timeout");
+              tracing::debug!("action timeout: {:?}", id);
               true
             }
             res = action => {
@@ -383,7 +389,7 @@ impl NodeConnState {
                 }
                 Err(err) => {
                   state.request_callback(id, Err(err));
-                  tracing::debug!("action error");
+                  tracing::debug!("action error: {:?}", id);
                   true
                 }
               }
@@ -392,12 +398,13 @@ impl NodeConnState {
 
           if !exit {
             tokio::select! {
-              _ = dropper.notified() => {
+              _ = scope_handle.left() => {
                 state.request_callback(id, Err(Error::NodeRequestCancelled));
-              },
+              }
+              _ = done.notified() => {}
               _ = &mut timeout => {
                 state.request_callback(id, Err(Error::NodeRequestTimeout));
-                tracing::debug!("response timeout");
+                tracing::debug!("response timeout: {:?}", id);
               }
             }
           }
@@ -417,39 +424,41 @@ impl NodeConnState {
     let pending = self.pending_requests.write().remove(&id);
     if let Some(mut pending) = pending {
       if let Some(sender) = pending.sender.take() {
+        pending.done.notify();
         sender.send(result).ok();
       }
     }
   }
 
   async fn handle_frame(&self, frame: Frame) -> Result<()> {
+    let mut ctrl_event_sender = self.ctrl_event_sender.clone();
     flo_net::try_flo_packet! {
       frame => {
-        packet = PacketControllerCreateGameAccept => {
+        packet: PacketControllerCreateGameAccept => {
           let game_id = packet.game_id;
           self.request_callback(
             RequestId::CreateGame(game_id),
             CreatedGameInfo::unpack(packet).map_err(Into::into).map(Response::GameCreated),
           )
         }
-        packet = PacketControllerCreateGameReject => {
+        packet: PacketControllerCreateGameReject => {
           let game_id = packet.game_id;
           self.request_callback(
             RequestId::CreateGame(game_id),
             Err(Error::GameCreateReject(packet.reason()))
           )
         }
-        packet = PacketControllerUpdateSlotStatusAccept => {
+        packet: PacketControllerUpdateSlotStatusAccept => {
           let id = RequestId::PlayerLeave(PlayerLeaveRequestId {
             game_id: packet.game_id,
             player_id: packet.player_id,
           });
           self.request_callback(
             id,
-            Ok(Response::PlayerLeave(PlayerLeaveResponse::Accepted(packet.status())))
+            Ok(Response::PlayerLeave(PlayerLeaveResponse::Accepted(S2ProtoEnum::unpack_enum(packet.status()))))
           )
         }
-        packet = PacketControllerUpdateSlotStatusReject => {
+        packet: PacketControllerUpdateSlotStatusReject => {
           let id = RequestId::PlayerLeave(PlayerLeaveRequestId {
             game_id: packet.game_id,
             player_id: packet.player_id,
@@ -458,6 +467,31 @@ impl NodeConnState {
             id,
             Ok(Response::PlayerLeave(PlayerLeaveResponse::Rejected(packet.reason())))
           )
+        }
+        packet: PacketClientUpdateSlotClientStatus => {
+          if !self.event_sender.is_closed() {
+            ctrl_event_sender.send(
+              FloControllerEvent::GameSlotClientStatusUpdate(
+                S2ProtoUnpack::unpack(packet)?
+              )
+            ).await.ok();
+          }
+        }
+        packet: PacketNodeGameStatusUpdate => {
+          if !self.event_sender.is_closed() {
+            ctrl_event_sender.send(
+              FloControllerEvent::GameStatusUpdate(vec![
+                GameStatusUpdate::from(packet)
+              ])
+            ).await.ok();
+          }
+        }
+        packet: PacketNodeGameStatusUpdateBulk => {
+          if !self.event_sender.is_closed() {
+            ctrl_event_sender.send(
+              FloControllerEvent::GameStatusUpdate(packet.games.into_iter().map(Into::into).collect())
+            ).await.ok();
+          }
         }
       }
     }
@@ -506,9 +540,9 @@ impl NodeConnEvent {
 
 #[derive(Debug)]
 pub enum NodeConnEventData {
-  ConnectedEvent,
-  DisconnectedEvent,
-  WorkerErrorEvent(Error),
+  Connected,
+  Disconnected,
+  WorkerError(Error),
 }
 
 impl FloEvent for NodeConnEvent {

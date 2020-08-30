@@ -23,12 +23,9 @@ impl PacketPayload for PingFromHost {
 pub struct PongToHost(Ping);
 
 impl PongToHost {
-  pub fn elapsed_millis(&self, since: Instant) -> Option<u32> {
-    let d = Instant::now().checked_duration_since(since)?;
-    self
-      .0
-      .payload
-      .checked_sub((d.as_secs() * 1000) as u32 + d.subsec_millis())
+  pub fn elapsed_millis(&self, since: Instant) -> u32 {
+    let d = Instant::now().saturating_duration_since(since);
+    (d.as_millis() as u32).saturating_sub(self.0.payload)
   }
 }
 
@@ -43,9 +40,9 @@ pub struct Ping {
 
 impl Ping {
   pub fn payload_since(since: Instant) -> Ping {
-    let d = Instant::now() - since;
+    let d = Instant::now().saturating_duration_since(since);
     Self {
-      payload: (d.as_secs() * 1000) as u32 + d.subsec_millis(),
+      payload: d.as_millis() as u32,
     }
   }
 }

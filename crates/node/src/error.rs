@@ -1,7 +1,10 @@
+use crate::game::SlotClientStatus;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("cancelled")]
+  Cancelled,
   #[error("game exists")]
   GameExists,
   #[error("game has no player")]
@@ -10,16 +13,22 @@ pub enum Error {
   PlayerBusy(i32),
   #[error("player not found in game")]
   PlayerNotFoundInGame,
+  #[error("player connection exists")]
+  PlayerConnectionExists,
+  #[error("invalid slot id")]
+  InvalidSlotId,
   #[error("invalid secret")]
   InvalidSecret,
   #[error("invalid token")]
   InvalidToken,
-  #[error("invalid client status transition")]
-  InvalidClientStatusTransition,
+  #[error("invalid client status transition: {0:?} => {1:?}")]
+  InvalidClientStatusTransition(SlotClientStatus, SlotClientStatus),
   #[error("tokio io: {0}")]
   Tokio(#[from] tokio::io::Error),
   #[error("operation timeout")]
   Timeout(#[from] tokio::time::Elapsed),
+  #[error("w3gs: {0}")]
+  W3GS(#[from] flo_w3gs::error::Error),
   #[error("net: {0}")]
   Net(#[from] flo_net::error::Error),
   #[error("proto: {0}")]

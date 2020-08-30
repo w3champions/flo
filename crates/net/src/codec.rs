@@ -1,10 +1,10 @@
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use flo_util::binary::{BinDecode, BinEncode};
+use flo_util::binary::BinDecode;
 
 use crate::error::Error;
-use crate::packet::{Frame, Header};
+use crate::packet::{Frame, FramePayload, Header, PacketTypeId};
 
 const MAX_PAYLOAD_LEN: usize = 4096;
 
@@ -36,12 +36,13 @@ impl Decoder for FloFrameCodec {
             return Err(Error::PayloadTooLarge);
           }
 
+          if header.type_id.has_subtype() && payload_len < 1 {
+            return Err(Error::PayloadTooSmall);
+          }
+
           if src.remaining() >= payload_len {
             // payload received
-            Ok(Some(Frame {
-              type_id: header.type_id,
-              payload: src.split_to(payload_len).freeze(),
-            }))
+            Ok(Some(Self::frame(header.type_id, src.split_to(payload_len))))
           } else {
             // wait payload
             src.reserve(payload_len);
@@ -62,10 +63,8 @@ impl Decoder for FloFrameCodec {
       } => {
         if src.remaining() >= payload_len {
           let header = header.take().expect("header");
-          let frame = Frame {
-            type_id: header.type_id,
-            payload: src.split_to(payload_len).freeze(),
-          };
+          let payload = src.split_to(payload_len);
+          let frame = Self::frame(header.type_id, payload);
           self.decode_state = DecoderState::DecodingHeader;
           Ok(Some(frame))
         } else {
@@ -88,11 +87,24 @@ enum DecoderState {
 impl Encoder<Frame> for FloFrameCodec {
   type Error = Error;
 
+  #[inline]
   fn encode(&mut self, item: Frame, dst: &mut BytesMut) -> Result<(), Self::Error> {
-    dst.reserve(Header::MIN_SIZE + item.payload.len());
-    item.type_id.encode(dst);
-    (item.payload.len() as u16).encode(dst);
-    dst.put(item.payload);
+    item.encode(dst);
     Ok(())
+  }
+}
+
+impl FloFrameCodec {
+  #[inline]
+  fn frame(type_id: PacketTypeId, mut payload: BytesMut) -> Frame {
+    Frame {
+      type_id,
+      payload: if type_id.has_subtype() {
+        let subtype = payload.get_u8();
+        FramePayload::SubTypeBytes(subtype, payload.freeze())
+      } else {
+        FramePayload::Bytes(payload.freeze())
+      },
+    }
   }
 }

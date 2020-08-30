@@ -4,6 +4,7 @@ pub mod constants;
 pub mod desync;
 pub mod game;
 pub mod join;
+pub mod lag;
 pub mod leave;
 pub mod map;
 pub mod packet;

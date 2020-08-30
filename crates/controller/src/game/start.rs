@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Sender};
-use tokio::sync::Notify;
 use tokio::time::delay_for;
 use tracing_futures::Instrument;
 
 use flo_event::*;
 use flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest;
+use flo_task::SpawnScope;
 
 use crate::error::*;
-use crate::state::event::FloLobbyEvent;
+use crate::state::event::FloControllerEvent;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -21,9 +21,9 @@ pub struct GameStartEvent {
   pub data: GameStartEventData,
 }
 
-impl From<GameStartEvent> for FloLobbyEvent {
+impl From<GameStartEvent> for FloControllerEvent {
   fn from(event: GameStartEvent) -> Self {
-    FloLobbyEvent::GameStartEvent(event)
+    FloControllerEvent::GameStartEvent(event)
   }
 }
 
@@ -31,7 +31,7 @@ impl FloEvent for GameStartEvent {
   const NAME: &'static str = "GameStartEvent";
 }
 
-pub type EventSender = EventFromSender<FloLobbyEvent, GameStartEvent>;
+pub type EventSender = EventFromSender<FloControllerEvent, GameStartEvent>;
 
 #[derive(Debug)]
 pub enum GameStartEventData {
@@ -41,22 +41,16 @@ pub enum GameStartEventData {
 
 #[derive(Debug)]
 pub struct StartGameState {
+  scope: SpawnScope,
   player_sender: Sender<(i32, PacketGameStartPlayerClientInfoRequest)>,
   state: Arc<State>,
 }
 
-impl Drop for StartGameState {
-  fn drop(&mut self) {
-    self.state.dropper.notify();
-  }
-}
-
 impl StartGameState {
   pub fn new(event_sender: EventSender, game_id: i32, player_ids: Vec<i32>) -> Self {
-    let dropper = Arc::new(Notify::new());
+    let scope = SpawnScope::new();
     let state = Arc::new(State {
       game_id,
-      dropper,
       event_sender,
       player_ack_map: RwLock::new(Some(
         player_ids
@@ -71,11 +65,12 @@ impl StartGameState {
     tokio::spawn(
       {
         let state = state.clone();
+        let mut scope = scope.handle();
         async move {
           let mut timeout = delay_for(TIMEOUT);
           loop {
             tokio::select! {
-              _ = state.dropper.notified() => {
+              _ = scope.left() => {
                 tracing::debug!("dropped");
                 break;
               }
@@ -116,6 +111,7 @@ impl StartGameState {
     );
 
     StartGameState {
+      scope,
       player_sender,
       state,
     }
@@ -153,7 +149,6 @@ pub enum ClientInfoAck {
 #[derive(Debug)]
 struct State {
   game_id: i32,
-  dropper: Arc<Notify>,
   event_sender: EventSender,
   player_ack_map: RwLock<Option<HashMap<i32, ClientInfoAck>>>,
 }
@@ -184,6 +179,7 @@ impl State {
         // already done
         false
       };
+
       if done {
         if let Some(map) = guard.take() {
           map

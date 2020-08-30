@@ -108,7 +108,7 @@ async fn handle_stream(
         tokio::spawn(set_ping_timeout);
       }
       _ = ping_timeout_notify.notified() => {
-          tracing::debug!("ping timeout");
+          tracing::error!("heartbeat timeout");
           break;
       }
       next = receiver.recv() => {
@@ -144,28 +144,29 @@ async fn handle_stream(
 
         flo_net::try_flo_packet! {
           frame => {
-            packet = proto::flo_common::PacketPong => {
+            packet: proto::flo_common::PacketPong => {
+              //TODO: save ping and display on UI
               // tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
             }
-            packet = proto::flo_connect::PacketGameSlotUpdateRequest => {
+            packet: proto::flo_connect::PacketGameSlotUpdateRequest => {
               handle_game_slot_update_request(state.clone(), player_id, packet).await?;
             }
-            _packet = proto::flo_connect::PacketListNodesRequest => {
+            _packet: proto::flo_connect::PacketListNodesRequest => {
               handle_list_nodes_request(state.clone(), player_id).await?;
             }
-            packet = proto::flo_connect::PacketGamePlayerPingMapUpdateRequest => {
+            packet: proto::flo_connect::PacketGamePlayerPingMapUpdateRequest => {
               handle_game_player_ping_map_update_request(state.clone(), player_id, packet).await?;
             }
-            packet = proto::flo_connect::PacketGamePlayerPingMapSnapshotRequest => {
+            packet: proto::flo_connect::PacketGamePlayerPingMapSnapshotRequest => {
               handle_game_player_ping_map_snapshot_request(state.clone(), player_id, packet.game_id).await?;
             }
-            packet = proto::flo_connect::PacketGameSelectNodeRequest => {
+            packet: proto::flo_connect::PacketGameSelectNodeRequest => {
               handle_game_select_node_request(state.clone(), player_id, packet).await?;
             }
-            packet = flo_net::proto::flo_connect::PacketGameStartRequest => {
+            packet: flo_net::proto::flo_connect::PacketGameStartRequest => {
               handle_game_start_request(state.clone(), player_id, packet).await?;
             }
-            packet = flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest => {
+            packet: flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest => {
               handle_game_start_player_client_info_request(state.clone(), player_id, packet).await?;
             }
           }

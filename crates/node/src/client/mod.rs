@@ -1,31 +1,24 @@
-mod event;
-pub use event::{ClientEvent, ClientEventSender};
-
 use futures::stream::StreamExt;
-use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Notify;
-use tracing_futures::Instrument;
 
 use flo_constants::NODE_CLIENT_PORT;
 use flo_net::listener::FloListener;
-use flo_net::packet::{FloPacket, Frame};
+use flo_net::packet::Frame;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
-use flo_net::try_flo_packet;
 
 use crate::error::*;
-use crate::session::{PlayerToken, SessionStore};
+use crate::state::{GlobalState, GlobalStateRef, PlayerToken};
 
-pub async fn serve_client() -> Result<()> {
+pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
   let mut listener = FloListener::bind_v4(NODE_CLIENT_PORT).await?;
 
   while let Some(incoming) = listener.incoming().next().await {
     if let Ok(mut stream) = incoming {
+      let state = state.clone();
       tokio::spawn(async move {
-        let state = match handshake(&mut stream).await {
-          Ok(state) => state,
+        let claim = match handshake(&state, &mut stream).await {
+          Ok(claim) => claim,
           Err(err) => {
             let reason = match &err {
               Error::InvalidToken => ClientConnectRejectReason::InvalidToken,
@@ -43,10 +36,44 @@ pub async fn serve_client() -> Result<()> {
         };
 
         tracing::debug!(
-          game_id = state.game_id,
-          player_id = state.player_id,
+          game_id = claim.game_id,
+          player_id = claim.player_id,
           "connected"
         );
+
+        let session = match state.get_game(claim.game_id) {
+          Some(session) => session,
+          None => {
+            stream
+              .send(PacketClientConnectReject {
+                reason: ClientConnectRejectReason::Unknown.into(),
+                message: format!("Game session was not found."),
+              })
+              .await
+              .ok();
+            return;
+          }
+        };
+
+        if let Err((mut stream, err)) = session
+          .register_player_stream(claim.player_id, stream)
+          .await
+        {
+          tracing::debug!(
+            game_id = claim.game_id,
+            player_id = claim.player_id,
+            "register player stream: {}",
+            err
+          );
+          stream
+            .send(PacketClientConnectReject {
+              reason: ClientConnectRejectReason::Unknown.into(),
+              message: format!("Register: {}", err),
+            })
+            .await
+            .ok();
+          return;
+        }
       });
     }
   }
@@ -54,13 +81,11 @@ pub async fn serve_client() -> Result<()> {
   Ok(())
 }
 
-async fn handshake(stream: &mut FloStream) -> Result<ClientState> {
+async fn handshake(state: &GlobalState, stream: &mut FloStream) -> Result<Claim> {
   use std::time::Duration;
   const RECV_TIMEOUT: Duration = Duration::from_secs(3);
 
   let connect: PacketClientConnect = stream.recv_timeout(RECV_TIMEOUT).await?;
-
-  let session = SessionStore::get();
 
   let token = if let Some(token) = PlayerToken::from_vec(connect.token) {
     token
@@ -68,18 +93,18 @@ async fn handshake(stream: &mut FloStream) -> Result<ClientState> {
     return Err(Error::InvalidToken);
   };
 
-  let pending = session
+  let pending = state
     .get_pending_player(&token)
     .ok_or_else(|| Error::InvalidToken)?;
 
-  Ok(ClientState {
+  Ok(Claim {
     game_id: pending.game_id,
     player_id: pending.player_id,
   })
 }
 
 #[derive(Debug)]
-pub struct ClientState {
+pub struct Claim {
   game_id: i32,
   player_id: i32,
 }

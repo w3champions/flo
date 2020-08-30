@@ -39,7 +39,7 @@ impl ControllerStateRef {
     let (mem, config, nodes) = tokio::try_join!(
       MemStorage::init(db.clone(), event_sender.clone()),
       ConfigStorage::init(db.clone()),
-      NodeRegistry::init(db.clone())
+      NodeRegistry::init(db.clone(), event_sender.clone())
     )?;
 
     let mem = mem.into_ref();

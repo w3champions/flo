@@ -3,22 +3,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Cow;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use flo_net::proto::flo_connect::{
   PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshotRequest,
   PacketGamePlayerPingMapUpdate, PacketGameSelectNode, PacketGameSelectNodeRequest,
-  PacketGameSlotUpdate, PacketGameSlotUpdateRequest, PacketGameStartReject, PacketGameStartRequest,
-  PacketGameStarting,
+  PacketGameStartReject, PacketGameStartRequest, PacketGameStarting,
 };
-
-use flo_net::proto::flo_node::PacketClientUpdateSlotClientStatus;
 
 use crate::error::{Error, Result};
 use crate::node::PingUpdate;
 use crate::platform::PlatformStateError;
 pub use crate::types::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
-use crate::types::{GameInfo, Slot, SlotClientStatus, SlotSettings};
+use crate::types::{GameInfo, GameStatusUpdate, Slot, SlotSettings};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -60,6 +56,7 @@ pub enum OutgoingMessage {
   GameStarting(PacketGameStarting),
   GameStarted(GameStarted),
   GameSlotClientStatusUpdate(ClientUpdateSlotClientStatus),
+  GameStatusUpdate(GameStatusUpdate),
 }
 
 impl FromStr for IncomingMessage {
@@ -186,13 +183,7 @@ pub struct GameSlotUpdate {
   pub slot_settings: SlotSettings,
 }
 
-#[derive(Debug, Serialize, S2ProtoUnpack)]
-#[s2_grpc(message_type(flo_net::proto::flo_connect::PacketClientUpdateSlotClientStatus))]
-pub struct ClientUpdateSlotClientStatus {
-  pub player_id: i32,
-  pub game_id: i32,
-  pub status: SlotClientStatus,
-}
+pub use crate::node::stream::SlotClientStatusUpdate as ClientUpdateSlotClientStatus;
 
 #[derive(Debug, Serialize, S2ProtoUnpack)]
 #[s2_grpc(message_type(flo_net::proto::flo_connect::PacketGamePlayerEnter))]

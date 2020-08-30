@@ -1,27 +1,50 @@
+use futures::lock::Mutex;
 use futures::stream::StreamExt;
+use parking_lot::RwLock;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::sync::Notify;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing_futures::Instrument;
 
 use flo_constants::NODE_CONTROLLER_PORT;
 use flo_net::listener::FloListener;
-use flo_net::packet::{FloPacket, Frame};
+use flo_net::packet::Frame;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
 use flo_net::try_flo_packet;
+use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
-use crate::session::SessionStore;
+use crate::state::GlobalStateRef;
 
 #[derive(Debug)]
-pub struct ControllerHandler {
-  current: Option<ControllerConn>,
+pub struct ControllerServer {
+  state: Arc<State>,
 }
 
-impl ControllerHandler {
-  pub fn new() -> Self {
-    Self { current: None }
+#[derive(Debug)]
+struct State {
+  g_state: GlobalStateRef,
+  current: RwLock<Option<ControllerConn>>,
+  frame_tx: Sender<Frame>,
+  frame_rx: Mutex<Receiver<Frame>>,
+}
+
+impl ControllerServer {
+  pub fn new(g_state: GlobalStateRef) -> ControllerServer {
+    let (frame_tx, frame_rx) = channel(crate::constants::CONTROLLER_SENDER_BUF_SIZE);
+    let state = Arc::new(State {
+      g_state,
+      current: RwLock::new(None),
+      frame_tx,
+      frame_rx: Mutex::new(frame_rx),
+    });
+    Self { state }
+  }
+
+  pub fn handle(&self) -> ControllerServerHandle {
+    ControllerServerHandle {
+      state: self.state.clone(),
+    }
   }
 
   pub async fn serve(&mut self) -> Result<()> {
@@ -29,53 +52,77 @@ impl ControllerHandler {
 
     while let Some(incoming) = listener.incoming().next().await {
       if let Ok(stream) = incoming {
-        if let Ok(conn) = handshake(stream).await {
-          self.current = Some(conn)
+        if let Ok(conn) = self.handshake(stream).await {
+          self.state.current.write().replace(conn);
         }
       }
     }
 
     Ok(())
   }
-}
 
-async fn handshake(mut stream: FloStream) -> Result<ControllerConn> {
-  use std::time::Duration;
-  const RECV_TIMEOUT: Duration = Duration::from_secs(3);
+  async fn handshake(&self, mut stream: FloStream) -> Result<ControllerConn> {
+    use std::time::Duration;
+    const RECV_TIMEOUT: Duration = Duration::from_secs(3);
 
-  let connect: PacketControllerConnect = stream.recv_timeout(RECV_TIMEOUT).await?;
+    let connect: PacketControllerConnect = stream.recv_timeout(RECV_TIMEOUT).await?;
 
-  if connect.secret != crate::env::Env::get().secret_key {
+    if connect.secret != crate::env::Env::get().secret_key {
+      stream
+        .send(PacketControllerConnectReject {
+          reason: ControllerConnectRejectReason::InvalidSecretKey.into(),
+        })
+        .await?;
+      return Err(Error::InvalidSecret);
+    }
+
     stream
-      .send(PacketControllerConnectReject {
-        reason: ControllerConnectRejectReason::InvalidSecretKey.into(),
+      .send(PacketControllerConnectAccept {
+        version: Some(crate::version::FLO_NODE_VERSION.into()),
       })
       .await?;
-    return Err(Error::InvalidSecret);
+
+    Ok(ControllerConn::new(self.state.clone(), stream))
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ControllerServerHandle {
+  state: Arc<State>,
+}
+
+impl ControllerServerHandle {
+  fn new(state: Arc<State>) -> Self {
+    Self { state }
   }
 
-  stream
-    .send(PacketControllerConnectAccept {
-      version: Some(crate::version::FLO_NODE_VERSION.into()),
-    })
-    .await?;
-
-  Ok(ControllerConn::new(stream))
+  /// Sends a frame to the controller
+  /// If the controller is disconnected and the send buf is full,
+  /// block until the connection is restored.
+  pub async fn send(&self, frame: Frame) -> Result<(), Frame> {
+    self
+      .state
+      .frame_tx
+      .clone()
+      .send(frame)
+      .await
+      .map_err(|err| err.0)
+  }
 }
 
 #[derive(Debug)]
 struct ControllerConn {
-  dropper: Arc<Notify>,
+  scope: SpawnScope,
 }
 
 impl ControllerConn {
-  fn new(stream: FloStream) -> Self {
-    let dropper = Arc::new(Notify::new());
+  fn new(state: Arc<State>, stream: FloStream) -> Self {
+    let scope = SpawnScope::new();
 
     tokio::spawn({
-      let dropper = dropper.clone();
+      let scope = scope.handle();
       async move {
-        if let Err(e) = handle_stream(dropper, stream).await {
+        if let Err(e) = handle_stream(state, stream, scope).await {
           tracing::debug!("handle_stream: {}", e);
         }
         tracing::debug!("exiting")
@@ -83,53 +130,52 @@ impl ControllerConn {
       .instrument(tracing::debug_span!("worker"))
     });
 
-    ControllerConn { dropper }
+    ControllerConn { scope }
   }
 }
 
-impl Drop for ControllerConn {
-  fn drop(&mut self) {
-    tracing::debug!("controller connection drop.");
-    self.dropper.notify();
-  }
-}
-
-async fn handle_stream(dropper: Arc<Notify>, mut stream: FloStream) -> Result<()> {
-  use futures::TryStreamExt;
-  let (tx, mut rx) = mpsc::channel(5);
-
+async fn handle_stream(
+  state: Arc<State>,
+  mut stream: FloStream,
+  mut scope: SpawnScopeHandle,
+) -> Result<()> {
+  let mut rx = state.frame_rx.lock().await;
   loop {
     tokio::select! {
-      _ = dropper.notified() => {
+      _ = scope.left() => {
         break;
       }
       frame = stream.recv_frame() => {
         let frame = frame?;
-        let sender = tx.clone();
+        let state = state.clone();
         tokio::spawn(async move {
-          if let Err(e) = handle_frame(sender, frame).await {
+          if let Err(e) = handle_frame(&state, frame).await {
             tracing::error!("handle_frame: {}", e);
           }
         }.instrument(tracing::debug_span!("handle_frame_worker")));
       }
-      frame = rx.recv() => {
-        let frame = frame.expect("sender reference hold on stack");
-        stream.send_frame(frame).await?;
+      next = rx.recv() => {
+        if let Some(frame) = next {
+          stream.send_frame(frame).await?;
+        } else {
+          break;
+        }
       }
     }
   }
   Ok(())
 }
 
-async fn handle_frame(mut tx: mpsc::Sender<Frame>, frame: Frame) -> Result<()> {
+async fn handle_frame(state: &Arc<State>, frame: Frame) -> Result<()> {
+  let mut tx = state.frame_tx.clone();
   try_flo_packet! {
     frame => {
-      pkt = PacketControllerCreateGame => {
-        let frame = SessionStore::get().handle_controller_create_game(pkt)?;
+      pkt: PacketControllerCreateGame => {
+        let frame = state.g_state.handle_controller_create_game(ControllerServerHandle::new(state.clone()), pkt)?;
         flo_log::result_ok!("create game", tx.send(frame).await);
       }
-      pkt = PacketControllerUpdateSlotStatus => {
-        let frame = SessionStore::get().handle_controller_update_slot_client_status(pkt).await?;
+      pkt: PacketControllerUpdateSlotStatus => {
+        let frame = state.g_state.handle_controller_update_slot_client_status(pkt).await?;
         flo_log::result_ok!("update slot status", tx.send(frame).await);
       }
     }

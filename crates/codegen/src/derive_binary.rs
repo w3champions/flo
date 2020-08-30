@@ -361,7 +361,7 @@ impl DecodeInputReceiver {
         let value = &v.value;
         let vident = &v.ident;
         quote::quote_spanned! {
-          v.ident.span() => #value => Ok(#ident::#vident)
+          v.ident.span() => #value => #ident::#vident
         }
       })
       .collect();
@@ -377,9 +377,18 @@ impl DecodeInputReceiver {
             return Err(#mod_path::BinDecodeError::incomplete());
           }
 
-          match <#repr as #mod_path::BinDecode>::decode(buf)? {
+          Ok(match <#repr as #mod_path::BinDecode>::decode(buf)? {
             #known_items,
-            v => Ok(#ident::UnknownValue(v)),
+            v => #ident::UnknownValue(v),
+          })
+        }
+      }
+
+      impl From<#repr> for #ident #ty #wher {
+        fn from(value: #repr) -> #ident {
+          match value {
+            #known_items,
+            v => #ident::UnknownValue(v)
           }
         }
       }

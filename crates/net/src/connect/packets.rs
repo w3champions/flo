@@ -32,3 +32,4 @@ packet_type!(
   GameStartPlayerClientInfoRequest,
   PacketGameStartPlayerClientInfoRequest
 );
+packet_type!(GameSlotClientStatusUpdate, PacketGameSlotClientStatusUpdate);

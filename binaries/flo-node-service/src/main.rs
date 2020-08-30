@@ -1,4 +1,4 @@
-use flo_node::{serve_client, serve_controller, serve_echo, serve_metrics};
+use flo_node::serve;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -8,12 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     flo_log_subscriber::init_env("flo_node_service=debug,flo_node=debug");
   }
 
-  tokio::try_join!(
-    serve_client(),
-    serve_controller(),
-    serve_echo(),
-    serve_metrics()
-  )?;
+  serve().await?;
 
   Ok(())
 }

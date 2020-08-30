@@ -5,9 +5,9 @@ use crate::error::*;
 use hyper::header::CONTENT_TYPE;
 
 lazy_static! {
-  pub static ref PENDING_PLAYER_TOKENS: IntGauge = register_int_gauge!(
-    "flonode_pending_player_tokens",
-    "Number of pending player tokens"
+  pub static ref PLAYER_TOKENS: IntGauge = register_int_gauge!(
+    "flonode_player_tokens",
+    "Number of registered player tokens"
   )
   .unwrap();
   pub static ref CONNECTED_PLAYERS: IntGauge =

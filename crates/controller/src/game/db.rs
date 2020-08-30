@@ -16,6 +16,7 @@ use crate::map::Map;
 use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::{game, game_used_slot, node, player};
+use crate::state::event::GameStatusUpdate;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<GameRowWithRelated> {
   let row = game::table
@@ -361,6 +362,51 @@ fn sync_slot_at(conn: &DbConn, game_id: i32, slot_index: i32, slot: &Slot) -> Re
   }
 
   Ok(())
+}
+
+pub fn update_slot_client_status(
+  conn: &DbConn,
+  game_id: i32,
+  player_id: i32,
+  status: SlotClientStatus,
+) -> Result<()> {
+  use game_used_slot::dsl;
+
+  diesel::update(
+    game_used_slot::table.filter(
+      dsl::game_id
+        .eq(game_id)
+        .and(dsl::player_id.is_not_distinct_from(player_id)),
+    ),
+  )
+  .set(dsl::client_status.eq(status))
+  .execute(conn)?;
+
+  Ok(())
+}
+
+pub fn bulk_update_status(conn: &DbConn, items: &[GameStatusUpdate]) -> Result<()> {
+  conn.transaction(|| {
+    for item in items {
+      let game_id = item.game_id;
+      let game_status = GameStatus::from(item.status);
+      diesel::update(game::table.find(item.game_id))
+        .set(game::dsl::status.eq(game_status))
+        .execute(conn)?;
+      for (player_id, status) in &item.updated_player_game_client_status_map {
+        diesel::update(
+          game_used_slot::table.filter(
+            game_used_slot::dsl::game_id
+              .eq(game_id)
+              .and(game_used_slot::player_id.eq(*player_id)),
+          ),
+        )
+        .set(game_used_slot::client_status.eq(*status))
+        .execute(conn)?;
+      }
+    }
+    Ok(())
+  })
 }
 
 fn upsert_used_slots(conn: &DbConn, game_id: i32, used_slots: Vec<UsedSlot>) -> Result<()> {

@@ -1,5 +1,5 @@
 mod stream;
-use stream::LobbyStream;
+use stream::ControllerStream;
 mod ws;
 
 use parking_lot::RwLock;
@@ -12,19 +12,17 @@ use tracing_futures::Instrument;
 use flo_event::*;
 use flo_net::packet::{FloPacket, Frame};
 
-pub use crate::controller::stream::GameStartedEvent;
+pub use crate::controller::stream::GameReceivedEvent;
 use crate::controller::stream::{
   ControllerStreamEvent, ControllerStreamEventSender, PlayerSessionUpdateEvent,
 };
 use crate::error::*;
-use crate::lan::game::slot::LanSlotInfo;
-use crate::node::{NodeRegistry, NodeRegistryRef, PingUpdate};
+use crate::node::{NodeInfo, NodeRegistry, NodeRegistryRef, PingUpdate};
 use crate::platform::PlatformStateRef;
-use crate::types::{
-  DisconnectReason, PlayerInfo, PlayerSession, PlayerSessionUpdate, RejectReason,
-};
 use crate::types::{GameInfo, Slot};
+use crate::types::{GameStatusUpdate, PlayerInfo, PlayerSession};
 
+use crate::controller::ws::message::ClientUpdateSlotClientStatus;
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
 
@@ -72,9 +70,9 @@ impl ControllerClient {
 pub struct ControllerClientHandle(Arc<State>);
 
 impl ControllerClientHandle {
-  pub fn current_game_info(&self) -> Option<Arc<LocalGameInfo>> {
-    self.0.current_game_info.read().clone()
-  }
+  // pub fn current_game_info(&self) -> Option<Arc<LocalGameInfo>> {
+  //   self.0.current_game_info.read().clone()
+  // }
 
   pub fn with_player_session<F, R>(&self, f: F) -> Option<R>
   where
@@ -87,8 +85,28 @@ impl ControllerClientHandle {
     }
   }
 
-  pub fn node_registry(&self) -> NodeRegistryRef {
-    self.0.nodes.clone()
+  // pub fn node_registry(&self) -> NodeRegistryRef {
+  //   self.0.nodes.clone()
+  // }
+
+  pub fn get_node(&self, id: i32) -> Option<Arc<NodeInfo>> {
+    self.0.nodes.get_node(id)
+  }
+
+  pub async fn ws_send_update_slot_client_status(&self, msg: ClientUpdateSlotClientStatus) {
+    self
+      .0
+      .ws
+      .send_or_discard(OutgoingMessage::GameSlotClientStatusUpdate(msg))
+      .await;
+  }
+
+  pub async fn ws_send_update_game_status(&self, msg: GameStatusUpdate) {
+    self
+      .0
+      .ws
+      .send_or_discard(OutgoingMessage::GameStatusUpdate(msg))
+      .await;
   }
 }
 
@@ -207,7 +225,7 @@ impl State {
   // try send a frame
   // if not connected, discard the frame
   // if connected, but the send failed, send disconnect msg to the conn's ws connection
-  pub async fn send_frame_or_disconnect_ws(&self, frame: Frame) {
+  pub async fn send_frame_or_disconnect_ws(&self, frame: Frame) -> bool {
     let senders = self
       .conn
       .read()
@@ -222,8 +240,11 @@ impl State {
           }))
           .await
           .ok();
+      } else {
+        return true;
       }
     }
+    false
   }
 
   async fn handle_ws_event(self: Arc<Self>, event: WsEvent) {
@@ -309,7 +330,7 @@ impl State {
           tracing::error!("get client info: {}", err);
         }
       }
-      ControllerStreamEvent::GameStartedEvent(event) => {
+      ControllerStreamEvent::GameReceivedEvent(event) => {
         let game_info = { self.current_game_info.read().clone() };
         if let Some(game_info) = game_info {
           self
@@ -420,7 +441,7 @@ impl State {
 #[derive(Debug)]
 pub struct LobbyConn {
   id: u64,
-  stream: LobbyStream,
+  stream: ControllerStream,
   event_sender: ControllerStreamEventSender,
   ws_sender: WsMessageSender,
 }
@@ -435,7 +456,7 @@ impl LobbyConn {
     token: String,
   ) -> Self {
     let domain = platform.with_config(|c| c.lobby_domain.clone());
-    let stream = LobbyStream::new(
+    let stream = ControllerStream::new(
       id,
       &domain,
       ws_sender.clone(),
@@ -505,11 +526,11 @@ impl LocalGameInfo {
 pub enum ControllerEvent {
   ConnectedEvent,
   DisconnectedEvent,
-  GameStartedEvent(GameStartedEvent, Arc<LocalGameInfo>),
+  GameStartedEvent(GameReceivedEvent, Arc<LocalGameInfo>),
   GameInfoUpdateEvent(Option<Arc<LocalGameInfo>>),
   WsWorkerErrorEvent(Error),
 }
 
 impl FloEvent for ControllerEvent {
-  const NAME: &'static str = "LobbyEvent";
+  const NAME: &'static str = "ControllerEvent";
 }

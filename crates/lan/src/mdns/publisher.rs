@@ -102,7 +102,6 @@ impl MdnsPublisher {
           },
           update = update_rx.recv() => {
             if let Some(ack) = update {
-              debug!("update");
               if let Err(e) = broadcast(
                 &sender,
                 &name,
@@ -166,6 +165,11 @@ impl MdnsPublisher {
       let mut lock = self.game_info.write();
       f(&mut lock)
     }
+    self.refresh().await?;
+    Ok(())
+  }
+
+  pub async fn refresh(&mut self) -> Result<()> {
     let (ack_tx, ack_rx) = oneshot::channel();
     self
       .update_tx

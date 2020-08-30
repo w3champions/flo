@@ -47,8 +47,9 @@ enum Computer {
 enum SlotClientStatus {
   SlotClientStatusPending = 0;
   SlotClientStatusConnected = 1;
-  SlotClientStatusLoading = 2;
-  SlotClientStatusLoaded = 3;
-  SlotClientStatusDisconnected = 4;
-  SlotClientStatusLeft = 5;
+  SlotClientStatusJoined = 2;
+  SlotClientStatusLoading = 3;
+  SlotClientStatusLoaded = 4;
+  SlotClientStatusDisconnected = 5;
+  SlotClientStatusLeft = 6;
 }

@@ -1,7 +1,16 @@
+use flo_types::node::NodeGameStatus;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("unexpected node game status: {0:?}")]
+  UnexpectedNodeGameStatus(NodeGameStatus),
+  #[error("invalid node token")]
+  InvalidNodeToken,
+  #[error("not in game")]
+  NotInGame,
+  #[error("node connection rejected: {1} ({0:?})")]
+  NodeConnectionRejected(flo_net::proto::flo_node::ClientConnectRejectReason, String),
   #[error("map checksum mismatch")]
   MapChecksumMismatch,
   #[error("unexpected controller packet")]

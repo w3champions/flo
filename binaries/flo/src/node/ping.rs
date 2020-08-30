@@ -5,12 +5,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::sync::watch::{channel, Sender};
-use tokio::sync::{mpsc, Notify, Semaphore};
+use tokio::sync::{mpsc, Semaphore};
 use tokio::time::{delay_for, timeout};
 use tracing_futures::Instrument;
 
 use flo_constants::NODE_ECHO_PORT;
 use flo_net::time::StopWatch;
+use flo_task::SpawnScope;
 
 use crate::error::*;
 use crate::node::PingUpdate;
@@ -20,9 +21,9 @@ const PACKETS: usize = 1;
 
 #[derive(Debug)]
 pub struct Pinger {
+  scope: SpawnScope,
   interval_sender: Sender<PingIntervalUpdate>,
   current_interval: RwLock<Duration>,
-  shutdown: Arc<Notify>,
   current_ping: Arc<RwLock<Option<u32>>>,
 }
 
@@ -35,7 +36,7 @@ impl Pinger {
     ip: Ipv4Addr,
     port: u16,
   ) -> Self {
-    let shutdown = Arc::new(Notify::new());
+    let scope = SpawnScope::new();
     let ip_str: &str = &format!("{}", ip);
     let (interval_sender, mut interval_receiver) = channel(PingIntervalUpdate {
       value: interval,
@@ -45,7 +46,7 @@ impl Pinger {
 
     tokio::spawn(
       {
-        let shutdown = shutdown.clone();
+        let mut scope = scope.handle();
         let current_ping = current_ping.clone();
         async move {
           let mut sleep: Option<Duration> = None;
@@ -53,7 +54,7 @@ impl Pinger {
           loop {
             if let Some(duration) = sleep.take() {
               tokio::select! {
-                _ = shutdown.notified() => {
+                _ = scope.left() => {
                   tracing::debug!("exiting: shutdown");
                   break;
                 }
@@ -77,7 +78,7 @@ impl Pinger {
             }
 
             tokio::select! {
-              _ = shutdown.notified() => {
+              _ = scope.left() => {
                 tracing::debug!("exiting: shutdown");
                 break;
               }
@@ -115,9 +116,9 @@ impl Pinger {
     );
 
     Self {
+      scope,
       interval_sender,
       current_interval: RwLock::new(interval),
-      shutdown,
       current_ping,
     }
   }
@@ -143,12 +144,6 @@ impl Pinger {
     let _permit = limiter.acquire().await;
     let rtt = ping(ip, Some(port)).await?;
     Ok(rtt)
-  }
-}
-
-impl Drop for Pinger {
-  fn drop(&mut self) {
-    self.shutdown.notify();
   }
 }
 

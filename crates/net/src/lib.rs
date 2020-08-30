@@ -10,6 +10,7 @@ pub mod constants;
 pub mod listener;
 pub mod stream;
 pub mod time;
+pub mod w3gs;
 
 pub mod proto {
   pub mod flo_common {

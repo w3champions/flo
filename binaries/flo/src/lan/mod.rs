@@ -1,7 +1,8 @@
 pub mod game;
 
+use futures::lock::Mutex;
 use lazy_static::lazy_static;
-use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use flo_event::*;
@@ -9,7 +10,10 @@ use game::LanGame;
 
 use crate::controller::LocalGameInfo;
 use crate::error::*;
+use crate::node::stream::NodeStreamEvent;
+use crate::node::NodeInfo;
 use crate::platform::PlatformStateRef;
+use crate::types::{NodeGameStatus, SlotClientStatus};
 
 #[derive(Debug)]
 pub struct Lan {
@@ -17,12 +21,12 @@ pub struct Lan {
 }
 
 impl Lan {
-  pub fn new(platform: PlatformStateRef, event_sender: EventSender<LanEvent>) -> Self {
+  pub fn new(platform: PlatformStateRef, event_sender: Sender<LanEvent>) -> Self {
     Lan {
       state: Arc::new(State {
         platform,
         event_sender,
-        active_game: RwLock::new(None),
+        active_game: Mutex::new(None),
       }),
     }
   }
@@ -36,12 +40,23 @@ impl Lan {
 pub struct LanHandle(Arc<State>);
 
 impl LanHandle {
-  pub fn is_active(&self) -> bool {
-    self.0.active_game.read().is_some()
-  }
-
-  pub async fn replace_game(&self, my_player_id: i32, game: Arc<LocalGameInfo>) -> Result<()> {
+  pub async fn replace_game(
+    &self,
+    my_player_id: i32,
+    node: Arc<NodeInfo>,
+    player_token: Vec<u8>,
+    game: Arc<LocalGameInfo>,
+  ) -> Result<()> {
     let game_id = game.game_id;
+    let mut active_game = self.0.active_game.lock().await;
+    if active_game
+      .as_ref()
+      .map(|g| g.is_same_game(game_id, my_player_id))
+      == Some(true)
+    {
+      return Ok(());
+    }
+
     let checksum = self
       .0
       .platform
@@ -50,27 +65,83 @@ impl LanHandle {
       })
       .await?;
     if checksum.sha1 == game.map_sha1 {
-      let lan_game =
-        LanGame::create(my_player_id, game, checksum, self.0.event_sender.clone()).await?;
+      let lan_game = LanGame::create(
+        my_player_id,
+        node,
+        player_token,
+        game,
+        checksum,
+        self.0.event_sender.clone(),
+      )
+      .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");
-      *self.0.active_game.write() = Some(lan_game);
+      active_game.replace(lan_game);
     } else {
-      self.0.active_game.write().take();
+      active_game.take();
       return Err(Error::MapChecksumMismatch);
     }
     Ok(())
   }
 
-  pub fn stop_game(&self) {
-    self.0.active_game.write().take();
+  pub async fn update_game_status(
+    &self,
+    game_id: i32,
+    status: NodeGameStatus,
+    updated_player_game_client_status_map: &HashMap<i32, SlotClientStatus>,
+  ) -> Result<()> {
+    let mut active_game = self.0.active_game.lock().await;
+    let game = if let Some(game) = active_game.as_mut() {
+      game
+    } else {
+      return Err(Error::NotInGame);
+    };
+
+    if game.game_id() != game_id {
+      tracing::error!("game id mismatch");
+      return Ok(());
+    }
+
+    game.update_game_status(status).await?;
+    for (player_id, status) in updated_player_game_client_status_map {
+      game.update_player_status(*player_id, *status).await?;
+    }
+
+    Ok(())
+  }
+
+  pub async fn update_player_status(
+    &self,
+    game_id: i32,
+    player_id: i32,
+    status: SlotClientStatus,
+  ) -> Result<()> {
+    let mut active_game = self.0.active_game.lock().await;
+    let game = if let Some(game) = active_game.as_mut() {
+      game
+    } else {
+      return Err(Error::NotInGame);
+    };
+
+    if game.game_id() != game_id {
+      tracing::warn!("game id mismatch");
+      return Ok(());
+    }
+
+    game.update_player_status(player_id, status).await?;
+
+    Ok(())
+  }
+
+  pub async fn stop_game(&self) {
+    self.0.active_game.lock().await.take();
   }
 }
 
 #[derive(Debug)]
 struct State {
   platform: PlatformStateRef,
-  event_sender: EventSender<LanEvent>,
-  active_game: RwLock<Option<LanGame>>,
+  event_sender: Sender<LanEvent>,
+  active_game: Mutex<Option<LanGame>>,
 }
 
 pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
@@ -90,9 +161,14 @@ pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
 
 #[derive(Debug)]
 pub enum LanEvent {
-  PlayerJoinEvent,
-  PlayerChatEvent(String),
-  PlayerLeftEvent,
+  GameDisconnected,
+  NodeStreamEvent(NodeStreamEvent),
+}
+
+impl From<NodeStreamEvent> for LanEvent {
+  fn from(value: NodeStreamEvent) -> Self {
+    LanEvent::NodeStreamEvent(value)
+  }
 }
 
 impl FloEvent for LanEvent {

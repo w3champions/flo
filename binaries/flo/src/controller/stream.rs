@@ -1,18 +1,17 @@
 use parking_lot::RwLock;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
-use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use flo_event::*;
 use flo_net::packet::*;
 use flo_net::proto::flo_connect as proto;
 use flo_net::stream::FloStream;
+use flo_task::SpawnScope;
 
 use super::ws::{message, WsMessageSender};
-use crate::controller::ws::message::{GamePlayerEnter, OutgoingMessage};
+use crate::controller::ws::message::OutgoingMessage;
 use crate::controller::LocalGameInfo;
 use crate::error::*;
 use crate::node::NodeRegistryRef;
@@ -21,16 +20,10 @@ use crate::types::*;
 pub type ControllerStreamEventSender = EventSender<ControllerStreamEvent>;
 
 #[derive(Debug)]
-pub struct LobbyStream {
+pub struct ControllerStream {
   frame_sender: Sender<Frame>,
   state: Arc<State>,
-  dropper: Arc<Notify>,
-}
-
-impl Drop for LobbyStream {
-  fn drop(&mut self) {
-    self.dropper.notify();
-  }
+  scope: SpawnScope,
 }
 
 #[derive(Debug)]
@@ -51,14 +44,14 @@ impl State {
 
     let res = f(Arc::make_mut(&mut mutated));
     if !Arc::ptr_eq(&r, &mutated) {
-      self.current_game_info.write().replace(mutated);
+      self.current_game_info.write().replace(mutated.clone());
     }
     self
       .event_sender
       .clone()
       .send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(
         GameInfoUpdateEvent {
-          game_info: Some(r.clone()),
+          game_info: Some(mutated),
         },
       ))
       .await;
@@ -66,7 +59,7 @@ impl State {
   }
 }
 
-impl LobbyStream {
+impl ControllerStream {
   pub fn new(
     id: u64,
     domain: &str,
@@ -76,7 +69,7 @@ impl LobbyStream {
     token: String,
   ) -> Self {
     let (frame_sender, frame_receiver) = channel(5);
-    let dropper = Arc::new(Notify::new());
+    let scope = SpawnScope::new();
     let state = Arc::new(State {
       event_sender: event_sender.clone(),
       nodes_reg,
@@ -89,12 +82,12 @@ impl LobbyStream {
         let state = state.clone();
         let domain = domain.to_string();
         let mut event_sender = event_sender.clone();
-        let dropper = dropper.clone();
+        let mut scope = scope.handle();
         async move {
           let serve = Self::connect_and_serve(id, &domain, token, frame_receiver, state);
 
           let result = tokio::select! {
-            _ = dropper.notified() => {
+            _ = scope.left() => {
               Ok(())
             }
             res = serve => {
@@ -128,7 +121,7 @@ impl LobbyStream {
     Self {
       frame_sender,
       state,
-      dropper,
+      scope,
     }
   }
 
@@ -158,14 +151,14 @@ impl LobbyStream {
 
     let (session, nodes): (PlayerSession, _) = flo_net::try_flo_packet! {
       reply => {
-        p = proto::PacketClientConnectAccept => {
+        p: proto::PacketClientConnectAccept => {
           state.nodes_reg.update_nodes(p.nodes.clone())?;
           (
             PlayerSession::unpack(p.session)?,
             p.nodes
           )
         }
-        p = proto::PacketClientConnectReject => {
+        p: proto::PacketClientConnectReject => {
           return Err(Error::ConnectionRequestRejected(S2ProtoEnum::unpack_enum(p.reason())))
         }
       }
@@ -292,13 +285,13 @@ impl LobbyStream {
   ) -> Result<()> {
     let msg = flo_net::try_flo_packet! {
       frame => {
-        p = proto::PacketClientDisconnect => {
+        p: proto::PacketClientDisconnect => {
           message::OutgoingMessage::Disconnect(message::Disconnect {
             reason: S2ProtoEnum::unpack_i32(p.reason)?,
             message: format!("Server closed the connection: {:?}", p.reason)
           })
         }
-        p = proto::PacketGameInfo => {
+        p: proto::PacketGameInfo => {
           state.nodes_reg.set_selected_node(p.game.as_ref().and_then(|g| {
             g.node.as_ref().map(|node| node.id)
           }))?;
@@ -316,7 +309,7 @@ impl LobbyStream {
 
           OutgoingMessage::CurrentGameInfo(game)
         }
-        p = proto::PacketGamePlayerEnter => {
+        p: proto::PacketGamePlayerEnter => {
           state.mutate_local_game_info(|info| -> Result<_> {
             if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
               *slot = Slot::unpack(p.slot.clone())?;
@@ -331,7 +324,7 @@ impl LobbyStream {
           })??;
           OutgoingMessage::GamePlayerEnter(S2ProtoUnpack::unpack(p)?)
         }
-        p = proto::PacketGamePlayerLeave => {
+        p: proto::PacketGamePlayerLeave => {
           state.mutate_local_game_info(|info| -> Result<_> {
             if let Some(slot) = info.slots.iter_mut().find(|s| s.player.as_ref().map(|p| p.id) == Some(p.player_id)) {
               *slot = Slot::default();
@@ -346,7 +339,7 @@ impl LobbyStream {
           })??;
           OutgoingMessage::GamePlayerLeave(p)
         }
-        p = proto::PacketGameSlotUpdate => {
+        p: proto::PacketGameSlotUpdate => {
           state.mutate_local_game_info(|info| -> Result<_> {
             if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
               slot.settings = SlotSettings::unpack(p.slot_settings.clone())?;
@@ -361,7 +354,7 @@ impl LobbyStream {
           })??;
           OutgoingMessage::GameSlotUpdate(S2ProtoUnpack::unpack(p)?)
         }
-        p = proto::PacketPlayerSessionUpdate => {
+        p: proto::PacketPlayerSessionUpdate => {
           let session = PlayerSessionUpdate::unpack(p)?;
           event_sender.send_or_log_as_error(ControllerStreamEvent::PlayerSessionUpdateEvent(PlayerSessionUpdateEvent::Partial(session.clone()))).await;
           if session.game_id.is_none() {
@@ -373,7 +366,7 @@ impl LobbyStream {
           }
           OutgoingMessage::PlayerSessionUpdate(session)
         }
-        p = proto::PacketListNodes => {
+        p: proto::PacketListNodes => {
           state.nodes_reg.update_nodes(p.nodes.clone())?;
           let mut list = message::NodeList {
             nodes: Vec::with_capacity(p.nodes.len())
@@ -389,7 +382,7 @@ impl LobbyStream {
           }
           OutgoingMessage::ListNodes(list)
         }
-        p = proto::PacketGameSelectNode => {
+        p: proto::PacketGameSelectNode => {
           state.nodes_reg.set_selected_node(p.node_id)?;
           state.mutate_local_game_info(|info| info.node_id = p.node_id).await.ok_or_else(|| {
             tracing::error!("PacketGameSelectNode came before PacketGameInfo");
@@ -397,23 +390,23 @@ impl LobbyStream {
           })?;
           OutgoingMessage::GameSelectNode(p)
         }
-        p = proto::PacketGamePlayerPingMapUpdate => {
+        p: proto::PacketGamePlayerPingMapUpdate => {
           OutgoingMessage::GamePlayerPingMapUpdate(p)
         }
-        p = proto::PacketGamePlayerPingMapSnapshot => {
+        p: proto::PacketGamePlayerPingMapSnapshot => {
           OutgoingMessage::GamePlayerPingMapSnapshot(p)
         }
-        p = proto::PacketGameStartReject => {
+        p: proto::PacketGameStartReject => {
           OutgoingMessage::GameStartReject(p)
         }
-        p = proto::PacketGameStarting => {
+        p: proto::PacketGameStarting => {
           event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartingEvent(GameStartingEvent {
             game_id: p.game_id,
           })).await;
           OutgoingMessage::GameStarting(p)
         }
-        p = proto::PacketGamePlayerToken => {
-          event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartedEvent(GameStartedEvent {
+        p: proto::PacketGamePlayerToken => {
+          event_sender.send_or_log_as_error(ControllerStreamEvent::GameReceivedEvent(GameReceivedEvent {
             node_id: p.node_id,
             game_id: p.game_id,
             player_token: p.player_token,
@@ -425,8 +418,12 @@ impl LobbyStream {
             }
           })
         }
-        p = proto::PacketClientUpdateSlotClientStatus => {
+        // client status update from node
+        p: proto::PacketGameSlotClientStatusUpdate => {
           OutgoingMessage::GameSlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)
+        }
+        p: flo_net::proto::flo_node::PacketNodeGameStatusUpdate => {
+          OutgoingMessage::GameStatusUpdate(p.into())
         }
       }
     };
@@ -443,7 +440,7 @@ pub enum ControllerStreamEvent {
   PlayerSessionUpdateEvent(PlayerSessionUpdateEvent),
   GameInfoUpdateEvent(GameInfoUpdateEvent),
   GameStartingEvent(GameStartingEvent),
-  GameStartedEvent(GameStartedEvent),
+  GameReceivedEvent(GameReceivedEvent),
   DisconnectedEvent(u64),
 }
 
@@ -464,7 +461,7 @@ pub struct GameStartingEvent {
 }
 
 #[derive(Debug)]
-pub struct GameStartedEvent {
+pub struct GameReceivedEvent {
   pub node_id: i32,
   pub game_id: i32,
   pub player_token: Vec<u8>,

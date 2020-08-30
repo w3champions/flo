@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 flo-constants = { path = "../../crates/constants" }
+flo-types = { path = "../../crates/types" }
 flo-log = { path = "../../crates/log" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-lan = { path = "../../crates/lan" }
@@ -17,6 +18,7 @@ flo-w3map = { path = "../../crates/w3map" }
 flo-event = { path = "../../crates/event" }
 flo-w3gs = { path = "../../crates/w3gs" }
 flo-util = { path = "../../crates/util" }
+flo-task = { path = "../../crates/task" }
 
 s2-grpc-utils = "0.2"
 dotenv = "0.15.0"

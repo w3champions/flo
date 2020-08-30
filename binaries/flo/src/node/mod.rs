@@ -1,4 +1,4 @@
 mod ping;
 mod registry;
-mod stream;
-pub use registry::{NodeRegistry, NodeRegistryRef, PingUpdate};
+pub mod stream;
+pub use registry::{NodeInfo, NodeRegistry, NodeRegistryRef, PingUpdate};

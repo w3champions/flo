@@ -8,13 +8,14 @@ use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack};
 use std::collections::HashMap;
 
+use flo_net::packet::FloPacket;
 use flo_net::proto;
 
 use crate::error::*;
 use crate::game::db::{CreateGameParams, LeaveGameParams};
 use crate::node::conn::PlayerLeaveResponse;
 use crate::node::PlayerToken;
-use crate::state::event::FloEventContext;
+use crate::state::event::{FloEventContext, GameSlotClientStatusUpdate, GameStatusUpdate};
 use crate::state::{ControllerStateRef, LockedGameState, LockedPlayerState};
 pub use slots::Slots;
 pub use types::*;
@@ -344,13 +345,15 @@ async fn leave_game_abort(
 
   game_guard
     .get_broadcaster()
-    .broadcast(
-      flo_net::proto::flo_node::PacketClientUpdateSlotClientStatus {
+    .broadcast({
+      let mut pkt = flo_net::proto::flo_connect::PacketGameSlotClientStatusUpdate {
         game_id,
         player_id,
-        status: SlotClientStatus::Left.into_proto_enum().into(),
-      },
-    )
+        ..Default::default()
+      };
+      pkt.set_status(SlotClientStatus::Left.into_proto_enum());
+      pkt
+    })
     .await
     .ok();
   player_guard.leave_game(game_id);
@@ -685,5 +688,75 @@ pub async fn start_game_abort(ctx: &FloEventContext, game_id: i32) -> Result<()>
     })
     .await
     .ok();
+  Ok(())
+}
+
+pub async fn update_game_slot_client_status(
+  ctx: &FloEventContext,
+  GameSlotClientStatusUpdate {
+    player_id,
+    game_id,
+    status,
+  }: GameSlotClientStatusUpdate,
+) -> Result<()> {
+  let game_guard = ctx
+    .mem
+    .lock_game_state(game_id)
+    .await
+    .ok_or_else(|| Error::GameNotFound)?;
+
+  ctx
+    .db
+    .exec(move |conn| crate::game::db::update_slot_client_status(conn, game_id, player_id, status))
+    .await?;
+
+  game_guard
+    .get_broadcaster()
+    .broadcast({
+      let mut pkt = proto::flo_connect::PacketGameSlotClientStatusUpdate {
+        player_id,
+        game_id,
+        ..Default::default()
+      };
+      pkt.set_status(status.into_proto_enum());
+      pkt
+    })
+    .await
+    .ok();
+
+  Ok(())
+}
+
+pub async fn bulk_update_game_status(
+  ctx: &FloEventContext,
+  updates: Vec<GameStatusUpdate>,
+) -> Result<()> {
+  let mut player_frames = HashMap::new();
+  for item in &updates {
+    let frame = item.to_packet().encode_as_frame()?;
+    for player_id in item.updated_player_game_client_status_map.keys().cloned() {
+      player_frames
+        .entry(player_id)
+        .or_insert_with(|| vec![])
+        .push(frame.clone());
+    }
+  }
+
+  ctx
+    .db
+    .exec(move |conn| -> Result<_> {
+      crate::game::db::bulk_update_status(conn, &updates)?;
+      Ok(updates)
+    })
+    .await?;
+
+  // let f: FuturesUnordered<_> = updates.into_iter().map(|update| Ok(())).collect();
+  //
+  // if f.is_empty() {
+  //   return Ok(());
+  // }
+  //
+  // f.collect::<Vec<Result<_>>>().await;
+
   Ok(())
 }

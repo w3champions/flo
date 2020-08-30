@@ -1,4 +1,5 @@
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::buf::BufExt;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub use prost::Message;
 
 use flo_util::{BinDecode, BinEncode};
@@ -18,7 +19,7 @@ where
     self.encode(&mut buf)?;
     Ok(Frame {
       type_id: Self::TYPE_ID,
-      payload: buf.freeze(),
+      payload: FramePayload::Bytes(buf.freeze()),
     })
   }
 }
@@ -32,7 +33,50 @@ pub(crate) struct Header {
 #[derive(Debug, Clone)]
 pub struct Frame {
   pub type_id: PacketTypeId,
-  pub payload: Bytes,
+  pub payload: FramePayload,
+}
+
+#[derive(Debug, Clone)]
+pub enum FramePayload {
+  Bytes(Bytes),
+  SubTypeBytes(u8, Bytes),
+}
+
+impl FramePayload {
+  pub fn len(&self) -> usize {
+    match *self {
+      FramePayload::Bytes(ref bytes) => bytes.len(),
+      FramePayload::SubTypeBytes(_, ref bytes) => 1 + bytes.len(),
+    }
+  }
+
+  pub fn subtype_id(&self) -> Option<u8> {
+    match *self {
+      FramePayload::Bytes(_) => None,
+      FramePayload::SubTypeBytes(id, _) => Some(id),
+    }
+  }
+
+  pub fn into_subtype(self) -> Option<(u8, Bytes)> {
+    match self {
+      FramePayload::Bytes(_) => None,
+      FramePayload::SubTypeBytes(id, bytes) => Some((id, bytes)),
+    }
+  }
+
+  pub fn bytes(&self) -> &[u8] {
+    match *self {
+      FramePayload::Bytes(ref bytes) => bytes.as_ref(),
+      FramePayload::SubTypeBytes(_, ref bytes) => bytes.as_ref(),
+    }
+  }
+
+  pub fn into_bytes(self) -> Bytes {
+    match self {
+      FramePayload::Bytes(bytes) => bytes,
+      FramePayload::SubTypeBytes(_, bytes) => bytes,
+    }
+  }
 }
 
 impl Frame {
@@ -47,7 +91,29 @@ impl Frame {
       });
     }
 
-    T::decode(self.payload).map_err(Into::into)
+    match self.payload {
+      FramePayload::Bytes(bytes) => T::decode(bytes).map_err(Into::into),
+      FramePayload::SubTypeBytes(sub_type, bytes) => {
+        let head = &[sub_type] as &[_];
+        T::decode(head.chain(bytes)).map_err(Into::into)
+      }
+    }
+  }
+
+  pub fn encode(&self, dst: &mut BytesMut) {
+    use flo_util::binary::{BinDecode, BinEncode};
+    dst.reserve(Header::MIN_SIZE + self.payload.len());
+    self.type_id.encode(dst);
+    (self.payload.len() as u16).encode(dst);
+    match self.payload {
+      FramePayload::Bytes(ref bytes) => {
+        dst.put(bytes.as_ref());
+      }
+      FramePayload::SubTypeBytes(subtype, ref bytes) => {
+        dst.put_u8(subtype);
+        dst.put(bytes.as_ref());
+      }
+    }
   }
 }
 
@@ -71,7 +137,7 @@ macro_rules! try_flo_packet {
   (
     $frame:expr => {
       $(
-        $binding:ident = $packet_type:ty => $block:block
+        $binding:ident: $packet_type:ty => $block:block
       )*
     }
   ) => {
@@ -79,7 +145,10 @@ macro_rules! try_flo_packet {
       $(
         <$packet_type as $crate::packet::FloPacket>::TYPE_ID => {
           let $binding = <$packet_type as $crate::packet::Message>::decode(
-            $frame.payload
+            match $frame.payload {
+              $crate::packet::FramePayload::Bytes(bytes) => bytes,
+              $crate::packet::FramePayload::SubTypeBytes(_, bytes) => bytes,
+            }
           ).map_err($crate::error::Error::from)?;
           $block
         }
@@ -147,6 +216,8 @@ pub enum PacketTypeId {
   GameStartReject,
   #[bin(value = 0x19)]
   GameStartPlayerClientInfoRequest,
+  #[bin(value = 0x1A)]
+  GameSlotClientStatusUpdate,
 
   // Lobby <-> Node
   #[bin(value = 0x30)]
@@ -203,6 +274,15 @@ pub enum PacketTypeId {
   #[bin(value = 0xF7)]
   W3GS,
   UnknownValue(u8),
+}
+
+impl PacketTypeId {
+  pub fn has_subtype(&self) -> bool {
+    match *self {
+      PacketTypeId::W3GS => true,
+      _ => false,
+    }
+  }
 }
 
 macro_rules! packet_type {

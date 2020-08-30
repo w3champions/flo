@@ -164,6 +164,29 @@ pub enum GameStatus {
   Terminated = 5,
 }
 
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]
+#[repr(i32)]
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_node::NodeGameStatus))]
+pub enum NodeGameStatus {
+  Created = 0,
+  Waiting = 1,
+  Loading = 2,
+  Running = 3,
+  Ended = 4,
+}
+
+impl From<NodeGameStatus> for GameStatus {
+  fn from(status: NodeGameStatus) -> Self {
+    match status {
+      NodeGameStatus::Created => GameStatus::Created,
+      NodeGameStatus::Waiting => GameStatus::Created,
+      NodeGameStatus::Loading => GameStatus::Created,
+      NodeGameStatus::Running => GameStatus::Running,
+      NodeGameStatus::Ended => GameStatus::Ended,
+    }
+  }
+}
+
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type(flo_grpc::game::Slot, flo_net::proto::flo_connect::Slot))]
 pub struct Slot {
@@ -273,8 +296,9 @@ pub enum Computer {
 pub enum SlotClientStatus {
   Pending = 0,
   Connected = 1,
-  Loading = 2,
-  Loaded = 3,
-  Left = 4,
+  Joined = 2,
+  Loading = 3,
+  Loaded = 4,
   Disconnected = 5,
+  Left = 6,
 }

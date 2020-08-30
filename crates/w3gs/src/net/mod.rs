@@ -58,11 +58,13 @@ impl W3GSStream {
     self.peer_addr
   }
 
+  #[inline]
   pub async fn send(&mut self, packet: Packet) -> Result<()> {
     self.transport.send(packet).await?;
     Ok(())
   }
 
+  #[inline]
   pub async fn send_all<I>(&mut self, iter: I) -> Result<()>
   where
     I: IntoIterator<Item = Packet>,
@@ -72,11 +74,13 @@ impl W3GSStream {
     Ok(())
   }
 
+  #[inline]
   pub async fn recv(&mut self) -> Result<Option<Packet>> {
     let packet = self.transport.try_next().await?;
     Ok(packet)
   }
 
+  #[inline]
   pub async fn flush(&mut self) -> Result<()> {
     use tokio::io::AsyncWriteExt;
     self.transport.get_mut().flush().await?;
@@ -93,6 +97,7 @@ impl Incoming<'_> {
     Incoming { inner: listener }
   }
 
+  #[inline]
   pub fn poll_accept(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<W3GSStream>> {
     let (socket, addr) = ready!(self.inner.poll_accept(cx))?;
 
@@ -112,6 +117,7 @@ impl Incoming<'_> {
 impl Stream for Incoming<'_> {
   type Item = Result<W3GSStream>;
 
+  #[inline]
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let stream = ready!(self.poll_accept(cx))?;
     Poll::Ready(Some(Ok(stream)))

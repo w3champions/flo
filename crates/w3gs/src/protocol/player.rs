@@ -165,6 +165,6 @@ fn test_player_unknown_02() {
     BytesMut::from(flo_util::sample_bytes!("packet", "protobuf_0x59_0x02.bin").as_slice());
   let h = Packet::decode_header(&mut buf).unwrap();
   let p = Packet::decode(h, &mut buf).unwrap();
-  let p: ProtoBufPayload = p.decode_simple_payload().unwrap();
+  let p: ProtoBufPayload = p.decode_simple().unwrap();
   dbg!(&p);
 }

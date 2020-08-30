@@ -10,57 +10,76 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Sender};
-use tokio::sync::Notify;
+
+use flo_task::SpawnScope;
 
 use crate::error::*;
 use crate::node::NodeConnConfig;
 
+use crate::state::event::FloControllerEventSender;
 use backoff::backoff::Backoff;
 use conn::{NodeConn, NodeConnEvent, NodeConnEventData};
 use tracing_futures::Instrument;
 
 #[derive(Debug)]
 pub struct NodeRegistry {
+  spawn_scope: SpawnScope,
   state: Arc<State>,
 }
 
 pub type NodeRegistryRef = Arc<NodeRegistry>;
 
 impl NodeRegistry {
-  pub async fn init(db: ExecutorRef) -> Result<Self> {
+  pub async fn init(db: ExecutorRef, ctrl_event_sender: FloControllerEventSender) -> Result<Self> {
     let (event_sender, mut event_receiver) = channel(2);
+
+    let scope = SpawnScope::new();
 
     let configs = db
       .exec(|conn| crate::node::db::get_node_conn_configs(conn))
       .await?;
 
-    let state = Arc::new(State::new(event_sender, configs)?);
+    let state = Arc::new(State::new(ctrl_event_sender, event_sender, configs)?);
 
     tokio::spawn(
       {
+        let mut scope = scope.handle();
         let state = state.clone();
         async move {
-          while let Some(event) = event_receiver.recv().await {
-            let node_id = event.node_id;
-            match event.data {
-              NodeConnEventData::WorkerErrorEvent(err) => {
-                tracing::error!(node_id, "worker: {}", err);
-                if let Err(err) = state.reconnect(node_id) {
-                  tracing::error!(node_id, "reconnect: {}", err);
+          loop {
+            tokio::select! {
+              _ = scope.left() => {
+                break;
+              }
+              next = event_receiver.recv() => {
+                if let Some(event) = next {
+                  let node_id = event.node_id;
+                  match event.data {
+                    NodeConnEventData::WorkerError(err) => {
+                      tracing::error!(node_id, "worker: {}", err);
+                      if let Err(err) = state.reconnect(node_id) {
+                        tracing::error!(node_id, "reconnect: {}", err);
+                      }
+                    }
+                    NodeConnEventData::Disconnected => {
+                      tracing::error!(node_id, "disconnected");
+                      if let Err(err) = state.reconnect(node_id) {
+                        tracing::error!(node_id, "reconnect: {}", err);
+                      }
+                    }
+                    NodeConnEventData::Connected => {
+                      tracing::debug!(node_id, "connected");
+                      if let Err(err) = state.reset_backoff(node_id) {
+                        tracing::error!(node_id, "reset backoff: {}", err);
+                      }
+                    }
+                  }
+                } else {
+                  // will never happen because state holds a sender
+                  break;
                 }
               }
-              NodeConnEventData::DisconnectedEvent => {
-                tracing::error!(node_id, "disconnected");
-                if let Err(err) = state.reconnect(node_id) {
-                  tracing::error!(node_id, "reconnect: {}", err);
-                }
-              }
-              NodeConnEventData::ConnectedEvent => {
-                if let Err(err) = state.reset_backoff(node_id) {
-                  tracing::error!(node_id, "reset backoff: {}", err);
-                }
-              }
-            }
+            };
           }
           tracing::debug!("exiting")
         }
@@ -68,7 +87,10 @@ impl NodeRegistry {
       .instrument(tracing::debug_span!("event_handler_worker")),
     );
 
-    Ok(NodeRegistry { state })
+    Ok(NodeRegistry {
+      spawn_scope: scope,
+      state,
+    })
   }
 
   pub fn get_conn(&self, node_id: i32) -> Result<Arc<NodeConn>> {
@@ -80,21 +102,19 @@ impl NodeRegistry {
   }
 }
 
-impl Drop for NodeRegistry {
-  fn drop(&mut self) {
-    self.state.dropper.notify();
-  }
-}
-
 #[derive(Debug)]
 struct State {
-  dropper: Notify,
   root_event_sender: Sender<NodeConnEvent>,
+  ctrl_event_sender: FloControllerEventSender,
   map: HashMap<i32, RwLock<NodeSlot>>,
 }
 
 impl State {
-  fn new(root_event_sender: Sender<NodeConnEvent>, configs: Vec<NodeConnConfig>) -> Result<Self> {
+  fn new(
+    ctrl_event_sender: FloControllerEventSender,
+    root_event_sender: Sender<NodeConnEvent>,
+    configs: Vec<NodeConnConfig>,
+  ) -> Result<Self> {
     let mut map = HashMap::new();
     for config in configs {
       let conn = Arc::new(NodeConn::new(
@@ -102,6 +122,7 @@ impl State {
         &config.addr,
         &config.secret,
         root_event_sender.clone().into(),
+        ctrl_event_sender.clone(),
         None,
       )?);
       map.insert(
@@ -112,7 +133,7 @@ impl State {
           reconnect_backoff: ExponentialBackoff {
             initial_interval: Duration::from_secs(5),
             current_interval: Duration::from_secs(5),
-            multiplier: 2.0,
+            multiplier: 1.5,
             ..Default::default()
           },
         }),
@@ -120,8 +141,8 @@ impl State {
     }
 
     Ok(State {
-      dropper: Notify::new(),
       map,
+      ctrl_event_sender,
       root_event_sender,
     })
   }
@@ -144,6 +165,7 @@ impl State {
         &guard.config.addr,
         &guard.config.secret,
         self.root_event_sender.clone().into(),
+        self.ctrl_event_sender.clone(),
         delay,
       )?);
       Ok(())

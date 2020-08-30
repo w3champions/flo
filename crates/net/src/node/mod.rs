@@ -17,6 +17,7 @@ packet_type!(ControllerCreateGameAccept, PacketControllerCreateGameAccept);
 packet_type!(ControllerCreateGameReject, PacketControllerCreateGameReject);
 packet_type!(ControllerQueryGameStatus, PacketControllerQueryGameStatus);
 packet_type!(ClientConnect, PacketClientConnect);
+packet_type!(ClientConnectAccept, PacketClientConnectAccept);
 packet_type!(ClientConnectReject, PacketClientConnectReject);
 packet_type!(
   ClientUpdateSlotClientStatusRequest,
@@ -27,7 +28,8 @@ packet_type!(
   PacketClientUpdateSlotClientStatus
 );
 packet_type!(
-  ClientUpdateSlotClientStatus,
+  ClientUpdateSlotClientStatusReject,
   PacketClientUpdateSlotClientStatusReject
 );
 packet_type!(NodeGameStatusUpdate, PacketNodeGameStatusUpdate);
+packet_type!(NodeGameStatusUpdateBulk, PacketNodeGameStatusUpdateBulk);

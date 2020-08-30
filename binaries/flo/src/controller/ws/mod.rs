@@ -8,15 +8,15 @@ use parking_lot::RwLock;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Sender};
-use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use flo_net::packet::Frame;
+use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
 use crate::platform::PlatformStateRef;
 
-use handler::WsHandlerRef;
+use handler::WsHandler;
 use message::OutgoingMessage;
 use stream::WsStream;
 
@@ -25,29 +25,29 @@ pub type WsEventSender = Sender<WsEvent>;
 
 #[derive(Debug)]
 pub struct Ws {
-  dropper: WsDrop,
+  scope: SpawnScope,
   sender: WsMessageSender,
   state: Arc<State>,
 }
 
 impl Ws {
   pub async fn init(platform: PlatformStateRef, event_sender: WsEventSender) -> Result<Self> {
+    let scope = SpawnScope::new();
     let port = platform.with_config(|c| c.local_port);
-    let dropper = Arc::new(Notify::new());
     let (ws_sender, mut ws_receiver) = channel(3);
     let state = Arc::new(State {
       port,
       platform,
       event_sender: event_sender.clone(),
       handler: Arc::new(RwLock::new(None)),
-      dropper: dropper.clone(),
     });
     tokio::spawn(
       {
+        let scope = scope.handle();
         let state = state.clone();
         let mut event_sender = event_sender.clone();
         async move {
-          if let Err(err) = state.serve().await {
+          if let Err(err) = state.serve(scope).await {
             tracing::error!("serve: {}", err);
             event_sender.send(WsEvent::WorkerErrorEvent(err)).await.ok();
           }
@@ -56,7 +56,7 @@ impl Ws {
       .instrument(tracing::debug_span!("worker")),
     );
 
-    // forward ws messages to current handler
+    // forward or drop ws messages to current handler
     tokio::spawn(
       {
         let state = state.clone();
@@ -64,7 +64,7 @@ impl Ws {
           loop {
             match ws_receiver.recv().await {
               Some(msg) => {
-                let handler = { state.handler.read().as_ref().cloned() };
+                let handler = { state.handler.read().as_ref().map(|v| v.sender()) };
                 if let Some(handler) = handler {
                   handler.send_or_discard(msg).await;
                 }
@@ -79,19 +79,14 @@ impl Ws {
     );
 
     Ok(Self {
-      dropper: WsDrop(dropper),
+      scope,
       sender: ws_sender,
       state,
     })
   }
-}
 
-#[derive(Debug)]
-struct WsDrop(Arc<Notify>);
-
-impl Drop for WsDrop {
-  fn drop(&mut self) {
-    self.0.notify()
+  pub async fn send_or_discard(&self, msg: OutgoingMessage) {
+    self.sender.clone().send(msg).await.ok();
   }
 }
 
@@ -100,12 +95,11 @@ struct State {
   port: u16,
   platform: PlatformStateRef,
   event_sender: WsEventSender,
-  handler: Arc<RwLock<Option<WsHandlerRef>>>,
-  dropper: Arc<Notify>,
+  handler: Arc<RwLock<Option<WsHandler>>>,
 }
 
 impl State {
-  pub async fn serve(self: Arc<Self>) -> Result<()> {
+  pub async fn serve(self: Arc<Self>, mut scope: SpawnScopeHandle) -> Result<()> {
     use async_tungstenite::tokio::accept_hdr_async;
     use async_tungstenite::tungstenite::Error as WsError;
     use tokio::net::TcpListener;
@@ -119,7 +113,7 @@ impl State {
 
     loop {
       let stream = tokio::select! {
-        _ = self.dropper.notified() => {
+        _ = scope.left() => {
           return Ok(())
         }
         stream = incoming.try_next() => {
@@ -144,7 +138,7 @@ impl State {
       {
         let current = std::mem::replace(
           &mut self.handler.write() as &mut Option<_>,
-          Some(WsHandlerRef::new(
+          Some(WsHandler::new(
             self.platform.clone(),
             self.event_sender.clone(),
             WsStream::new(stream),
@@ -153,6 +147,7 @@ impl State {
 
         if let Some(current) = current {
           current
+            .sender()
             .send_or_discard(OutgoingMessage::Disconnect(message::Disconnect {
               reason: message::DisconnectReason::Multi,
               message: "Another browser window took up the connection.".to_string(),

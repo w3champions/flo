@@ -1,14 +1,17 @@
 use thiserror::Error;
 
 use crate::packet::PacketTypeId;
+use crate::w3gs::ParseW3GSPacketError;
 
 #[derive(Error, Debug)]
 pub enum Error {
   #[error("payload too large")]
   PayloadTooLarge,
+  #[error("payload too small")]
+  PayloadTooSmall,
   #[error("stream timed out")]
   StreamTimeout,
-  #[error("stream closed unexpectedly")]
+  #[error("stream closed")]
   StreamClosed,
   #[error("unexpected packet type: expected {expected:?}, got {got:?}")]
   UnexpectedPacketType {
@@ -21,6 +24,8 @@ pub enum Error {
   PacketFieldNotPresent,
   #[error("task cancelled unexpectedly")]
   Cancelled,
+  #[error("invalid W3GS frame")]
+  ReadW3GSFrame(ParseW3GSPacketError),
   #[error("io: {0}")]
   Io(#[from] std::io::Error),
   #[error("decode: {0}")]
