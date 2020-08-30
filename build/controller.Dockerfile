@@ -1,5 +1,12 @@
 FROM debian:stable
 
+RUN apt-get update && \
+  apt-get install \
+  libpq-dev \
+  -qqy \
+  --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /flo
 
 ARG IMAGE_BUILD_DATE=2016-01-01
