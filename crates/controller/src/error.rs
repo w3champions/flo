@@ -75,6 +75,8 @@ pub enum Error {
   Net(#[from] flo_net::error::Error),
   #[error("db error: {0}")]
   Db(#[from] bs_diesel_utils::result::DbError),
+  #[error("db migration: {0}")]
+  DbMigration(#[from] diesel_migrations::RunMigrationsError),
   #[error("json: {0}")]
   Json(#[from] serde_json::Error),
   #[error("json web token: {0}")]

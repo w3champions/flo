@@ -1,3 +1,9 @@
+#[cfg(not(debug_assertions))]
+#[macro_use]
+extern crate diesel_migrations;
+#[cfg(not(debug_assertions))]
+pub mod migration;
+
 #[macro_use]
 mod macros;
 mod version;
