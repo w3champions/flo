@@ -9,6 +9,8 @@ ENV RUST_BACKTRACE 1
 
 EXPOSE 3552/udp
 EXPOSE 3553/tcp
+EXPOSE 3554/tcp
+EXPOSE 3555/tcp
 
 COPY release/flo-node-service flo-node-service
 
