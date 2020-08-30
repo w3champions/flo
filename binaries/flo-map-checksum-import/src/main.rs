@@ -22,13 +22,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
   }
 
-  let channel = Channel::from_static("tcp://127.0.0.1:3549")
+  let channel = Channel::from_static("tcp://service.w3flo.com:3549")
     .connect()
     .await?;
   let mut client = FloControllerClient::with_interceptor(channel, |mut req: Request<()>| {
     req
       .metadata_mut()
-      .insert("x-flo-secret", "TEST".parse().unwrap());
+      .insert("x-flo-secret", "x9&hZx$2hG047GAT".parse().unwrap());
     Ok(req)
   });
 

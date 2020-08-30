@@ -36,6 +36,11 @@ impl ControllerStateRef {
 
     let db = Executor::env().into_ref();
 
+    #[cfg(not(debug_assertions))]
+    {
+      db.exec(|conn| crate::migration::run(conn)).await?;
+    }
+
     let (mem, config, nodes) = tokio::try_join!(
       MemStorage::init(db.clone(), event_sender.clone()),
       ConfigStorage::init(db.clone()),
