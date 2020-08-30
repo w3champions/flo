@@ -38,7 +38,7 @@ impl ControllerStateRef {
 
     #[cfg(not(debug_assertions))]
     {
-      state.db.exec(|conn| crate::migration::run(conn)).await?;
+      db.exec(|conn| crate::migration::run(conn)).await?;
     }
 
     let (mem, config, nodes) = tokio::try_join!(
