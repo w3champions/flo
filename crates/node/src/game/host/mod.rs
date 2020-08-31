@@ -1,4 +1,4 @@
-mod action;
+mod clock;
 mod dispatch;
 
 use dispatch::{Dispatcher, Message};
@@ -140,6 +140,7 @@ impl GameHost {
       .send(Message::PlayerConnect {
         player_id: stream.player_id(),
         tx,
+        slot_player_id,
       })
       .await
       .map_err(|_| Error::Cancelled)?;
@@ -182,6 +183,11 @@ impl GameHost {
     match cmd {
       Command::AddPeerStream(AddPeerStream { snapshot, stream }) => {
         let player_id = stream.player_id();
+        let slot_player_id = state
+          .player_slot_id_map
+          .get(&player_id)
+          .cloned()
+          .ok_or_else(|| Error::PlayerNotFoundInGame)?;
         tracing::debug!(player_id, "add peer stream");
         let state = state.clone();
         tokio::spawn(
@@ -194,7 +200,10 @@ impl GameHost {
             crate::metrics::CONNECTED_PLAYERS.dec();
 
             dispatch_tx
-              .send(Message::PlayerDisconnect { player_id })
+              .send(Message::PlayerDisconnect {
+                player_id,
+                slot_player_id,
+              })
               .await
               .ok();
             tracing::debug!("exiting");

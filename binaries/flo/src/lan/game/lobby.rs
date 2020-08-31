@@ -114,7 +114,7 @@ impl<'a> LobbyHandler<'a> {
 
   async fn send_start(&mut self) -> Result<()> {
     self.stream.send(Packet::simple(CountDownStart)?).await?;
-    delay_for(Duration::from_secs(5)).await;
+    delay_for(Duration::from_secs(1)).await;
     self.stream.send(Packet::simple(CountDownEnd)?).await?;
     Ok(())
   }

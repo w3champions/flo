@@ -3,8 +3,9 @@ use tokio::sync::watch::Receiver as WatchReceiver;
 
 use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
+use flo_w3gs::protocol::action::{IncomingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::ChatToHost;
-use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
+use flo_w3gs::protocol::leave::LeaveAck;
 
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
@@ -58,7 +59,7 @@ impl<'a> GameHandler<'a> {
           };
           if let Some(pkt) = pkt {
             // tracing::debug!("game => {:?}", pkt.type_id());
-            if pkt.type_id() == LeaveReq::PACKET_TYPE_ID {
+            if pkt.type_id() == LeaveAck::PACKET_TYPE_ID {
               self.node_stream.report_slot_status(SlotClientStatus::Left).await.ok();
               self.stream.send(Packet::simple(LeaveAck)?).await?;
               self.stream.flush().await?;
@@ -96,7 +97,6 @@ impl<'a> GameHandler<'a> {
 
   #[inline]
   async fn handle_w3gs(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
-    // tracing::debug!("game <= {:?}", pkt.type_id());
     self.stream.send(pkt).await?;
     Ok(())
   }
@@ -123,7 +123,11 @@ impl<'a> GameHandler<'a> {
         //   ))?)
         //   .await?;
       }
-      _ => {}
+      OutgoingKeepAlive::PACKET_TYPE_ID => {}
+      IncomingAction::PACKET_TYPE_ID => {}
+      _ => {
+        tracing::debug!("unknown game packet: {:?}", pkt.type_id());
+      }
     }
 
     self.node_stream.send_w3gs(pkt).await?;

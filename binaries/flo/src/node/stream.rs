@@ -175,7 +175,13 @@ impl NodeStream {
         }
       }
     }
-    tracing::debug!("exiting");
+    tracing::debug!("flushing...");
+    outgoing_receiver.close();
+    while let Some(frame) = outgoing_receiver.recv().await {
+      stream.send_frame(frame).await.ok();
+    }
+    stream.flush().await.ok();
+    tracing::debug!("exiting...");
   }
 
   async fn handle_node_frame(event_sender: &mut NodeStreamEventSender, frame: Frame) -> Result<()> {

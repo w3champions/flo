@@ -123,6 +123,11 @@ impl FloStream {
       .ok_or_else(|| Error::StreamClosed)?;
     Ok(frame)
   }
+
+  pub async fn flush(&mut self) -> Result<()> {
+    self.transport.flush().await?;
+    Ok(())
+  }
 }
 
 impl Stream for FloStream {

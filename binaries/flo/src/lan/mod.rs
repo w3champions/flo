@@ -101,10 +101,10 @@ impl LanHandle {
       return Ok(());
     }
 
-    game.update_game_status(status).await?;
     for (player_id, status) in updated_player_game_client_status_map {
       game.update_player_status(*player_id, *status).await?;
     }
+    game.update_game_status(status).await?;
 
     Ok(())
   }

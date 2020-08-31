@@ -1,8 +1,11 @@
 use futures::stream::StreamExt;
+use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoEnum;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tracing_futures::Instrument;
 
@@ -10,8 +13,9 @@ use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
 use flo_task::{SpawnScope, SpawnScopeHandle};
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::protocol::action::PlayerAction;
+use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction};
 use flo_w3gs::protocol::leave::LeaveReq;
+use flo_w3gs::protocol::leave::{LeaveAck, PlayerLeft};
 use flo_w3gs::protocol::packet::*;
 
 use crate::error::*;
@@ -19,8 +23,9 @@ use crate::game::{
   GameEvent, GameEventSender, GameSlot, SlotClientStatus, SlotClientStatusUpdateSource,
 };
 
-use super::action::ActionTickStream;
-use crate::game::host::action::Tick;
+use super::clock::ActionTickStream;
+use crate::game::host::clock::Tick;
+use flo_w3gs::protocol::constants::LeaveReason;
 
 #[derive(Debug)]
 pub enum Message {
@@ -31,17 +36,18 @@ pub enum Message {
   },
   PlayerConnect {
     player_id: i32,
+    slot_player_id: u8,
     tx: Sender<Frame>,
   },
   PlayerDisconnect {
     player_id: i32,
+    slot_player_id: u8,
   },
 }
 
 #[derive(Debug)]
 pub struct Dispatcher {
   scope: SpawnScope,
-  player_map: BTreeMap<i32, PlayerDispatchInfo>,
   start_tx: Option<oneshot::Sender<()>>,
 }
 
@@ -56,15 +62,22 @@ impl Dispatcher {
     let state = State::new(slots);
 
     let (start_tx, start_rx) = oneshot::channel();
+    let (action_tx, action_rx) = channel(10);
+
+    tokio::spawn(Self::tick(
+      state.player_map.clone(),
+      start_rx,
+      action_rx,
+      scope.handle(),
+    ));
 
     tokio::spawn(
-      Self::serve(state, rx, start_rx, out_tx, scope.handle())
-        .instrument(tracing::debug_span!("worker", game_id)),
+      Self::serve(state, rx, action_tx, out_tx, scope.handle())
+        .instrument(tracing::debug_span!("state_worker", game_id)),
     );
 
     Dispatcher {
       scope,
-      player_map: BTreeMap::new(),
       start_tx: Some(start_tx),
     }
   }
@@ -79,7 +92,7 @@ impl Dispatcher {
   async fn serve(
     mut state: State,
     mut rx: Receiver<Message>,
-    mut start_rx: oneshot::Receiver<()>,
+    mut action_tx: Sender<ActionMsg>,
     mut out_tx: GameEventSender,
     mut scope: SpawnScopeHandle,
   ) {
@@ -87,26 +100,14 @@ impl Dispatcher {
       let dropped = scope.left();
     }
 
-    let mut started = false;
-
     loop {
       tokio::select! {
         _ = &mut dropped => {
           break;
         }
-        _ = &mut start_rx, if !started => {
-          started = true;
-        }
-        Some(tick) = state.action_ticks.next(), if started => {
-          state.time = state.time + tick.time_increment_ms;
-          if let Err(err) = state.dispatch_action_tick(tick).await {
-            tracing::error!("dispatch action tick: {}", err);
-            break;
-          }
-        }
         next = rx.recv() => {
           if let Some(msg) = next {
-            match state.dispatch(msg, &mut out_tx).await {
+            match state.dispatch(msg, &mut action_tx, &mut out_tx).await {
               Ok(_) => {},
               Err(err) => {
                 tracing::error!("dispatch: {}", err);
@@ -119,34 +120,80 @@ impl Dispatcher {
       }
     }
   }
+
+  async fn tick(
+    player_map: Arc<Mutex<PlayerMap>>,
+    start_rx: oneshot::Receiver<()>,
+    mut rx: Receiver<ActionMsg>,
+    mut scope: SpawnScopeHandle,
+  ) {
+    tokio::pin! {
+      let dropped = scope.left();
+    }
+
+    let mut stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
+
+    if let Ok(_) = start_rx.await {
+      loop {
+        tokio::select! {
+          _ = &mut dropped => {
+            break;
+          }
+          Some(msg) = rx.recv() => {
+            match msg {
+              ActionMsg::PlayerAction(action) => {
+                stream.add_player_action(action);
+              }
+            }
+          }
+          Some(tick) = stream.next() => {
+            if let Err(err) = player_map.lock().dispatch_action_tick(tick) {
+              tracing::error!("dispatch action tick: {}", err);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    tracing::debug!("exiting")
+  }
+}
+
+#[derive(Debug)]
+enum ActionMsg {
+  PlayerAction(PlayerAction),
 }
 
 #[derive(Debug)]
 struct State {
-  time: u32,
-  ticks: usize,
   max_lag_time: u32,
-  player_map: BTreeMap<i32, PlayerDispatchInfo>,
-  action_ticks: ActionTickStream,
+  player_map: Arc<Mutex<PlayerMap>>,
+  player_ack_map: BTreeMap<i32, AtomicUsize>,
 }
 
 impl State {
   fn new(slots: &[GameSlot]) -> Self {
     State {
-      time: 0,
-      ticks: 0,
       max_lag_time: 0,
-      player_map: slots
+      player_map: Arc::new(Mutex::new(PlayerMap::new(slots))),
+      player_ack_map: slots
         .into_iter()
-        .map(|slot| (slot.player.player_id, PlayerDispatchInfo::new(slot)))
+        .map(|slot| (slot.player.player_id, AtomicUsize::new(0)))
         .collect(),
-      action_ticks: ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS),
     }
+  }
+
+  fn ack_tick(&self, player_id: i32) {
+    self.player_ack_map.get(&player_id).map(|counter| {
+      counter.fetch_add(1, Ordering::SeqCst);
+    });
   }
 
   pub async fn dispatch(
     &mut self,
     msg: Message,
+    action_tx: &mut Sender<ActionMsg>,
     out_tx: &mut GameEventSender,
   ) -> Result<DispatchResult> {
     match msg {
@@ -156,8 +203,24 @@ impl State {
         frame,
       } => match frame.type_id {
         PacketTypeId::W3GS => {
+          let pkt = frame_to_w3gs(frame)?;
+
+          if pkt.type_id() == OutgoingAction::PACKET_TYPE_ID {
+            let payload: OutgoingAction = pkt.decode_payload()?;
+            if let Err(_) = action_tx
+              .send(ActionMsg::PlayerAction(PlayerAction {
+                player_id: slot_player_id,
+                data: payload.data,
+              }))
+              .await
+            {
+              return Err(Error::Cancelled);
+            }
+            return Ok(DispatchResult::Continue);
+          }
+
           let res = self
-            .dispatch_incoming_w3gs(player_id, slot_player_id, frame_to_w3gs(frame)?, out_tx)
+            .dispatch_incoming_w3gs(player_id, slot_player_id, pkt, out_tx)
             .await?;
           return Ok(res);
         }
@@ -165,8 +228,10 @@ impl State {
           self.dispatch_incoming_flo(player_id, frame, out_tx).await?;
         }
       },
-      Message::PlayerConnect { player_id, tx } => {
-        self.get_player(player_id)?.tx.replace(tx);
+      Message::PlayerConnect { player_id, tx, .. } => {
+        {
+          self.player_map.lock().get_player(player_id)?.tx.replace(tx);
+        }
         out_tx
           .send(GameEvent::PlayerStatusChange(
             player_id,
@@ -176,7 +241,10 @@ impl State {
           .await
           .map_err(|_| Error::Cancelled)?;
       }
-      Message::PlayerDisconnect { player_id } => {
+      Message::PlayerDisconnect {
+        player_id,
+        slot_player_id,
+      } => {
         out_tx
           .send(GameEvent::PlayerStatusChange(
             player_id,
@@ -185,7 +253,15 @@ impl State {
           ))
           .await
           .map_err(|_| Error::Cancelled)?;
-        self.get_player(player_id)?.tx.take();
+        let pkt = Packet::simple(PlayerLeft {
+          player_id: slot_player_id,
+          reason: LeaveReason::LeaveDisconnect,
+        })?;
+        {
+          let mut guard = self.player_map.lock();
+          guard.get_player(player_id)?.tx.take();
+          guard.broadcast(pkt, None)?;
+        }
       }
     }
 
@@ -196,18 +272,30 @@ impl State {
     &mut self,
     player_id: i32,
     slot_player_id: u8,
-    packet: Packet,
+    mut packet: Packet,
     out_tx: &mut GameEventSender,
   ) -> Result<DispatchResult> {
     use flo_w3gs::protocol::constants::PacketTypeId;
-    use flo_w3gs::protocol::leave::{LeaveAck, PlayerLeft};
-    let player = self.get_player(player_id)?;
 
     match packet.type_id() {
       PacketTypeId::LeaveReq => {
         let req: LeaveReq = packet.decode_simple()?;
         tracing::info!(player_id, "leave: {:?}", req.reason());
-        player.send_w3gs(Packet::simple(LeaveAck)?).ok();
+
+        let pkt = Packet::simple(PlayerLeft {
+          player_id: slot_player_id,
+          reason: req.reason(),
+        })?;
+
+        {
+          let mut guard = self.player_map.lock();
+          {
+            let player = guard.get_player(player_id)?;
+            player.send_w3gs(Packet::simple(LeaveAck)?).ok();
+            player.disconnect();
+          }
+          guard.broadcast(pkt, Some(&[player_id]))?;
+        }
         out_tx
           .send(GameEvent::PlayerStatusChange(
             player_id,
@@ -216,20 +304,16 @@ impl State {
           ))
           .await
           .map_err(|_| Error::Cancelled)?;
-        player.disconnect();
-        let pkt = Packet::simple(PlayerLeft {
-          player_id: slot_player_id,
-          reason: req.reason(),
-        })?;
-        self.broadcast(pkt)?;
+      }
+      PacketTypeId::ChatToHost => {
+        packet.header.type_id = PacketTypeId::ChatFromHost;
+        self
+          .player_map
+          .lock()
+          .broadcast(packet, Some(&[player_id]))?;
       }
       PacketTypeId::OutgoingKeepAlive => {
-        player.ack_tick();
-      }
-      PacketTypeId::OutgoingAction => {
-        self
-          .action_ticks
-          .add_player_action(slot_player_id, packet.decode_payload()?);
+        self.ack_tick(player_id);
       }
       id => {
         tracing::debug!("id = {:?}", id);
@@ -262,27 +346,47 @@ impl State {
     }
     Ok(())
   }
+}
 
-  pub async fn dispatch_action_tick(&mut self, tick: Tick) -> Result<()> {
-    if !tick.actions.is_empty() {
-      tracing::debug!(
-        "actions: {:?}, tick = {}, time = {}",
-        tick.actions.iter().map(|a| a.player_id).collect::<Vec<_>>(),
-        self.ticks,
-        self.time
-      );
+#[derive(Debug)]
+struct PlayerMap {
+  map: BTreeMap<i32, PlayerDispatchInfo>,
+}
+
+impl PlayerMap {
+  fn new(slots: &[GameSlot]) -> Self {
+    Self {
+      map: slots
+        .into_iter()
+        .map(|slot| (slot.player.player_id, PlayerDispatchInfo::new(slot)))
+        .collect(),
     }
-    self.broadcast(Packet::with_payload(IncomingAction::from(tick))?)?;
-    self.ticks = self.ticks + 1;
+  }
+
+  fn get_player(&mut self, player_id: i32) -> Result<&mut PlayerDispatchInfo> {
+    if let Some(player) = self.map.get_mut(&player_id) {
+      Ok(player)
+    } else {
+      tracing::error!(player_id, "unknown player id");
+      return Err(Error::PlayerNotFoundInGame);
+    }
+  }
+
+  pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<()> {
+    self.broadcast(Packet::with_payload(IncomingAction::from(tick))?, None)?;
     Ok(())
   }
 
-  pub fn broadcast(&mut self, packet: Packet) -> Result<()> {
+  pub fn broadcast(&mut self, packet: Packet, excludes: Option<&[i32]>) -> Result<()> {
     let frame = w3gs_to_frame(packet);
+    let excludes = excludes.unwrap_or(&[] as &[i32]);
     let errors: Vec<_> = self
-      .player_map
+      .map
       .iter_mut()
       .filter_map(|(player_id, info)| {
+        if excludes.contains(player_id) {
+          return None;
+        }
         if info.connected() {
           info.send(frame.clone()).err().map(|err| (*player_id, err))
         } else {
@@ -296,7 +400,7 @@ impl State {
         match err {
           PlayerSendError::Closed(_frame) => {
             tracing::info!(player_id, "removing player: stream broken");
-            self.player_map.remove(&player_id);
+            self.map.remove(&player_id);
           }
           PlayerSendError::Lagged => {
             tracing::info!(player_id, "lagged");
@@ -307,15 +411,6 @@ impl State {
     }
 
     Ok(())
-  }
-
-  fn get_player(&mut self, player_id: i32) -> Result<&mut PlayerDispatchInfo> {
-    if let Some(player) = self.player_map.get_mut(&player_id) {
-      Ok(player)
-    } else {
-      tracing::error!(player_id, "unknown player id");
-      return Err(Error::PlayerNotFoundInGame);
-    }
   }
 }
 
@@ -337,12 +432,8 @@ impl PlayerDispatchInfo {
     }
   }
 
-  fn ack_tick(&mut self) {
-    self.ticks = self.ticks + 1;
-  }
-
-  fn disconnect(&mut self) {
-    self.tx.take();
+  fn disconnect(&mut self) -> Option<Sender<Frame>> {
+    self.tx.take()
   }
 
   fn connected(&self) -> bool {

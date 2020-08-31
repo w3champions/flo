@@ -235,6 +235,7 @@ impl State {
     };
 
     tracing::debug!("game ended: {:?}", game_res);
+    stream.flush().await.ok();
     Ok(())
   }
 
@@ -317,6 +318,7 @@ impl State {
           SlotClientStatus::Loaded => {
             if player_id != my_player_id {
               loaded_sent.push(player_id);
+              tracing::debug!("player loaded (pre-game event): {}", player_id);
               packets.push(get_player_loaded_packet(info, player_id)?);
             } else {
               tracing::warn!("received Loaded status for local player");
@@ -366,26 +368,7 @@ impl State {
         // player events
         next = event_rx.recv() => {
           match next {
-            Some(event) => {
-              match event {
-                PreGameEvent::PlayerStatusChange { player_id, status } => {
-                  match status {
-                    SlotClientStatus::Pending | SlotClientStatus::Connected | SlotClientStatus::Joined => {
-                      tracing::warn!(player_id, "unexpected player status update during load screen: {:?}", status);
-                    },
-                    SlotClientStatus::Loading => {},
-                    SlotClientStatus::Loaded => {
-                      if player_id != my_player_id && !loaded_sent.contains(&player_id) {
-                        stream.send(get_player_loaded_packet(info, player_id)?).await?;
-                        loaded_sent.push(player_id);
-                      }
-                    },
-                    SlotClientStatus::Disconnected => {},
-                    SlotClientStatus::Left => {},
-                  }
-                }
-              }
-            },
+            Some(event) => handle_player_event(info, my_player_id, &mut loaded_sent, stream, event).await?,
             None => {
               break;
             },
@@ -403,6 +386,12 @@ impl State {
               match status {
                 NodeGameStatus::Loading => {},
                 NodeGameStatus::Running => {
+                  event_rx.close();
+
+                  while let Some(event) = event_rx.recv().await {
+                    handle_player_event(info, my_player_id, &mut loaded_sent, stream, event).await?;
+                  }
+
                   return Ok(())
                 },
                 other => {
@@ -418,6 +407,39 @@ impl State {
 
     Ok(())
   }
+}
+
+async fn handle_player_event(
+  info: &LanGameInfo,
+  my_player_id: i32,
+  loaded_sent: &mut Vec<i32>,
+  stream: &mut W3GSStream,
+  event: PreGameEvent,
+) -> Result<()> {
+  match event {
+    PreGameEvent::PlayerStatusChange { player_id, status } => match status {
+      SlotClientStatus::Pending | SlotClientStatus::Connected | SlotClientStatus::Joined => {
+        tracing::warn!(
+          player_id,
+          "unexpected player status update during load screen: {:?}",
+          status
+        );
+      }
+      SlotClientStatus::Loading => {}
+      SlotClientStatus::Loaded => {
+        if player_id != my_player_id && !loaded_sent.contains(&player_id) {
+          tracing::debug!("player loaded: {}", player_id);
+          stream
+            .send(get_player_loaded_packet(info, player_id)?)
+            .await?;
+          loaded_sent.push(player_id);
+        }
+      }
+      SlotClientStatus::Disconnected => {}
+      SlotClientStatus::Left => {}
+    },
+  }
+  Ok(())
 }
 
 fn get_player_loaded_packet(info: &LanGameInfo, player_id: i32) -> Result<Packet> {
