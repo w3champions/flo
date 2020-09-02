@@ -133,6 +133,7 @@ impl State {
           reconnect_backoff: ExponentialBackoff {
             initial_interval: Duration::from_secs(5),
             current_interval: Duration::from_secs(5),
+            max_interval: Duration::from_secs(60),
             multiplier: 1.5,
             ..Default::default()
           },

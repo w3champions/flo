@@ -54,7 +54,10 @@ impl GameSession {
     let scope = SpawnScope::new();
     let game_id = game.id;
     let (tx, mut rx) = GameEvent::channel(3);
-    let slots = Vec::<GameSlot>::unpack(game.slots)?;
+    let slots: Vec<_> = Vec::<GameSlot>::unpack(game.slots)?
+      .into_iter()
+      .filter_map(PlayerSlot::from_game_slot)
+      .collect();
 
     let mut scope_handle = scope.handle();
     let state = Arc::new(Mutex::new(State {
@@ -350,7 +353,7 @@ struct State {
   g_event_sender: GlobalEventSender,
   host: GameHost,
   status: NodeGameStatus,
-  player_slots: BTreeMap<i32, GameSlot>,
+  player_slots: BTreeMap<i32, PlayerSlot>,
   ctrl: ControllerServerHandle,
   tx: GameEventSender,
 }
@@ -454,6 +457,30 @@ impl State {
 }
 
 #[derive(Debug)]
+pub struct PlayerSlot {
+  pub id: u32,
+  pub settings: GameSlotSettings,
+  pub player: GamePlayer,
+  pub client_status: SlotClientStatus,
+  pub disconnected_at_ms: Option<u32>,
+  pub sender: Option<PeerHandle>,
+}
+
+impl PlayerSlot {
+  fn from_game_slot(slot: GameSlot) -> Option<PlayerSlot> {
+    let player = slot.player?;
+    Some(PlayerSlot {
+      id: slot.id,
+      settings: slot.settings,
+      player,
+      client_status: slot.client_status,
+      disconnected_at_ms: None,
+      sender: None,
+    })
+  }
+}
+
+#[derive(Debug)]
 struct SharedState {
   game_id: i32,
   created_at: SystemTime,
@@ -503,10 +530,8 @@ impl State {
 pub struct GameSlot {
   id: u32,
   settings: GameSlotSettings,
-  player: GamePlayer,
+  player: Option<GamePlayer>,
   client_status: SlotClientStatus,
-  disconnected_at_ms: Option<u32>,
-  sender: Option<PeerHandle>,
 }
 
 impl S2ProtoUnpack<proto::GameSlot> for GameSlot {
@@ -514,10 +539,8 @@ impl S2ProtoUnpack<proto::GameSlot> for GameSlot {
     Ok(GameSlot {
       id: value.id,
       settings: GameSlotSettings::unpack(value.settings)?,
-      player: GamePlayer::unpack(value.player)?,
+      player: Option::<GamePlayer>::unpack(value.player)?,
       client_status: SlotClientStatus::unpack(value.client_status)?,
-      disconnected_at_ms: None,
-      sender: None,
     })
   }
 }
