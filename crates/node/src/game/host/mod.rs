@@ -15,7 +15,7 @@ use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
 use crate::game::peer::{PeerMessage, PeerStream};
-use crate::game::{GameEventSender, GameSlot, NodeGameStatus, NodeGameStatusSnapshot};
+use crate::game::{GameEventSender, NodeGameStatus, NodeGameStatusSnapshot, PlayerSlot};
 
 #[derive(Debug)]
 pub struct GameHost {
@@ -27,7 +27,7 @@ pub struct GameHost {
 }
 
 impl GameHost {
-  pub fn new(game_id: i32, slots: &[GameSlot], event_sender: GameEventSender) -> Self {
+  pub fn new(game_id: i32, slots: &[PlayerSlot], event_sender: GameEventSender) -> Self {
     let scope = SpawnScope::new();
     let (command_sender, command_receiver) = channel(5);
     let (dispatch_tx, dispatch_rx) = channel(crate::constants::GAME_DISPATCH_BUF_SIZE);
