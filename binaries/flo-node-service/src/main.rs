@@ -7,6 +7,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv()?;
     flo_log_subscriber::init_env_override("flo_node_service=debug,flo_node=debug");
   }
+  #[cfg(not(debug_assertions))]
+  {
+    flo_log_subscriber::init();
+  }
 
   serve().await?;
 
