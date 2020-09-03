@@ -128,12 +128,14 @@ impl Slots {
   pub fn acquire_slot_mut(&mut self) -> Option<&mut Slot> {
     let mut open_slot_idx = None;
     let mut color_set = [false; 24];
+    let mut occupied_player_slots = 0;
     for (i, slot) in self.inner.iter().enumerate() {
       match slot.settings.status {
         SlotStatus::Occupied => {
           if slot.settings.color < 24 {
             color_set[slot.settings.color as usize] = true;
           }
+          occupied_player_slots = occupied_player_slots + 1;
         }
         SlotStatus::Open => {
           if let None = open_slot_idx {
@@ -153,8 +155,16 @@ impl Slots {
 
     if let Some(idx) = open_slot_idx {
       let slot = &mut self.inner[idx];
-      slot.settings.team = 0;
-      slot.settings.color = color as i32;
+      slot.settings.team = if occupied_player_slots >= self.map_players {
+        24
+      } else {
+        occupied_player_slots as i32
+      };
+      slot.settings.color = if occupied_player_slots >= self.map_players {
+        0
+      } else {
+        color as i32
+      };
       slot.settings.status = SlotStatus::Occupied;
       slot.settings.computer = Computer::Easy;
       Some(slot)
@@ -244,6 +254,7 @@ impl Slots {
         // players -> referees: reset settings
         slot.settings = SlotSettings {
           team: new_team,
+          status: slot.settings.status,
           ..Default::default()
         };
       }
