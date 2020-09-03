@@ -16,12 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   #[cfg(unix)]
   {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut stream = signal(SignalKind::hangup())?;
     tokio::spawn({
       let state = state.clone();
       async move {
-        use tokio::signal::unix::{signal, SignalKind};
-        let mut stream = signal(SignalKind::hangup())?;
-
         loop {
           stream.recv().await;
           tracing::info!("reloading");
