@@ -10,3 +10,4 @@ flo-node = { path = "../../crates/node" }
 
 dotenv = "0.15.0"
 tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros", "blocking"] }
+tracing = "0.1"

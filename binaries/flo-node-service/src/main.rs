@@ -12,6 +12,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     flo_log_subscriber::init();
   }
 
+  tracing::info!("starting.");
+
   serve().await?;
 
   Ok(())
