@@ -75,20 +75,6 @@ impl GlobalState {
       return Err(Error::NoPlayer);
     }
 
-    {
-      for id in &player_ids {
-        if self.players.is_registered(*id) {
-          return Ok(
-            PacketControllerCreateGameReject {
-              game_id,
-              reason: ControllerCreateGameRejectReason::PlayerBusy.into(),
-            }
-            .encode_as_frame()?,
-          );
-        }
-      }
-    }
-
     let pending: Vec<(PlayerToken, RegisteredPlayer)> = {
       let players: Vec<_> = game
         .slots
@@ -257,10 +243,6 @@ impl PlayerRegistry {
     PlayerRegistry {
       state: RwLock::new(PlayerTokenRegistryState::default()),
     }
-  }
-
-  fn is_registered(&self, id: i32) -> bool {
-    self.state.read().player_token.contains_key(&id)
   }
 
   // for controller

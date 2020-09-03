@@ -16,7 +16,7 @@ use crate::platform::PlatformState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-  flo_log_subscriber::init_env("flo=debug,flo_lan=debug");
+  flo_log_subscriber::init_env_override("flo=debug,flo_lan=debug");
 
   tracing::info!("version: {}", version::FLO_VERSION);
 
