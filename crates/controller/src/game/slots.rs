@@ -2,7 +2,9 @@ use diesel::helper_types::Nullable;
 use diesel::prelude::*;
 use std::collections::HashMap;
 
-use crate::game::{Slot, SlotClientStatus, SlotSettings, SlotSettingsColumns, SlotStatus};
+use crate::game::{
+  Computer, Slot, SlotClientStatus, SlotSettings, SlotSettingsColumns, SlotStatus,
+};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::game_used_slot;
 
@@ -154,6 +156,7 @@ impl Slots {
       slot.settings.team = 0;
       slot.settings.color = color as i32;
       slot.settings.status = SlotStatus::Occupied;
+      slot.settings.computer = Computer::Easy;
       Some(slot)
     } else {
       None
@@ -199,6 +202,31 @@ impl Slots {
 
     let slot = &mut self.inner[slot_index as usize];
 
+    if slot.player.is_none() {
+      if slot.settings.status != settings.status {
+        slot.settings.status = settings.status;
+        match settings.status {
+          SlotStatus::Open => {
+            slot.settings.computer = Computer::Easy;
+          }
+          SlotStatus::Closed => {
+            slot.settings.computer = Computer::Easy;
+          }
+          SlotStatus::Occupied => {
+            let mut color = 0;
+            for i in 0..24 {
+              if !color_set[i] {
+                color = i as i32;
+                break;
+              }
+            }
+            slot.settings.color = color;
+            slot.settings.computer = settings.computer;
+          }
+        }
+      }
+    }
+
     let new_color = settings.color;
     if new_color < 24 && slot.settings.color != new_color {
       if !color_set[new_color as usize] {
@@ -208,10 +236,16 @@ impl Slots {
 
     let new_team = settings.team;
     if new_team != slot.settings.team {
-      // referees -> players: reset color
       if slot.settings.team == 24 && new_team != 24 {
+        // referees -> players: reset color
         let next_color = color_set.iter().position(|v| !*v).map(|v| v as i32);
         slot.settings.color = next_color.unwrap_or_default();
+      } else if slot.settings.team != 24 && new_team == 24 {
+        // players -> referees: reset settings
+        slot.settings = SlotSettings {
+          team: new_team,
+          ..Default::default()
+        };
       }
     }
 

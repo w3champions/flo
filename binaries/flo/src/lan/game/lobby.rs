@@ -271,8 +271,8 @@ impl JoinPacketRecvState {
 
   fn is_ready(&self) -> bool {
     self.num_profile == self.total_players
-      && self.num_skins == self.total_players - 1
-      && self.num_unk5 == self.total_players - 1
+      && self.num_skins >= self.total_players - 1
+      && self.num_unk5 >= self.total_players - 1
   }
 
   fn should_start(&self) -> bool {

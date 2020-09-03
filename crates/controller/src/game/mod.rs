@@ -399,17 +399,7 @@ pub async fn update_game_slot_settings(
     })
     .await?;
 
-  let index = slots
-    .iter()
-    .position(|s| {
-      s.player
-        .as_ref()
-        .map(|p| p.id == player_id)
-        .unwrap_or(false)
-    })
-    .ok_or_else(|| Error::PlayerSlotNotFound)?;
-
-  let slot_index = index as i32;
+  let index = slot_index as usize;
   let settings: proto::flo_connect::SlotSettings = slots[index].settings.clone().pack()?;
 
   let players = game_guard.players().to_vec();

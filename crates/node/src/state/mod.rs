@@ -64,6 +64,7 @@ impl GlobalState {
     packet: PacketControllerCreateGame,
   ) -> Result<Frame> {
     let game = packet.game.extract()?;
+
     let game_id = game.id;
     let player_ids: Vec<i32> = game
       .slots

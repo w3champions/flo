@@ -319,13 +319,22 @@ impl SlotOwnerInfo {
 pub fn get_slot_owner_info(conn: &DbConn, game_id: i32, slot_index: i32) -> Result<SlotOwnerInfo> {
   use game::dsl as g;
   use game_used_slot::dsl as gus;
-  game::table
+  let rows: Vec<(Option<i32>, Option<i32>, Option<i32>)> = game::table
     .left_join(game_used_slot::table)
-    .select((g::created_by, gus::player_id.nullable()))
-    .filter(g::id.eq(game_id).and(gus::slot_index.eq(slot_index)))
-    .first(conn)
-    .optional()?
-    .ok_or_else(|| Error::GameNotFound)
+    .select((
+      g::created_by,
+      gus::slot_index.nullable(),
+      gus::player_id.nullable(),
+    ))
+    .filter(g::id.eq(game_id))
+    .load(conn)?;
+  Ok(SlotOwnerInfo {
+    host_player_id: rows.first().ok_or_else(|| Error::GameNotFound)?.0.clone(),
+    slot_player_id: rows
+      .iter()
+      .find(|r| r.1 == Some(slot_index))
+      .and_then(|r| r.2),
+  })
 }
 
 pub fn update_slot_settings(

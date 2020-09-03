@@ -20,7 +20,7 @@ use flo_w3gs::protocol::packet::*;
 
 use crate::error::*;
 use crate::game::{
-  GameEvent, GameEventSender, GameSlot, SlotClientStatus, SlotClientStatusUpdateSource,
+  GameEvent, GameEventSender, PlayerSlot, SlotClientStatus, SlotClientStatusUpdateSource,
 };
 
 use super::clock::ActionTickStream;
@@ -54,7 +54,7 @@ pub struct Dispatcher {
 impl Dispatcher {
   pub fn new(
     game_id: i32,
-    slots: &[GameSlot],
+    slots: &[PlayerSlot],
     rx: Receiver<Message>,
     out_tx: GameEventSender,
   ) -> Self {
@@ -173,7 +173,7 @@ struct State {
 }
 
 impl State {
-  fn new(slots: &[GameSlot]) -> Self {
+  fn new(slots: &[PlayerSlot]) -> Self {
     State {
       max_lag_time: 0,
       player_map: Arc::new(Mutex::new(PlayerMap::new(slots))),
@@ -354,7 +354,7 @@ struct PlayerMap {
 }
 
 impl PlayerMap {
-  fn new(slots: &[GameSlot]) -> Self {
+  fn new(slots: &[PlayerSlot]) -> Self {
     Self {
       map: slots
         .into_iter()
@@ -403,7 +403,7 @@ impl PlayerMap {
             self.map.remove(&player_id);
           }
           PlayerSendError::Lagged => {
-            tracing::info!(player_id, "lagged");
+            tracing::info!(player_id, "removing player: lagged");
           }
           _ => {}
         }
@@ -423,7 +423,7 @@ struct PlayerDispatchInfo {
 }
 
 impl PlayerDispatchInfo {
-  fn new(_slot: &GameSlot) -> Self {
+  fn new(_slot: &PlayerSlot) -> Self {
     Self {
       lagging: false,
       overflow_frames: vec![],

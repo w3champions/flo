@@ -3,7 +3,7 @@ use tokio::sync::watch::Receiver as WatchReceiver;
 
 use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
-use flo_w3gs::protocol::action::{IncomingAction, OutgoingKeepAlive};
+use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::leave::LeaveAck;
 
@@ -125,6 +125,7 @@ impl<'a> GameHandler<'a> {
       }
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
       IncomingAction::PACKET_TYPE_ID => {}
+      OutgoingAction::PACKET_TYPE_ID => {}
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());
       }
