@@ -215,15 +215,18 @@ impl State {
   fn reconnect(&self, node_id: i32) -> Result<()> {
     if let Some(slot) = self.map.get(&node_id) {
       let mut guard = slot.write();
-      let delay = guard.reconnect_backoff.next_backoff();
-      tracing::debug!(node_id, "reconnect backoff: {:?}", delay);
+      let delay = guard
+        .reconnect_backoff
+        .next_backoff()
+        .unwrap_or(guard.reconnect_backoff.max_interval);
+      tracing::error!(node_id, "reconnect: backoff: {:?}", delay);
       guard.conn = Arc::new(NodeConn::new(
         node_id,
         &guard.config.addr,
         &guard.config.secret,
         self.root_event_sender.clone().into(),
         self.ctrl_event_sender.clone(),
-        delay,
+        Some(delay),
       )?);
       Ok(())
     } else {
