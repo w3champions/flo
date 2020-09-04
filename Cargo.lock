@@ -940,6 +940,7 @@ dependencies = [
  "flo-log-subscriber",
  "flo-node",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

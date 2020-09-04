@@ -158,24 +158,33 @@ impl<'a> LobbyHandler<'a> {
         let mut player_profile_packets = Vec::with_capacity(num_players);
 
         for info in &slot_info.player_infos {
-          tracing::debug!(
-            "-> player: id = {}, name = {}",
-            info.slot_player_id,
-            info.name
-          );
-
           if info.slot_player_id != slot_info.slot_player_id {
+            tracing::debug!(
+              "-> PlayerInfo: player: id = {}, name = {}",
+              info.slot_player_id,
+              info.name
+            );
             player_info_packets.push(Packet::simple(PlayerInfo::new(
               info.slot_player_id,
               &info.name,
             ))?);
 
+            tracing::debug!(
+              "-> PlayerSkinsMessage: player: id = {}, name = {}",
+              info.slot_player_id,
+              info.name
+            );
             player_skin_packets.push(Packet::simple(ProtoBufPayload::new(PlayerSkinsMessage {
               player_id: info.slot_player_id as u32,
               ..Default::default()
             }))?);
           }
 
+          tracing::debug!(
+            "-> PlayerProfileMessage: player: id = {}, name = {}",
+            info.slot_player_id,
+            info.name
+          );
           player_profile_packets.push(Packet::simple(ProtoBufPayload::new(
             PlayerProfileMessage::new(info.slot_player_id, &info.name),
           ))?);
@@ -225,18 +234,37 @@ impl<'a> LobbyHandler<'a> {
           }
           ProtoBufMessageTypeId::PlayerProfile => {
             state.num_profile = state.num_profile + 1;
-            tracing::debug!("<-> PlayerProfile");
+            #[cfg(debug_assertions)]
+            {
+              tracing::debug!(
+                "<-> PlayerProfile: {:?}",
+                payload.decode_message::<PlayerProfileMessage>()?
+              );
+            }
             self.stream.send(pkt).await?;
           }
           ProtoBufMessageTypeId::PlayerSkins => {
             state.num_skins = state.num_skins + 1;
             self.stream.send(pkt).await?;
-            tracing::debug!("<-> PlayerSkins");
+            #[cfg(debug_assertions)]
+            {
+              tracing::debug!(
+                "<-> PlayerSkins: {:?}",
+                payload.decode_message::<PlayerSkinsMessage>()?
+              );
+            }
           }
           ProtoBufMessageTypeId::PlayerUnknown5 => {
             state.num_unk5 = state.num_unk5 + 1;
             self.stream.send(pkt).await?;
-            tracing::debug!("<-> PlayerUnknown5");
+            #[cfg(debug_assertions)]
+            {
+              use flo_w3gs::protocol::player::PlayerUnknown5Message;
+              tracing::debug!(
+                "<-> PlayerUnknown5: {:?}",
+                payload.decode_message::<PlayerUnknown5Message>()?
+              );
+            }
           }
           ProtoBufMessageTypeId::UnknownValue(id) => {
             tracing::warn!("unexpected protobuf packet type id: {}", id)
@@ -270,9 +298,7 @@ impl JoinPacketRecvState {
   }
 
   fn is_ready(&self) -> bool {
-    self.num_profile == self.total_players
-      && self.num_skins == self.total_players - 1
-      && self.num_unk5 == self.total_players - 1
+    self.num_profile == self.total_players && self.num_skins == 1 && self.num_unk5 == 1
   }
 
   fn should_start(&self) -> bool {
