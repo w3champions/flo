@@ -8,6 +8,7 @@ edition = "2018"
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-controller = { path = "../../crates/controller" }
 
+tracing = "0.1"
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 dotenv = "0.15.0"
-tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros", "blocking"] }
+tokio = { version = "0.2.21", features = ["time", "sync", "stream", "macros", "blocking", "signal"] }

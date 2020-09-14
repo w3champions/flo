@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "flo"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "async-tungstenite",
  "base64",
@@ -798,6 +798,7 @@ dependencies = [
  "flo-controller",
  "flo-log-subscriber",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -939,6 +940,7 @@ dependencies = [
  "flo-log-subscriber",
  "flo-node",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

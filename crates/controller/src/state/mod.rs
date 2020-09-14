@@ -67,6 +67,12 @@ impl ControllerStateRef {
       nodes,
     })
   }
+
+  pub async fn reload(&self) -> Result<()> {
+    self.config.reload().await?;
+    self.nodes.reload().await?;
+    Ok(())
+  }
 }
 
 #[derive(Debug)]

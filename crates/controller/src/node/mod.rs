@@ -21,10 +21,10 @@ use backoff::backoff::Backoff;
 use conn::{NodeConn, NodeConnEvent, NodeConnEventData};
 use tracing_futures::Instrument;
 
-#[derive(Debug)]
 pub struct NodeRegistry {
-  spawn_scope: SpawnScope,
-  state: Arc<State>,
+  _scope: SpawnScope,
+  db: ExecutorRef,
+  state: Arc<RwLock<State>>,
 }
 
 pub type NodeRegistryRef = Arc<NodeRegistry>;
@@ -39,7 +39,11 @@ impl NodeRegistry {
       .exec(|conn| crate::node::db::get_node_conn_configs(conn))
       .await?;
 
-    let state = Arc::new(State::new(ctrl_event_sender, event_sender, configs)?);
+    let state = Arc::new(RwLock::new(State::new(
+      ctrl_event_sender,
+      event_sender,
+      configs,
+    )?));
 
     tokio::spawn(
       {
@@ -57,19 +61,19 @@ impl NodeRegistry {
                   match event.data {
                     NodeConnEventData::WorkerError(err) => {
                       tracing::error!(node_id, "worker: {}", err);
-                      if let Err(err) = state.reconnect(node_id) {
+                      if let Err(err) = state.read().reconnect(node_id) {
                         tracing::error!(node_id, "reconnect: {}", err);
                       }
                     }
                     NodeConnEventData::Disconnected => {
                       tracing::error!(node_id, "disconnected");
-                      if let Err(err) = state.reconnect(node_id) {
+                      if let Err(err) = state.read().reconnect(node_id) {
                         tracing::error!(node_id, "reconnect: {}", err);
                       }
                     }
                     NodeConnEventData::Connected => {
                       tracing::debug!(node_id, "connected");
-                      if let Err(err) = state.reset_backoff(node_id) {
+                      if let Err(err) = state.read().reset_backoff(node_id) {
                         tracing::error!(node_id, "reset backoff: {}", err);
                       }
                     }
@@ -88,13 +92,24 @@ impl NodeRegistry {
     );
 
     Ok(NodeRegistry {
-      spawn_scope: scope,
+      db,
+      _scope: scope,
       state,
     })
   }
 
+  pub async fn reload(&self) -> Result<()> {
+    let configs = self
+      .db
+      .exec(|conn| crate::node::db::get_node_conn_configs(conn))
+      .await?;
+    let mut guard = self.state.write();
+    guard.update_config(configs)?;
+    Ok(())
+  }
+
   pub fn get_conn(&self, node_id: i32) -> Result<Arc<NodeConn>> {
-    self.state.get_conn(node_id)
+    self.state.read().get_conn(node_id)
   }
 
   pub fn into_ref(self) -> NodeRegistryRef {
@@ -148,6 +163,47 @@ impl State {
     })
   }
 
+  fn update_config(&mut self, configs: Vec<NodeConnConfig>) -> Result<()> {
+    let new_ids: Vec<i32> = configs.iter().map(|c| c.id).collect();
+    {
+      for id in self.map.keys().cloned().collect::<Vec<i32>>() {
+        if !new_ids.contains(&id) {
+          if let Some(removed) = self.map.remove(&id) {
+            let addr = removed.into_inner().config.addr;
+            tracing::info!(id, "node removed: {}", addr);
+          }
+        }
+      }
+    }
+    for config in configs {
+      if !self.map.contains_key(&config.id) {
+        tracing::info!(id = config.id, "node added: {}", config.addr);
+        let conn = Arc::new(NodeConn::new(
+          config.id,
+          &config.addr,
+          &config.secret,
+          self.root_event_sender.clone().into(),
+          self.ctrl_event_sender.clone(),
+          None,
+        )?);
+        self.map.insert(
+          config.id,
+          RwLock::new(NodeSlot {
+            config,
+            conn,
+            reconnect_backoff: ExponentialBackoff {
+              initial_interval: Duration::from_secs(5),
+              current_interval: Duration::from_secs(5),
+              multiplier: 1.5,
+              ..Default::default()
+            },
+          }),
+        );
+      }
+    }
+    Ok(())
+  }
+
   fn get_conn(&self, node_id: i32) -> Result<Arc<NodeConn>> {
     self
       .map
@@ -159,15 +215,18 @@ impl State {
   fn reconnect(&self, node_id: i32) -> Result<()> {
     if let Some(slot) = self.map.get(&node_id) {
       let mut guard = slot.write();
-      let delay = guard.reconnect_backoff.next_backoff();
-      tracing::debug!(node_id, "reconnect backoff: {:?}", delay);
+      let delay = guard
+        .reconnect_backoff
+        .next_backoff()
+        .unwrap_or(guard.reconnect_backoff.max_interval);
+      tracing::error!(node_id, "reconnect: backoff: {:?}", delay);
       guard.conn = Arc::new(NodeConn::new(
         node_id,
         &guard.config.addr,
         &guard.config.secret,
         self.root_event_sender.clone().into(),
         self.ctrl_event_sender.clone(),
-        delay,
+        Some(delay),
       )?);
       Ok(())
     } else {
