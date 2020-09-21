@@ -402,7 +402,6 @@ pub struct EndTimer {
 
 #[test]
 fn test_record() {
-  
   use bytes::buf::ext::Chain;
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();

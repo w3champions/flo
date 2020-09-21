@@ -33,7 +33,7 @@ pub enum PlayerStatus {
   InGame = 1,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Deserialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::PlayerInfo")]
 pub struct PlayerInfo {
   pub id: i32,
@@ -41,11 +41,12 @@ pub struct PlayerInfo {
   pub source: PlayerSource,
 }
 
-#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
 #[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::PlayerSource")]
 pub enum PlayerSource {
   Test = 0,
   BNet = 1,
+  Api = 2,
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]

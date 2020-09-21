@@ -7,5 +7,9 @@ pub fn init() {
 
 pub fn init_env_override(env: &str) {
   std::env::set_var("RUST_LOG", env);
+  #[cfg(debug_assertions)]
   tracing_subscriber::fmt::init();
+
+  #[cfg(not(debug_assertions))]
+  tracing_subscriber::fmt::fmt().with_ansi(false).init();
 }

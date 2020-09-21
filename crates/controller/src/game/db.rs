@@ -7,7 +7,8 @@ use std::collections::HashMap;
 
 use crate::db::DbConn;
 use crate::error::*;
-use crate::game::slots::UsedSlot;
+use crate::game::slots::{UsedSlot, UsedSlotInfo};
+use crate::game::state::GameStatusUpdate;
 use crate::game::{
   Computer, Game, GameEntry, GameStatus, Race, Slot, SlotClientStatus, SlotSettings, SlotStatus,
   Slots,
@@ -16,7 +17,7 @@ use crate::map::Map;
 use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::{game, game_used_slot, node, player};
-use crate::state::event::GameStatusUpdate;
+use diesel::pg::expression::dsl::{all, any};
 
 pub fn get(conn: &DbConn, id: i32) -> Result<GameRowWithRelated> {
   let row = game::table
@@ -205,35 +206,36 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
   Ok(row.into_game(meta, slots.into_inner())?)
 }
 
-#[derive(Debug, Deserialize, S2ProtoUnpack)]
-#[s2_grpc(message_type = "flo_grpc::controller::JoinGameRequest")]
-pub struct JoinGameParams {
-  pub game_id: i32,
-  pub player_id: i32,
-}
-
 /// Adds a player into a game
-pub fn join(conn: &DbConn, params: JoinGameParams) -> Result<Vec<Slot>> {
-  let mut slots = get_slots(conn, params.game_id)?.slots;
+pub fn add_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<Vec<Slot>> {
+  let status: GameStatus = game::table
+    .find(game_id)
+    .select(game::status)
+    .first(conn)
+    .optional()?
+    .ok_or_else(|| Error::GameNotFound)?;
+
+  if status != GameStatus::Created {
+    return Err(Error::GameStarted);
+  }
+
+  let mut slots = get_slots(conn, game_id)?.slots;
+
+  if slots.find_player_slot(player_id).is_some() {
+    return Err(Error::PlayerAlreadyInGame);
+  }
 
   if slots.is_full() {
     return Err(Error::GameFull);
   }
 
-  let player = crate::player::db::get_ref(conn, params.player_id)?;
+  let player = crate::player::db::get_ref(conn, player_id)?;
 
   slots.join(&player);
 
-  upsert_used_slots(conn, params.game_id, slots.as_used())?;
+  upsert_used_slots(conn, game_id, slots.as_used())?;
 
   Ok(slots.into_inner())
-}
-
-#[derive(Debug, Deserialize, S2ProtoUnpack)]
-#[s2_grpc(message_type = "flo_grpc::controller::LeaveGameRequest")]
-pub struct LeaveGameParams {
-  pub game_id: i32,
-  pub player_id: i32,
 }
 
 #[derive(Debug)]
@@ -243,17 +245,17 @@ pub struct LeaveGame {
   pub slots: Vec<Slot>,
 }
 
-pub fn leave_lobby(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> {
+pub fn remove_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<LeaveGame> {
   let GetSlots {
     mut slots,
     host_player_id,
-  } = get_slots(conn, params.game_id)?;
+  } = get_slots(conn, game_id)?;
 
   // host left, kick all players
-  if Some(params.player_id) == host_player_id {
+  if player_id == host_player_id {
     let removed = slots.release_all_player_slots();
-    upsert_used_slots(conn, params.game_id, slots.as_used())?;
-    end_game(conn, params.game_id, GameStatus::Ended)?;
+    upsert_used_slots(conn, game_id, slots.as_used())?;
+    end_game(conn, game_id, GameStatus::Ended)?;
     Ok(LeaveGame {
       game_ended: true,
       removed_players: removed,
@@ -262,12 +264,12 @@ pub fn leave_lobby(conn: &DbConn, params: LeaveGameParams) -> Result<LeaveGame> 
   } else {
     let mut ended = false;
     let mut removed_players = Vec::with_capacity(1);
-    if slots.release_player_slot(params.player_id) {
-      removed_players.push(params.player_id);
-      upsert_used_slots(conn, params.game_id, slots.as_used())?;
+    if slots.release_player_slot(player_id) {
+      removed_players.push(player_id);
+      upsert_used_slots(conn, game_id, slots.as_used())?;
       if slots.is_empty() {
         ended = true;
-        end_game(conn, params.game_id, GameStatus::Ended)?;
+        end_game(conn, game_id, GameStatus::Ended)?;
       }
     }
     Ok(LeaveGame {
@@ -289,7 +291,6 @@ pub fn leave_node(conn: &DbConn, game_id: i32, player_id: i32) -> Result<()> {
 }
 
 pub fn get_node_active_player_ids(conn: &DbConn, game_id: i32) -> Result<Vec<i32>> {
-  use diesel::pg::expression::dsl::all;
   use game_used_slot::dsl;
   game_used_slot::table
     .filter(
@@ -306,20 +307,20 @@ pub fn get_node_active_player_ids(conn: &DbConn, game_id: i32) -> Result<Vec<i32
 
 #[derive(Debug, Queryable)]
 pub struct SlotOwnerInfo {
-  pub host_player_id: Option<i32>,
+  pub host_player_id: i32,
   pub slot_player_id: Option<i32>,
 }
 
 impl SlotOwnerInfo {
   pub fn is_slot_owner(&self, player_id: i32) -> bool {
-    self.host_player_id == Some(player_id) || self.slot_player_id == Some(player_id)
+    self.host_player_id == player_id || self.slot_player_id == Some(player_id)
   }
 }
 
 pub fn get_slot_owner_info(conn: &DbConn, game_id: i32, slot_index: i32) -> Result<SlotOwnerInfo> {
   use game::dsl as g;
   use game_used_slot::dsl as gus;
-  let rows: Vec<(Option<i32>, Option<i32>, Option<i32>)> = game::table
+  let rows: Vec<(i32, Option<i32>, Option<i32>)> = game::table
     .left_join(game_used_slot::table)
     .select((
       g::created_by,
@@ -329,7 +330,7 @@ pub fn get_slot_owner_info(conn: &DbConn, game_id: i32, slot_index: i32) -> Resu
     .filter(g::id.eq(game_id))
     .load(conn)?;
   Ok(SlotOwnerInfo {
-    host_player_id: rows.first().ok_or_else(|| Error::GameNotFound)?.0.clone(),
+    host_player_id: rows.first().ok_or_else(|| Error::GameNotFound)?.0,
     slot_player_id: rows
       .iter()
       .find(|r| r.1 == Some(slot_index))
@@ -337,17 +338,30 @@ pub fn get_slot_owner_info(conn: &DbConn, game_id: i32, slot_index: i32) -> Resu
   })
 }
 
+#[derive(Debug)]
+pub struct UpdateSlotSettings {
+  pub slots: Vec<Slot>,
+  pub updated_indexes: Vec<i32>,
+}
+
 pub fn update_slot_settings(
   conn: &DbConn,
   game_id: i32,
   slot_index: i32,
   settings: SlotSettings,
-) -> Result<Vec<Slot>> {
+) -> Result<UpdateSlotSettings> {
   let mut slots = get_slots(conn, game_id)?.slots;
-  if let Some(slot) = slots.update_slot_at(slot_index, &settings) {
-    sync_slot_at(conn, game_id, slot_index, &slot)?
+  let mut updated_indexes = vec![];
+  if let Some(slots) = slots.update_slot_at(slot_index, &settings) {
+    for (index, slot) in slots {
+      sync_slot_at(conn, game_id, index as i32, &slot)?;
+      updated_indexes.push(index);
+    }
   }
-  Ok(slots.into_inner())
+  Ok(UpdateSlotSettings {
+    slots: slots.into_inner(),
+    updated_indexes,
+  })
 }
 
 fn sync_slot_at(conn: &DbConn, game_id: i32, slot_index: i32, slot: &Slot) -> Result<()> {
@@ -394,32 +408,29 @@ pub fn update_slot_client_status(
   Ok(())
 }
 
-pub fn bulk_update_status(conn: &DbConn, items: &[GameStatusUpdate]) -> Result<()> {
+pub fn update_status(conn: &DbConn, update: &GameStatusUpdate) -> Result<()> {
+  let game_id = update.game_id;
+  let game_status = GameStatus::from(update.status);
   conn.transaction(|| {
-    for item in items {
-      let game_id = item.game_id;
-      let game_status = GameStatus::from(item.status);
-      diesel::update(game::table.find(item.game_id))
-        .set(game::dsl::status.eq(game_status))
-        .execute(conn)?;
-      for (player_id, status) in &item.updated_player_game_client_status_map {
-        diesel::update(
-          game_used_slot::table.filter(
-            game_used_slot::dsl::game_id
-              .eq(game_id)
-              .and(game_used_slot::player_id.eq(*player_id)),
-          ),
-        )
-        .set(game_used_slot::client_status.eq(*status))
-        .execute(conn)?;
-      }
+    diesel::update(game::table.find(update.game_id))
+      .set(game::dsl::status.eq(game_status))
+      .execute(conn)?;
+    for (player_id, status) in &update.updated_player_game_client_status_map {
+      diesel::update(
+        game_used_slot::table.filter(
+          game_used_slot::dsl::game_id
+            .eq(game_id)
+            .and(game_used_slot::player_id.eq(*player_id)),
+        ),
+      )
+      .set(game_used_slot::client_status.eq(*status))
+      .execute(conn)?;
     }
     Ok(())
   })
 }
 
 fn upsert_used_slots(conn: &DbConn, game_id: i32, used_slots: Vec<UsedSlot>) -> Result<()> {
-  use diesel::pg::expression::dsl::all;
   use diesel::pg::upsert::excluded;
   use game_used_slot::dsl;
   let indices: Vec<i32> = used_slots.iter().map(|slot| slot.slot_index).collect();
@@ -456,14 +467,14 @@ fn upsert_used_slots(conn: &DbConn, game_id: i32, used_slots: Vec<UsedSlot>) -> 
 
 #[derive(Debug)]
 struct GetSlots {
-  host_player_id: Option<i32>,
+  host_player_id: i32,
   slots: Slots,
 }
 
 fn get_slots(conn: &DbConn, game_id: i32) -> Result<GetSlots> {
   use game_used_slot::dsl;
 
-  let (host_player_id, max_players): (Option<i32>, i32) = {
+  let (host_player_id, max_players): (i32, i32) = {
     use game::dsl;
     game::table
       .find(game_id)
@@ -494,6 +505,24 @@ fn get_used_slots(conn: &DbConn, game_id: i32) -> Result<Vec<UsedSlot>> {
     .filter(dsl::game_id.eq(game_id))
     .load(conn)
     .map_err(Into::into)
+}
+
+#[derive(Debug, Queryable)]
+pub struct PlayerActiveSlot {
+  pub game_id: i32,
+  pub slots: UsedSlotInfo,
+}
+
+pub fn get_player_active_slots(conn: &DbConn, player_id: i32) -> Result<Vec<PlayerActiveSlot>> {
+  let rows = game_used_slot::table
+    .left_outer_join(player::table)
+    .inner_join(game::table)
+    .select((game_used_slot::game_id, UsedSlotInfo::columns()))
+    .filter(game::status.eq(any(GameStatus::active_variants())))
+    .filter(game_used_slot::player_id.eq(player_id))
+    .order(game_used_slot::created_at)
+    .load(conn)?;
+  Ok(rows)
 }
 
 pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
@@ -548,9 +577,9 @@ pub fn get_full_and_node_token(
 pub struct GameStateFromDb {
   pub id: i32,
   pub status: GameStatus,
-  pub players: Vec<i32>,
+  pub players: Vec<(i32, Option<Vec<u8>>)>,
   pub node_id: Option<i32>,
-  pub created_by: Option<i32>,
+  pub created_by: i32,
 }
 
 /// Loads game players info from database
@@ -558,7 +587,7 @@ pub struct GameStateFromDb {
 pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> {
   use game::dsl;
 
-  let rows: Vec<(i32, GameStatus, Option<i32>, Option<i32>)> = game::table
+  let rows: Vec<(i32, GameStatus, Option<i32>, i32)> = game::table
     .left_outer_join(node::table)
     .filter(dsl::status.eq_any(&[
       GameStatus::Preparing,
@@ -570,11 +599,10 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
     .load(conn)?;
 
   let game_ids: Vec<_> = rows.iter().map(|(id, _, _, _)| *id).collect();
-  let mut game_players_map: HashMap<i32, Vec<i32>> = {
-    use diesel::pg::expression::dsl::{all, any};
+  let mut game_players_map: HashMap<i32, Vec<(i32, Option<Vec<u8>>)>> = {
     use game_used_slot::dsl;
-    let rows: Vec<(i32, Option<i32>)> = game_used_slot::table
-      .select((dsl::game_id, dsl::player_id))
+    let rows: Vec<(i32, Option<i32>, Option<Vec<u8>>)> = game_used_slot::table
+      .select((dsl::game_id, dsl::player_id, dsl::node_token))
       .filter(
         dsl::game_id
           .eq(any(game_ids))
@@ -585,9 +613,12 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
       )
       .load(conn)?;
     let mut map = HashMap::new();
-    for (game_id, player_id) in rows {
+    for (game_id, player_id, node_token) in rows {
       if let Some(player_id) = player_id {
-        map.entry(game_id).or_insert_with(|| vec![]).push(player_id)
+        map
+          .entry(game_id)
+          .or_insert_with(|| vec![])
+          .push((player_id, node_token))
       }
     }
     map
@@ -607,13 +638,22 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
   Ok(games)
 }
 
-pub fn select_node(conn: &DbConn, id: i32, node_id: Option<i32>) -> Result<()> {
+pub fn select_node(conn: &DbConn, id: i32, player_id: i32, node_id: Option<i32>) -> Result<()> {
   use game::dsl;
 
-  diesel::update(game::table.find(id))
-    .filter(dsl::status.eq(GameStatus::Preparing))
+  let n: usize = diesel::update(game::table.find(id))
+    .filter(
+      dsl::status
+        .eq(GameStatus::Preparing)
+        .and(game::created_by.eq(player_id)),
+    )
     .set(dsl::node_id.eq(node_id))
     .execute(conn)?;
+
+  if n != 1 {
+    return Err(Error::GameSlotUpdateDenied);
+  }
+
   Ok(())
 }
 
@@ -677,7 +717,6 @@ pub fn update_reset_created(conn: &DbConn, id: i32) -> Result<()> {
 /// Reset all instance specific states
 /// Should be called after process start
 pub fn reset_instance_state(conn: &DbConn) -> Result<()> {
-  use diesel::pg::expression::dsl::{all, any};
   use game::dsl as g;
   use game_used_slot::dsl as gus;
   // invalidate active games' slot client status
@@ -693,7 +732,6 @@ pub fn reset_instance_state(conn: &DbConn) -> Result<()> {
 }
 
 pub fn get_node_active_game_ids(conn: &DbConn, node_id: i32) -> Result<Vec<i32>> {
-  use diesel::pg::expression::dsl::all;
   use game::dsl as g;
 
   game::table
@@ -789,7 +827,7 @@ impl GameRowWithRelated {
       is_live: self.is_live,
       num_players,
       max_players: self.max_players,
-      created_by: meta.created_by,
+      created_by: meta.created_by.expect("foreign key"),
       started_at: self.started_at,
       ended_at: self.ended_at,
       created_at: self.created_at,

@@ -1,16 +1,9 @@
-
-
-
-
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::*;
-use crate::protocol::constants::{PacketTypeId};
-use crate::protocol::packet::{
-  PacketPayload, PacketPayloadDecode, PacketPayloadEncode,
-};
-
+use crate::protocol::constants::PacketTypeId;
+use crate::protocol::packet::{PacketPayload, PacketPayloadDecode, PacketPayloadEncode};
 
 #[derive(Debug, PartialEq)]
 pub struct OutgoingAction {

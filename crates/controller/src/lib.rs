@@ -14,8 +14,8 @@ extern crate diesel;
 mod db;
 mod schema;
 
+mod client;
 mod config;
-mod connect;
 pub mod error;
 pub mod game;
 mod grpc;
@@ -25,6 +25,6 @@ pub mod node;
 pub mod player;
 mod state;
 
-pub use connect::serve as serve_socket;
+pub use client::serve as serve_socket;
 pub use grpc::serve as serve_grpc;
-pub use state::ControllerStateRef;
+pub use state::{ControllerState, ControllerStateRef};

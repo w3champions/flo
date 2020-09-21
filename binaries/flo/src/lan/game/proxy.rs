@@ -29,7 +29,7 @@ pub struct LanProxy {
   node_stream: NodeStream,
   state: Arc<State>,
   status_tx: watch::Sender<Option<NodeGameStatus>>,
-  event_tx: Sender<PreGameEvent>,
+  event_tx: Sender<PlayerEvent>,
 }
 
 impl LanProxy {
@@ -97,7 +97,7 @@ impl LanProxy {
     Ok(())
   }
 
-  pub async fn dispatch_pre_game_event(&mut self, evt: PreGameEvent) -> Result<()> {
+  pub async fn dispatch_player_event(&mut self, evt: PlayerEvent) -> Result<()> {
     self
       .event_tx
       .send(evt)
@@ -122,18 +122,18 @@ impl State {
   async fn serve(
     self: Arc<Self>,
     mut listener: W3GSListener,
-    event_rx: Receiver<PreGameEvent>,
+    event_rx: Receiver<PlayerEvent>,
     mut w3gs_rx: Receiver<Packet>,
     _out_tx: &mut Sender<LanEvent>,
     mut scope: SpawnScopeHandle,
   ) -> Result<()> {
     let mut node_stream = self.stream.clone();
     let mut status_rx = self.game_status_rx.clone();
-    let (stop_collect_pre_game_events_tx, stop_rx) = oneshot::channel();
+    let (stop_collect_player_events_tx, stop_rx) = oneshot::channel();
 
     tokio::pin! {
       let dropped = scope.left();
-      let collect_pre_game_events = self.collect_pre_game_events(event_rx, stop_rx, &self.info);
+      let collect_player_events = self.collect_player_events(event_rx, stop_rx, &self.info);
     }
 
     // Lobby
@@ -144,7 +144,7 @@ impl State {
         _ = &mut dropped => {
           return Ok(())
         }
-        _ = &mut collect_pre_game_events => {
+        _ = &mut collect_player_events => {
           return Ok(())
         }
         next = incoming.try_next() => {
@@ -171,7 +171,7 @@ impl State {
           _ = &mut dropped => {
             return Ok(())
           }
-          _ = &mut collect_pre_game_events => {
+          _ = &mut collect_player_events => {
             return Ok(())
           }
           res = &mut lobby => {
@@ -187,10 +187,10 @@ impl State {
 
     // Load Screen
     {
-      stop_collect_pre_game_events_tx
+      stop_collect_player_events_tx
         .send(())
         .expect("rx hold on stack");
-      let (slot_status_map, mut event_rx) = match (&mut collect_pre_game_events).await {
+      let (slot_status_map, mut event_rx) = match (&mut collect_player_events).await {
         Some(rx) => rx,
         None => return Ok(()),
       };
@@ -239,12 +239,12 @@ impl State {
     Ok(())
   }
 
-  async fn collect_pre_game_events(
+  async fn collect_player_events(
     &self,
-    mut rx: Receiver<PreGameEvent>,
+    mut rx: Receiver<PlayerEvent>,
     mut stop: oneshot::Receiver<()>,
     initial: &LanGameInfo,
-  ) -> Option<(HashMap<i32, SlotClientStatus>, Receiver<PreGameEvent>)> {
+  ) -> Option<(HashMap<i32, SlotClientStatus>, Receiver<PlayerEvent>)> {
     let mut map: HashMap<i32, SlotClientStatus> = initial
       .game
       .slots
@@ -263,7 +263,7 @@ impl State {
           match next {
             Some(evt) => {
               match evt {
-                PreGameEvent::PlayerStatusChange { player_id, status } => {
+                PlayerEvent::PlayerStatusChange { player_id, status } => {
                   map.insert(player_id, status);
                 },
               }
@@ -294,7 +294,7 @@ impl State {
     info: &LanGameInfo,
     stream: &mut W3GSStream,
     node_stream: &mut NodeStreamHandle,
-    event_rx: &mut Receiver<PreGameEvent>,
+    event_rx: &mut Receiver<PlayerEvent>,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
     initial_status_map: HashMap<i32, SlotClientStatus>,
   ) -> Result<()> {
@@ -318,7 +318,7 @@ impl State {
           SlotClientStatus::Loaded => {
             if player_id != my_player_id {
               loaded_sent.push(player_id);
-              tracing::debug!("player loaded (pre-game event): {}", player_id);
+              tracing::debug!("player loaded (pre-game): {}", player_id);
               packets.push(get_player_loaded_packet(info, player_id)?);
             } else {
               tracing::warn!("received Loaded status for local player");
@@ -414,10 +414,10 @@ async fn handle_player_event(
   my_player_id: i32,
   loaded_sent: &mut Vec<i32>,
   stream: &mut W3GSStream,
-  event: PreGameEvent,
+  event: PlayerEvent,
 ) -> Result<()> {
   match event {
-    PreGameEvent::PlayerStatusChange { player_id, status } => match status {
+    PlayerEvent::PlayerStatusChange { player_id, status } => match status {
       SlotClientStatus::Pending | SlotClientStatus::Connected | SlotClientStatus::Joined => {
         tracing::warn!(
           player_id,
@@ -465,7 +465,7 @@ fn get_player_loaded_packet(info: &LanGameInfo, player_id: i32) -> Result<Packet
 }
 
 #[derive(Debug)]
-pub enum PreGameEvent {
+pub enum PlayerEvent {
   PlayerStatusChange {
     player_id: i32,
     status: SlotClientStatus,

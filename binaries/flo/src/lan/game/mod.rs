@@ -21,7 +21,7 @@ use crate::lan::{get_lan_game_name, LanEvent};
 use crate::node::stream::NodeConnectToken;
 use crate::node::NodeInfo;
 
-use crate::lan::game::proxy::PreGameEvent;
+use crate::lan::game::proxy::PlayerEvent;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use proxy::LanProxy;
 
@@ -128,7 +128,7 @@ impl LanGame {
   ) -> Result<()> {
     self
       .proxy
-      .dispatch_pre_game_event(PreGameEvent::PlayerStatusChange { player_id, status })
+      .dispatch_player_event(PlayerEvent::PlayerStatusChange { player_id, status })
       .await?;
     Ok(())
   }

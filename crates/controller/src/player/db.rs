@@ -31,6 +31,17 @@ pub fn get_ref(conn: &DbConn, id: i32) -> Result<PlayerRef> {
     .map_err(Into::into)
 }
 
+pub fn get_ref_with_game_info(conn: &DbConn, id: i32) -> Result<PlayerRef> {
+  use player::dsl;
+  player::table
+    .find(id)
+    .select((dsl::id, dsl::name, dsl::source, dsl::realm))
+    .first::<PlayerRef>(conn)
+    .optional()?
+    .ok_or_else(|| Error::PlayerNotFound)
+    .map_err(Into::into)
+}
+
 pub fn get_by_source_id(conn: &DbConn, source_id: &str) -> Result<Option<Player>> {
   use player::dsl;
   player::table

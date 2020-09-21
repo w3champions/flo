@@ -62,7 +62,7 @@ impl From<Node> for NodeRef {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerToken {
   pub player_id: i32,
   pub bytes: [u8; 16],
@@ -102,4 +102,14 @@ pub struct NodeConnConfig {
   pub id: i32,
   pub addr: String,
   pub secret: String,
+}
+
+impl<'a> From<&'a Node> for NodeConnConfig {
+  fn from(node: &'a Node) -> Self {
+    Self {
+      id: node.id,
+      addr: node.ip_addr.clone(),
+      secret: node.secret.clone(),
+    }
+  }
 }

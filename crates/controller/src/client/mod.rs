@@ -16,12 +16,19 @@ use flo_net::stream::FloStream;
 use flo_net::time::StopWatch;
 
 use crate::error::*;
-use crate::state::{ControllerStateRef, LockedPlayerState};
+use crate::state::{ActorMapExt, ControllerStateRef};
 
 mod handshake;
 mod sender;
+use crate::game::messages::{ResolveGamePlayerPingBroadcastTargets, UpdateSlot};
+use crate::game::state::node::SelectNode;
+use crate::game::state::player::GetGamePlayers;
+use crate::game::state::start::{StartGameCheck, StartGamePlayerAck};
 use crate::game::SlotSettings;
-pub use sender::{PlayerBroadcaster, PlayerReceiver, PlayerSender, PlayerSenderMessage};
+use crate::node::messages::ListNode;
+use crate::player::state::conn::{Connect, Disconnect};
+use crate::player::state::ping::{GetPlayersPingSnapshot, PingUpdate, UpdatePing};
+pub use sender::{PlayerReceiver, PlayerSender, PlayerSenderMessage};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
@@ -35,11 +42,8 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
   let mut listener = FloListener::bind_v4(flo_constants::CONTROLLER_SOCKET_PORT).await?;
   tracing::info!("listening on port {}", listener.port());
 
-  let mut sid_counter = 0_u64;
   while let Some(mut stream) = listener.incoming().try_next().await? {
-    sid_counter = sid_counter.overflowing_add(1).0;
     let state = state.clone();
-    let sid = sid_counter;
     tokio::spawn(async move {
       tracing::debug!("connected: {}", stream.peer_addr()?);
 
@@ -55,17 +59,16 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
       tracing::debug!("accepted: player_id = {}", player_id);
 
       let receiver = {
-        let (sender, r) = PlayerSender::new(sid, player_id);
-        let mut player_state = state.mem.lock_player_state(player_id).await;
-        player_state.replace_sender(sender).await;
+        let (sender, r) = PlayerSender::new(player_id);
+        state.players.send(Connect { sender }).await?;
         r
       };
 
-      if let Err(err) = handle_stream(state.clone(), sid, player_id, stream, receiver).await {
+      if let Err(err) = handle_stream(state.clone(), player_id, stream, receiver).await {
         tracing::debug!("stream error: {}", err);
       }
 
-      state.emit_player_stream_closed(sid, player_id).await;
+      state.players.send(Disconnect { player_id }).await?;
       tracing::debug!("exiting: player_id = {}", player_id);
       Ok::<_, crate::error::Error>(())
     });
@@ -79,7 +82,6 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
 #[tracing::instrument(target = "player_stream", skip(state, stream))]
 async fn handle_stream(
   state: ControllerStateRef,
-  sid: u64,
   player_id: i32,
   mut stream: FloStream,
   mut receiver: PlayerReceiver,
@@ -183,15 +185,17 @@ async fn send_initial_state(
   stream: &mut FloStream,
   player_id: i32,
 ) -> Result<()> {
-  let player = state
+  let (player, active_slots) = state
     .db
-    .exec(move |conn| crate::player::db::get_ref(conn, player_id))
+    .exec(move |conn| -> Result<_> {
+      Ok((
+        crate::player::db::get_ref(conn, player_id)?,
+        crate::game::db::get_player_active_slots(conn, player_id)?,
+      ))
+    })
     .await?;
 
-  let game_id = {
-    let player = state.mem.lock_player_state(player.id).await;
-    player.joined_game_id()
-  };
+  let game_id = active_slots.last().map(|s| s.game_id);
 
   let mut frames = vec![connect::PacketClientConnectAccept {
     lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
@@ -207,7 +211,7 @@ async fn send_initial_state(
         game_id: game_id.clone(),
       }
     }),
-    nodes: state.config.with_nodes(|nodes| nodes.to_vec()).pack()?,
+    nodes: state.nodes.send(ListNode).await?.pack()?,
   }
   .encode_as_frame()?];
 
@@ -240,46 +244,34 @@ async fn send_initial_state(
   Ok(())
 }
 
-impl LockedPlayerState {
-  pub fn get_session_update(&self) -> proto::flo_connect::PacketPlayerSessionUpdate {
-    use proto::flo_connect::*;
-    let game_id = self.joined_game_id();
-    PacketPlayerSessionUpdate {
-      status: if game_id.is_some() {
-        PlayerStatus::InGame.into()
-      } else {
-        PlayerStatus::Idle.into()
-      },
-      game_id,
-    }
-  }
-}
-
 async fn handle_game_slot_update_request(
   state: ControllerStateRef,
   player_id: i32,
   packet: proto::flo_connect::PacketGameSlotUpdateRequest,
 ) -> Result<()> {
-  crate::game::update_game_slot_settings(
-    state,
-    packet.game_id,
-    player_id,
-    packet.slot_index,
-    SlotSettings::unpack(packet.slot_settings.extract()?)?,
-  )
-  .await?;
-
+  state
+    .games
+    .send_to(
+      packet.game_id,
+      UpdateSlot {
+        player_id,
+        slot_index: packet.slot_index,
+        settings: SlotSettings::unpack(packet.slot_settings.extract()?)?,
+      },
+    )
+    .await?;
   Ok(())
 }
 
 async fn handle_list_nodes_request(state: ControllerStateRef, player_id: i32) -> Result<()> {
-  if let Some(mut sender) = state.mem.get_player_sender(player_id) {
-    let nodes = state.config.with_nodes(|nodes| nodes.to_vec());
-    let packet = proto::flo_connect::PacketListNodes {
-      nodes: nodes.pack()?,
-    };
-    sender.send(packet).await.ok();
-  }
+  let nodes = state.nodes.send(ListNode).await?;
+  let packet = proto::flo_connect::PacketListNodes {
+    nodes: nodes.pack()?,
+  };
+  state
+    .player_packet_sender
+    .send(player_id, packet.encode_as_frame()?)
+    .await?;
   Ok(())
 }
 
@@ -289,37 +281,48 @@ async fn handle_game_player_ping_map_update_request(
   packet: proto::flo_connect::PacketGamePlayerPingMapUpdateRequest,
 ) -> Result<()> {
   let game_id = packet.game_id;
+  let mut node_ids = vec![];
+  let items = packet
+    .ping_map
+    .clone()
+    .into_iter()
+    .map(|(node_id, stats)| {
+      node_ids.push(node_id);
+      PingUpdate {
+        node_id,
+        avg: stats.avg,
+        current: stats.current,
+        loss_rate: stats.loss_rate,
+      }
+    })
+    .collect();
+
+  state.players.send(UpdatePing { player_id, items }).await?;
+
+  node_ids.sort();
+  node_ids.dedup();
+
+  let targets = state
+    .games
+    .send(ResolveGamePlayerPingBroadcastTargets {
+      player_id,
+      node_ids,
+    })
+    .await??;
+
   state
-    .mem
-    .update_game_player_ping_map(game_id, player_id, packet.ping_map.clone());
-
-  // broadcast ping update when
-  // - game node selected
-  // - packet contains data related to the selected node
-  let select_node_id = state.mem.get_game_selected_node(game_id);
-  if let Some(select_node_id) = select_node_id {
-    if packet.ping_map.contains_key(&select_node_id) {
-      let mut player_ids = state.mem.get_game_player_ids(game_id);
-
-      if player_ids.is_empty() {
-        return Ok(());
+    .player_packet_sender
+    .broadcast(
+      targets,
+      proto::flo_connect::PacketGamePlayerPingMapUpdate {
+        game_id,
+        player_id,
+        ping_map: packet.ping_map,
       }
+      .encode_as_frame()?,
+    )
+    .await?;
 
-      player_ids.retain(|id| *id != player_id);
-      if player_ids.len() > 0 {
-        state
-          .mem
-          .get_broadcaster(&player_ids)
-          .broadcast(proto::flo_connect::PacketGamePlayerPingMapUpdate {
-            game_id,
-            player_id,
-            ping_map: packet.ping_map,
-          })
-          .await
-          .ok();
-      }
-    }
-  }
   Ok(())
 }
 
@@ -328,36 +331,36 @@ async fn handle_game_player_ping_map_snapshot_request(
   player_id: i32,
   game_id: i32,
 ) -> Result<()> {
-  use crate::state::GamePlayerPingMapKey;
   use flo_net::proto::flo_connect::*;
 
-  let mut sender = if let Some(sender) = state.mem.get_player_sender(player_id) {
-    sender
-  } else {
-    return Ok(());
-  };
-  if let Some(map) = state.mem.get_game_player_ping_map(game_id) {
-    let mut node_ping_map = HashMap::<i32, NodePingMap>::new();
-    for (GamePlayerPingMapKey { node_id, player_id }, ping) in map {
+  let players = state.games.send_to(game_id, GetGamePlayers).await?;
+  let snapshot = state
+    .players
+    .send(GetPlayersPingSnapshot { players })
+    .await?;
+
+  let mut node_ping_map = HashMap::<i32, NodePingMap>::new();
+  for (player_id, node_map) in snapshot.map {
+    for (node_id, ping) in node_map {
       let item = node_ping_map
         .entry(node_id)
         .or_insert_with(|| Default::default());
-      item.player_ping_map.insert(player_id, ping);
+      item.player_ping_map.insert(player_id, ping.pack()?);
     }
-    sender
-      .send(PacketGamePlayerPingMapSnapshot {
+  }
+
+  state
+    .player_packet_sender
+    .send(
+      player_id,
+      PacketGamePlayerPingMapSnapshot {
         game_id,
         node_ping_map,
-      })
-      .await?;
-  } else {
-    sender
-      .send(PacketGamePlayerPingMapSnapshot {
-        game_id,
-        node_ping_map: Default::default(),
-      })
-      .await?;
-  }
+      }
+      .encode_as_frame()?,
+    )
+    .await?;
+
   Ok(())
 }
 
@@ -366,7 +369,16 @@ async fn handle_game_select_node_request(
   player_id: i32,
   packet: proto::flo_connect::PacketGameSelectNodeRequest,
 ) -> Result<()> {
-  crate::game::select_game_node(state, packet.game_id, player_id, packet.node_id).await?;
+  state
+    .games
+    .send_to(
+      packet.game_id,
+      SelectNode {
+        node_id: packet.node_id,
+        player_id,
+      },
+    )
+    .await?;
   Ok(())
 }
 
@@ -375,7 +387,10 @@ async fn handle_game_start_request(
   player_id: i32,
   packet: proto::flo_connect::PacketGameStartRequest,
 ) -> Result<()> {
-  crate::game::start_game(state, packet.game_id, player_id).await?;
+  state
+    .games
+    .send_to(packet.game_id, StartGameCheck { player_id })
+    .await?;
   Ok(())
 }
 
@@ -384,8 +399,9 @@ async fn handle_game_start_player_client_info_request(
   player_id: i32,
   packet: proto::flo_connect::PacketGameStartPlayerClientInfoRequest,
 ) -> Result<()> {
-  if let Some(mut game) = state.mem.lock_game_state(packet.game_id).await {
-    game.start_player_ack(player_id, packet);
-  }
+  state
+    .games
+    .send_to(packet.game_id, StartGamePlayerAck::new(player_id, packet))
+    .await?;
   Ok(())
 }

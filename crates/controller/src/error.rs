@@ -1,75 +1,80 @@
 use bs_diesel_utils::executor::ExecutorError;
+use flo_state::RegistryError;
 use thiserror::Error;
 use tonic::Status;
 
 #[derive(Error, Debug)]
 pub enum Error {
-  #[error("task cancelled")]
+  #[error("Task cancelled")]
   TaskCancelled,
-  #[error("node not found")]
+  #[error("Node not found")]
   NodeNotFound,
-  #[error("node not ready")]
+  #[error("Node not ready")]
   NodeNotReady,
-  #[error("node rejected connection: {addr:?}: {reason:?}")]
+  #[error("Node rejected connection: {addr:?}: {reason:?}")]
   NodeConnectionRejected {
     addr: std::net::SocketAddrV4,
     reason: flo_net::proto::flo_node::ControllerConnectRejectReason,
   },
-  #[error("unexpected node response")]
+  #[error("Unexpected node response")]
   NodeResponseUnexpected,
-  #[error("node request processing")]
+  #[error("Node request processing")]
   NodeRequestProcessing,
-  #[error("node request timeout")]
+  #[error("Node request timeout")]
   NodeRequestTimeout,
-  #[error("node request cancelled")]
+  #[error("Node request cancelled")]
   NodeRequestCancelled,
-  #[error("invalid node address: {0}")]
+  #[error("Invalid node address: {0}")]
   InvalidNodeAddress(String),
-  #[error("player stream closed")]
+  #[error("Player stream closed")]
   PlayerStreamClosed,
-  #[error("player token expired")]
+  #[error("Player token expired")]
   PlayerTokenExpired,
-  #[error("join link expired")]
+  #[error("Join link expired")]
   JoinTokenExpired,
-  #[error("you are not the host player")]
+  #[error("You are not the host player")]
   PlayerNotHost,
-  #[error("player not found")]
+  #[error("Player not found")]
   PlayerNotFound,
-  #[error("game not found")]
+  #[error("Game not found")]
   GameNotFound,
-  #[error("only games with `Preparing` status are deletable")]
+  #[error("Only games with `Preparing` status are deletable")]
   GameNotDeletable,
-  #[error("invalid game data, please re-create")]
+  #[error("Invalid game data, please re-create")]
   GameDataInvalid,
-  #[error("the game you are trying to join is full")]
+  #[error("The game you are trying to join is full")]
   GameFull,
-  #[error("create game request already exists")]
+  #[error("Create game request already exists")]
   GameCreating,
-  #[error("create game request rejected: {0:?}")]
+  #[error("Create game request rejected: {0:?}")]
   GameCreateReject(flo_net::proto::flo_node::ControllerCreateGameRejectReason),
-  #[error("create game request rejected: {0:?}")]
+  #[error("Create game request rejected: {0:?}")]
   GameLeaveRejected(flo_net::proto::flo_node::UpdateSlotClientStatusRejectReason),
-  #[error("game node not selected")]
+  #[error("Game node not selected")]
   GameNodeNotSelected,
-  #[error("slot update denied")]
+  #[error("Slot update denied")]
   GameSlotUpdateDenied,
-  #[error("game already started")]
+  #[error("Game already started")]
   GameStarted,
-  #[error("this map has no player slot")]
+  #[error("Game not in starting state")]
+  GameNotStarting,
+  #[error("This map has no player slot")]
   MapHasNoPlayer,
-  #[error("you can only join one game at a time")]
-  MultiJoin,
-  #[error("player not in game")]
+  #[error("Player not in game")]
   PlayerNotInGame,
-  #[error("player slot not found")]
+  #[error("Player already in game")]
+  PlayerAlreadyInGame,
+  #[error("Player slot not found")]
   PlayerSlotNotFound,
-  #[error("send to player channel timeout")]
+  #[error("Send to player channel timeout")]
   PlayerChannelSendTimeout,
-  #[error("player channel closed")]
+  #[error("Player channel closed")]
   PlayerChannelClosed,
-  #[error("invalid player source state")]
+  #[error("Invalid player source state")]
   InvalidPlayerSourceState,
-  #[error("operation timeout")]
+  #[error("Actor not found")]
+  ActorNotFound,
+  #[error("Operation timeout")]
   Timeout(#[from] tokio::time::Elapsed),
   #[error("net: {0}")]
   Net(#[from] flo_net::error::Error),
@@ -109,7 +114,6 @@ impl From<Error> for Status {
       | e @ Error::MapHasNoPlayer
       | e @ Error::GameFull
       | e @ Error::GameNotDeletable
-      | e @ Error::MultiJoin
       | e @ Error::JoinTokenExpired => Status::invalid_argument(e.to_string()),
       e @ Error::PlayerTokenExpired => Status::unauthenticated(e.to_string()),
       Error::JsonWebToken(e) => Status::unauthenticated(e.to_string()),
@@ -132,6 +136,40 @@ impl From<ExecutorError<Error>> for Error {
     match e {
       ExecutorError::Task(e) => e,
       ExecutorError::Executor(e) => Error::Db(e),
+    }
+  }
+}
+
+impl From<flo_state::error::Error> for Error {
+  fn from(err: flo_state::error::Error) -> Self {
+    match err {
+      flo_state::error::Error::WorkerGone => Self::TaskCancelled,
+    }
+  }
+}
+
+impl From<flo_state::RegistryError> for Error {
+  fn from(err: flo_state::RegistryError) -> Self {
+    match err {
+      RegistryError::RegistryGone => Self::TaskCancelled,
+    }
+  }
+}
+
+/// Helper trait to convert Option<Result<T>> to Result<T>
+pub trait TaskCancelledExt<T> {
+  fn or_cancelled(self) -> Result<T>;
+}
+
+impl<T, E> TaskCancelledExt<T> for Option<Result<T, E>>
+where
+  E: Into<Error>,
+{
+  fn or_cancelled(self) -> Result<T, Error> {
+    match self {
+      None => Err(Error::TaskCancelled),
+      Some(Ok(v)) => Ok(v),
+      Some(Err(e)) => Err(e.into()),
     }
   }
 }

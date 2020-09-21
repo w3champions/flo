@@ -105,7 +105,7 @@ impl Stream for ActionTickStream {
     let d = instant - self.last_instant;
     self.last_instant = instant;
 
-    let step = self.step;
+    let _step = self.step;
     let tick = {
       std::mem::replace(
         &mut self.tick,

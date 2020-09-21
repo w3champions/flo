@@ -5,15 +5,25 @@ use tonic::{Request, Response, Status};
 
 use flo_grpc::controller::flo_controller_server::*;
 use flo_grpc::controller::*;
-use flo_net::proto::flo_connect;
 
+use crate::config::GetInterceptor;
 use crate::error::{Error, Result};
-use crate::state::ControllerStateRef;
+use crate::game::db::CreateGameParams;
+use crate::game::messages::{CreateGame, PlayerJoin, PlayerLeave};
+use crate::game::state::cancel::CancelGame;
+use crate::game::state::node::SelectNode;
+
+use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer};
+use crate::node::messages::ListNode;
+
+use crate::state::{ActorMapExt, ControllerStateRef};
 
 pub async fn serve(state: ControllerStateRef) -> Result<()> {
   let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, flo_constants::CONTROLLER_GRPC_PORT);
   let server_impl = FloControllerService::new(state.clone());
-  let server = FloControllerServer::with_interceptor(server_impl, state.config.into_interceptor());
+
+  let interceptor = state.config.send(GetInterceptor).await?;
+  let server = FloControllerServer::with_interceptor(server_impl, interceptor);
   let server = Server::builder().add_service(server);
   server.serve(addr.into()).await?;
   Ok(())
@@ -85,7 +95,7 @@ impl FloController for FloControllerService {
   }
 
   async fn list_nodes(&self, _request: Request<()>) -> Result<Response<ListNodesReply>, Status> {
-    let nodes = self.state.config.with_nodes(|nodes| nodes.to_vec());
+    let nodes = self.state.nodes.send(ListNode).await.map_err(Error::from)?;
     Ok(Response::new(ListNodesReply {
       nodes: nodes.pack().map_err(Error::from)?,
     }))
@@ -93,30 +103,35 @@ impl FloController for FloControllerService {
 
   async fn list_games(
     &self,
-    request: Request<ListGamesRequest>,
+    _request: Request<ListGamesRequest>,
   ) -> Result<Response<ListGamesReply>, Status> {
-    let params =
-      crate::game::db::QueryGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
-    let mut r = self
-      .state
-      .db
-      .exec(move |conn| crate::game::db::query(conn, &params))
-      .await
-      .map_err(|e| Status::internal(e.to_string()))?;
-
-    self.state.mem.fetch_num_players(&mut r.games);
-
-    Ok(Response::new(r.pack().map_err(Error::from)?))
+    // let params =
+    //   crate::game::db::QueryGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
+    // let mut r = self
+    //   .state
+    //   .db
+    //   .exec(move |conn| crate::game::db::query(conn, &params))
+    //   .await
+    //   .map_err(|e| Status::internal(e.to_string()))?;
+    //
+    // self.state.state.fetch_num_players(&mut r.games);
+    //
+    // Ok(Response::new(r.pack().map_err(Error::from)?))
+    return Err(Status::unimplemented("Unimplemented"));
   }
 
   async fn create_game(
     &self,
     request: Request<CreateGameRequest>,
   ) -> Result<Response<CreateGameReply>, Status> {
-    let params =
-      crate::game::db::CreateGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
-
-    let game = crate::game::create_game(self.state.clone(), params).await?;
+    let game = self
+      .state
+      .games
+      .send(CreateGame {
+        params: CreateGameParams::unpack(request.into_inner()).map_err(Error::from)?,
+      })
+      .await
+      .map_err(Error::from)??;
 
     Ok(Response::new(CreateGameReply {
       game: game.pack().map_err(Status::internal)?,
@@ -129,7 +144,26 @@ impl FloController for FloControllerService {
   ) -> Result<Response<JoinGameReply>, Status> {
     let params = request.into_inner();
 
-    let game = crate::game::join_game(self.state.clone(), params.game_id, params.player_id).await?;
+    let game = self
+      .state
+      .games
+      .send_to(
+        params.game_id,
+        PlayerJoin {
+          player_id: params.player_id,
+        },
+      )
+      .await?;
+
+    self
+      .state
+      .games
+      .send(AddGamePlayer {
+        game_id: params.game_id,
+        player_id: params.player_id,
+      })
+      .await
+      .map_err(Error::from)?;
 
     Ok(Response::new(JoinGameReply {
       game: game.pack().map_err(Error::from)?,
@@ -166,8 +200,26 @@ impl FloController for FloControllerService {
     let params = request.into_inner();
     let join_token = crate::game::token::validate_join_token(&params.token)?;
 
-    let game =
-      crate::game::join_game(self.state.clone(), join_token.game_id, params.player_id).await?;
+    let game = self
+      .state
+      .games
+      .send_to(
+        join_token.game_id,
+        PlayerJoin {
+          player_id: params.player_id,
+        },
+      )
+      .await?;
+
+    self
+      .state
+      .games
+      .send(AddGamePlayer {
+        game_id: join_token.game_id,
+        player_id: params.player_id,
+      })
+      .await
+      .map_err(Error::from)?;
 
     Ok(Response::new(JoinGameReply {
       game: game.pack().map_err(Error::from)?,
@@ -177,7 +229,42 @@ impl FloController for FloControllerService {
   async fn leave_game(&self, request: Request<LeaveGameRequest>) -> Result<Response<()>, Status> {
     let params = request.into_inner();
 
-    crate::game::leave_game(self.state.clone(), params.game_id, params.player_id).await?;
+    let res = self
+      .state
+      .games
+      .send_to(
+        params.game_id,
+        PlayerLeave {
+          player_id: params.player_id,
+        },
+      )
+      .await
+      .map_err(Error::from)?;
+
+    if res.game_ended {
+      tracing::debug!(
+        game_id = params.game_id,
+        "shutting down: reason: PlayerLeave"
+      );
+      self
+        .state
+        .games
+        .send(Remove {
+          game_id: params.game_id,
+        })
+        .await
+        .map_err(Error::from)?;
+    } else {
+      self
+        .state
+        .games
+        .send(RemoveGamePlayer {
+          game_id: params.game_id,
+          player_id: params.player_id,
+        })
+        .await
+        .map_err(Error::from)?;
+    }
 
     Ok(Response::new(()))
   }
@@ -192,7 +279,11 @@ impl FloController for FloControllerService {
       node_id,
     } = request.into_inner();
 
-    crate::game::select_game_node(self.state.clone(), game_id, player_id, node_id).await?;
+    self
+      .state
+      .games
+      .send_to(game_id, SelectNode { player_id, node_id })
+      .await?;
 
     Ok(Response::new(()))
   }
@@ -201,40 +292,20 @@ impl FloController for FloControllerService {
     let req = request.into_inner();
     let game_id = req.game_id;
     let player_id = req.player_id;
-    let mut state = self
-      .state
-      .mem
-      .lock_game_state(game_id)
-      .await
-      .ok_or_else(|| Error::GameNotFound)?;
+
     self
       .state
-      .db
-      .exec(move |conn| crate::game::db::delete(conn, game_id, Some(player_id)))
+      .games
+      .send_to(game_id, CancelGame { player_id })
+      .await?;
+
+    tracing::debug!(game_id, "shutting down: reason: CancelGame");
+    self
+      .state
+      .games
+      .send(Remove { game_id })
       .await
       .map_err(Error::from)?;
-    for player in state.players() {
-      let mut player_state = self.state.mem.lock_player_state(*player).await;
-      player_state.leave_game(game_id);
-      let update = player_state.get_session_update();
-      player_state.get_sender_cloned().map(|mut sender| {
-        tokio::spawn(async move {
-          sender.send(update).await.ok();
-          sender
-            .send({
-              use flo_net::proto::flo_connect::*;
-              PacketGamePlayerLeave {
-                game_id,
-                player_id: sender.player_id(),
-                reason: flo_connect::PlayerLeaveReason::GameCancelled.into(),
-              }
-            })
-            .await
-            .ok();
-        });
-      });
-    }
-    state.close();
 
     Ok(Response::new(()))
   }

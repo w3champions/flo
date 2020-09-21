@@ -81,14 +81,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                       }
                     },
                     NodeStreamEvent::GameInitialStatus(data) => {
+                      let game_id = data.game_id;
+                      tracing::debug!(game_id, "GameInitialStatus: {:?}", data.game_status);
                       if let Err(err) = lan.update_game_status(data.game_id, data.game_status, &data.player_game_client_status_map).await {
-                        tracing::error!(game_id = data.game_id, "update lan game status to {:?}: {}", data.game_status, err);
+                        tracing::error!(game_id, "update lan game status to {:?}: {}", data.game_status, err);
                       }
                     },
                     NodeStreamEvent::GameStatusUpdate(update) => {
                       let game_id = update.game_id;
                       let game_status = update.status;
                       ctrl.ws_send_update_game_status(update.clone()).await;
+                      tracing::debug!(game_id, "GameStatusUpdate: {:?}", update.status);
                       if let Err(err) = lan.update_game_status(game_id, game_status, &update.updated_player_game_client_status_map).await {
                         tracing::error!(game_id, "update lan game status to {:?}: {}", game_status, err);
                       }

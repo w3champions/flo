@@ -1,6 +1,5 @@
 use bitflags::bitflags;
 
-
 use flo_util::{BinDecode, BinEncode};
 
 // W3GS packet type identifier

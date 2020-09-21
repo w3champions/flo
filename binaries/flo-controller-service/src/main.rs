@@ -1,4 +1,4 @@
-use flo_controller::{serve_grpc, serve_socket, ControllerStateRef};
+use flo_controller::{serve_grpc, serve_socket, ControllerState};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   #[cfg(not(debug_assertions))]
   flo_log_subscriber::init();
 
-  let state = ControllerStateRef::init().await?;
+  let state = ControllerState::init().await?.into_ref();
 
   #[cfg(unix)]
   {

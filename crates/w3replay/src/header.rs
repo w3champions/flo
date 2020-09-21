@@ -46,8 +46,6 @@ use flo_util::binary::*;
 use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
-
-
 #[derive(Debug, BinEncode, BinDecode)]
 pub struct Header {
   #[bin(eq = SIGNATURE)]

@@ -12,6 +12,7 @@ flo-constants = { path = "../constants" }
 flo-event = { path = "../event" }
 flo-log = { path = "../log" }
 flo-task = { path = "../task" }
+flo-state = "0.4"
 
 thiserror = "1.0.20"
 serde = { version = "1", features = ["derive"] }
@@ -34,9 +35,11 @@ hyper = "0.13.7"
 prometheus = "0.9.0"
 backoff = { version = "0.2.1", features = ["tokio"] }
 rand = "0.7.3"
+arc-swap = "1.0.0-rc1"
 
 [dev-dependencies]
 dotenv = "0.15.0"
+flo-log-subscriber = { path = "../log-subscriber" }
 
 [build-dependencies]
 flo-constants = { path = "../constants" }

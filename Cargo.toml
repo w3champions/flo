@@ -13,7 +13,6 @@ members = [
   "crates/net",
   "crates/w3storage",
   "crates/w3replay",
-  "crates/connect",
   "crates/constants",
   "crates/event",
   "crates/task",
@@ -22,6 +21,7 @@ members = [
   "crates/controller",
   "crates/node",
   "crates/observer",
+  "crates/client",
 
   "binaries/flo",
   "binaries/flo-cli",
@@ -44,3 +44,5 @@ casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
+#flo-state = { git = "https://github.com/wc3tools/flo-state.git", branch = "main" }
+flo-state = { path = "../flo-state" }

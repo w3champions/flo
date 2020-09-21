@@ -202,76 +202,140 @@ impl Slots {
     player_ids
   }
 
-  /// Validate and update a slot
-  pub fn update_slot_at(&mut self, slot_index: i32, settings: &SlotSettings) -> Option<&Slot> {
+  /// Validate and update a slot, return updated slots
+  pub fn update_slot_at(
+    &mut self,
+    slot_index: i32,
+    settings: &SlotSettings,
+  ) -> Option<Vec<(i32, &Slot)>> {
     let color_set = self.get_color_set();
 
     if slot_index < 0 || slot_index > 23 {
       return None;
     }
 
-    let slot = &mut self.inner[slot_index as usize];
+    let mut updated_slots = vec![];
 
-    if slot.player.is_none() {
-      if slot.settings.status != settings.status {
-        slot.settings.status = settings.status;
-        match settings.status {
-          SlotStatus::Open => {
-            slot.settings.computer = Computer::Easy;
+    // handle team change first
+    let target_index = {
+      if settings.team > self.map_players as i32 && settings.team != 24 {
+        return None;
+      }
+
+      let mut target_index = slot_index;
+      let current_settings = self.inner[slot_index as usize].settings.clone();
+      let new_team = settings.team;
+
+      if new_team != current_settings.team {
+        if current_settings.team == 24 && new_team != 24 {
+          // referees -> players
+          // reset color
+          let next_color = color_set.iter().position(|v| !*v).map(|v| v as i32);
+
+          // find an open player slot
+          if let Some((index, _player_slot)) = self
+            .inner
+            .iter_mut()
+            .enumerate()
+            .find(|(_index, s)| s.settings.team != 24 && s.settings.status == SlotStatus::Open)
+          {
+            target_index = index as i32;
+            self.inner[index].player = self.inner[slot_index as usize].player.clone();
+            self.inner[index].settings = SlotSettings {
+              team: new_team,
+              status: SlotStatus::Occupied,
+              color: next_color.unwrap_or_default(),
+              ..Default::default()
+            };
+            self.inner[slot_index as usize] = Slot {
+              settings: SlotSettings {
+                team: 24,
+                ..Default::default()
+              },
+              ..Default::default()
+            };
+          } else {
+            return None;
           }
-          SlotStatus::Closed => {
-            slot.settings.computer = Computer::Easy;
+        } else if current_settings.team != 24 && new_team == 24 {
+          // players -> referees:
+
+          // find an open referee slot
+          if let Some((index, _player_slot)) = self
+            .inner
+            .iter_mut()
+            .enumerate()
+            .find(|(_index, s)| s.settings.team == 24 && s.settings.status == SlotStatus::Open)
+          {
+            target_index = index as i32;
+            self.inner[index].player = self.inner[slot_index as usize].player.clone();
+            self.inner[index].settings = SlotSettings {
+              team: 24,
+              status: SlotStatus::Occupied,
+              ..Default::default()
+            };
+            self.inner[slot_index as usize] = Default::default();
+          } else {
+            return None;
           }
-          SlotStatus::Occupied => {
-            let mut color = 0;
-            for i in 0..24 {
-              if !color_set[i] {
-                color = i as i32;
-                break;
-              }
+        } else {
+          self.inner[slot_index as usize].settings.team = new_team;
+        }
+      }
+
+      target_index
+    };
+
+    let slot = &mut self.inner[target_index as usize];
+
+    // update other fields
+    if slot.settings.team != 24 {
+      if slot.player.is_none() {
+        if slot.settings.status != settings.status {
+          slot.settings.status = settings.status;
+          match settings.status {
+            SlotStatus::Open => {
+              slot.settings.computer = Computer::Easy;
             }
-            slot.settings.color = color;
-            slot.settings.computer = settings.computer;
+            SlotStatus::Closed => {
+              slot.settings.computer = Computer::Easy;
+            }
+            SlotStatus::Occupied => {
+              let mut color = 0;
+              for i in 0..24 {
+                if !color_set[i] {
+                  color = i as i32;
+                  break;
+                }
+              }
+              slot.settings.color = color;
+              slot.settings.computer = settings.computer;
+            }
           }
         }
       }
-    }
 
-    let new_color = settings.color;
-    if new_color < 24 && slot.settings.color != new_color {
-      if !color_set[new_color as usize] {
-        slot.settings.color = new_color;
+      let new_color = settings.color;
+      if new_color < 24 && slot.settings.color != new_color {
+        if !color_set[new_color as usize] {
+          slot.settings.color = new_color;
+        }
       }
-    }
 
-    let new_team = settings.team;
-    if new_team != slot.settings.team {
-      if slot.settings.team == 24 && new_team != 24 {
-        // referees -> players: reset color
-        let next_color = color_set.iter().position(|v| !*v).map(|v| v as i32);
-        slot.settings.color = next_color.unwrap_or_default();
-      } else if slot.settings.team != 24 && new_team == 24 {
-        // players -> referees: reset settings
-        slot.settings = SlotSettings {
-          team: new_team,
-          status: slot.settings.status,
-          ..Default::default()
-        };
+      let new_handicap = settings.handicap;
+      if new_handicap >= 50 && new_handicap <= 100 {
+        slot.settings.handicap = new_handicap - (new_handicap % 10);
       }
+
+      slot.settings.race = settings.race;
     }
 
-    if new_team < self.map_players as i32 || new_team == 24 {
-      slot.settings.team = new_team;
+    updated_slots.push((slot_index, &self.inner[slot_index as usize]));
+    if target_index != slot_index {
+      updated_slots.push((target_index, &self.inner[target_index as usize]))
     }
 
-    let new_handicap = settings.handicap;
-    if new_handicap >= 50 && new_handicap <= 100 {
-      slot.settings.handicap = new_handicap - (new_handicap % 10);
-    }
-
-    slot.settings.race = settings.race;
-
-    Some(&self.inner[slot_index as usize])
+    Some(updated_slots)
   }
 
   fn get_color_set(&self) -> [bool; 24] {
@@ -320,6 +384,29 @@ impl UsedSlot {
       SlotSettings::COLUMNS,
       game_used_slot::dsl::client_status,
       PlayerRef::COLUMNS.nullable(),
+    )
+  }
+}
+
+#[derive(Debug, Queryable)]
+pub struct UsedSlotInfo {
+  pub slot_index: i32,
+  pub settings: SlotSettings,
+  pub client_status: SlotClientStatus,
+}
+
+pub(crate) type UsedSlotInfoColumns = (
+  game_used_slot::dsl::slot_index,
+  SlotSettingsColumns,
+  game_used_slot::dsl::client_status,
+);
+
+impl UsedSlotInfo {
+  pub(crate) fn columns() -> UsedSlotInfoColumns {
+    (
+      game_used_slot::dsl::slot_index,
+      SlotSettings::COLUMNS,
+      game_used_slot::dsl::client_status,
     )
   }
 }

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use stormlib::OpenArchiveFlags;
@@ -114,19 +115,25 @@ impl W3Map {
     self.file_size
   }
 
-  pub fn name(&self) -> &str {
-    self.trigger_strings.get(self.info.name).unwrap_or("")
-  }
-
-  pub fn description(&self) -> &str {
+  pub fn name(&self) -> Cow<str> {
     self
       .trigger_strings
-      .get(self.info.description)
-      .unwrap_or("")
+      .get(&self.info.name)
+      .unwrap_or(Cow::Borrowed(""))
   }
 
-  pub fn author(&self) -> &str {
-    self.trigger_strings.get(self.info.author).unwrap_or("")
+  pub fn description(&self) -> Cow<str> {
+    self
+      .trigger_strings
+      .get(&self.info.description)
+      .unwrap_or(Cow::Borrowed(""))
+  }
+
+  pub fn author(&self) -> Cow<str> {
+    self
+      .trigger_strings
+      .get(&self.info.author)
+      .unwrap_or(Cow::Borrowed(""))
   }
 
   pub fn suggested_players(&self) -> &str {
@@ -150,7 +157,7 @@ impl W3Map {
         players
           .iter()
           .map(|p| MapPlayer {
-            name: self.trigger_strings.get(p.name).unwrap_or_default(),
+            name: self.trigger_strings.get(&p.name).unwrap_or_default(),
             r#type: p.type_,
             race: p.race,
             flags: p.flags,
@@ -162,7 +169,7 @@ impl W3Map {
           players
             .iter()
             .map(|p| MapPlayer {
-              name: self.trigger_strings.get(p.name).unwrap_or_default(),
+              name: self.trigger_strings.get(&p.name).unwrap_or_default(),
               r#type: p.type_,
               race: p.race,
               flags: p.flags,
@@ -183,7 +190,7 @@ impl W3Map {
       .forces
       .iter()
       .map(|force| MapForce {
-        name: self.trigger_strings.get(force.name).unwrap_or_default(),
+        name: self.trigger_strings.get(&force.name).unwrap_or_default(),
         flags: force.flags,
         player_set: force.player_set,
       })
@@ -229,20 +236,20 @@ impl W3Map {
 
     Ok(W3Map {
       name: trigger_strings
-        .get(info.name)
-        .map(ToString::to_string)
+        .get(&info.name)
+        .map(|v| v.to_string())
         .unwrap_or_else(|| "".to_string()),
       author: trigger_strings
-        .get(info.author)
-        .map(ToString::to_string)
+        .get(&info.author)
+        .map(|v| v.to_string())
         .unwrap_or_else(|| "".to_string()),
       description: trigger_strings
-        .get(info.description)
-        .map(ToString::to_string)
+        .get(&info.description)
+        .map(|v| v.to_string())
         .unwrap_or_else(|| "".to_string()),
       suggested_players: trigger_strings
-        .get(info.suggested_players)
-        .map(ToString::to_string)
+        .get(&info.suggested_players)
+        .map(|v| v.to_string())
         .unwrap_or_else(|| "".to_string()),
       file_size: archive.get_size()?,
       info,
@@ -315,7 +322,7 @@ impl<'a> Archive<'a> {
 
 #[derive(Debug)]
 pub struct MapPlayer<'a> {
-  pub name: &'a str,
+  pub name: Cow<'a, str>,
   pub r#type: u32,
   pub race: u32,
   pub flags: u32,
@@ -323,7 +330,7 @@ pub struct MapPlayer<'a> {
 
 #[derive(Debug)]
 pub struct MapForce<'a> {
-  pub name: &'a str,
+  pub name: Cow<'a, str>,
   pub flags: u32,
   pub player_set: u32,
 }

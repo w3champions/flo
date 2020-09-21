@@ -29,6 +29,7 @@ pub struct Player {
 pub enum PlayerSource {
   Test = 0,
   BNet = 1,
+  Api = 2,
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone, Queryable)]

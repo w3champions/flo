@@ -19,6 +19,7 @@ flo-event = { path = "../../crates/event" }
 flo-w3gs = { path = "../../crates/w3gs" }
 flo-util = { path = "../../crates/util" }
 flo-task = { path = "../../crates/task" }
+flo-state = "0.4"
 
 s2-grpc-utils = "0.2"
 dotenv = "0.15.0"

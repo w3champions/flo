@@ -68,6 +68,7 @@ message PacketGameSlotUpdate {
   int32 game_id = 1;
   int32 slot_index = 2;
   flo_common.SlotSettings slot_settings = 3;
+  PlayerInfo player = 4;
 }
 
 message PacketListNodesRequest {}
@@ -88,13 +89,27 @@ message PacketGameSelectNode {
 
 message PacketGamePlayerPingMapUpdateRequest {
   int32 game_id = 1;
-  map<int32, uint32> ping_map = 2;
+  map<int32, PingStatsInput> ping_map = 2;
 }
 
 message PacketGamePlayerPingMapUpdate {
   int32 game_id = 1;
   int32 player_id = 2;
-  map<int32, uint32> ping_map = 3;
+  map<int32, PingStatsInput> ping_map = 3;
+}
+
+message PingStatsInput {
+  google.protobuf.UInt32Value current = 1;
+  google.protobuf.UInt32Value avg = 2;
+  float loss_rate = 3;
+}
+
+message PingStats {
+  google.protobuf.UInt32Value current = 1;
+  google.protobuf.UInt32Value avg = 2;
+  google.protobuf.UInt32Value min = 3;
+  google.protobuf.UInt32Value max = 4;
+  float loss_rate = 5;
 }
 
 message PacketGamePlayerPingMapSnapshotRequest {
@@ -140,7 +155,7 @@ message PacketGameSlotClientStatusUpdate {
 }
 
 message NodePingMap {
-  map<int32, uint32> player_ping_map = 2;
+  map<int32, PingStats> player_ping_map = 2;
 }
 
 message Node {
@@ -154,6 +169,7 @@ message Node {
 enum PlayerSource {
   PlayerSourceTest = 0;
   PlayerSourceBNet = 1;
+  PlayerSourceApi = 2;
 }
 
 message PlayerInfo {

@@ -385,12 +385,18 @@ impl State {
     if let Some(ping) = ping {
       // upload ping update if joined a game
       if let Some((game_id, mut frame_sender)) = stream_state {
-        use flo_net::proto::flo_connect::PacketGamePlayerPingMapUpdateRequest;
+        use flo_net::proto::flo_connect::{PacketGamePlayerPingMapUpdateRequest, PingStatsInput};
         if let Some(frame) = (PacketGamePlayerPingMapUpdateRequest {
           game_id,
           ping_map: {
             let mut map = HashMap::new();
-            map.insert(node_id, ping);
+            map.insert(
+              node_id,
+              PingStatsInput {
+                current: Some(ping),
+                ..Default::default()
+              },
+            );
             map
           },
         })

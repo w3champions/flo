@@ -25,7 +25,7 @@ pub struct Game {
   pub num_players: i32,
   pub max_players: i32,
   pub random_seed: i32,
-  pub created_by: Option<PlayerRef>,
+  pub created_by: PlayerRef,
   pub started_at: Option<DateTime<Utc>>,
   pub ended_at: Option<DateTime<Utc>>,
   pub created_at: DateTime<Utc>,
@@ -162,6 +162,16 @@ pub enum GameStatus {
   Ended = 3,
   Paused = 4,
   Terminated = 5,
+}
+
+impl GameStatus {
+  pub fn is_active(&self) -> bool {
+    Self::active_variants().contains(self)
+  }
+
+  pub fn active_variants() -> &'static [GameStatus] {
+    &[Self::Preparing, Self::Created, Self::Running]
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, S2ProtoEnum)]
@@ -301,4 +311,18 @@ pub enum SlotClientStatus {
   Loaded = 4,
   Disconnected = 5,
   Left = 6,
+}
+
+impl SlotClientStatus {
+  pub fn still_in_game(&self) -> bool {
+    match *self {
+      SlotClientStatus::Pending
+      | SlotClientStatus::Connected
+      | SlotClientStatus::Joined
+      | SlotClientStatus::Loading
+      | SlotClientStatus::Loaded
+      | SlotClientStatus::Disconnected => true,
+      SlotClientStatus::Left => false,
+    }
+  }
 }
