@@ -120,7 +120,9 @@ impl PlatformState {
 
 async fn load() -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
   tokio::task::block_in_place(move || {
-    let config = ClientConfig::load().unwrap_or_default();
+    let config = ClientConfig::load()
+      .map_err(|err| tracing::error!("load config: {}", err))
+      .unwrap_or_default();
     let info = ClientPlatformInfo::with_config(&config).map_err(|e| match e {
       PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
       PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
