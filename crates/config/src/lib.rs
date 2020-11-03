@@ -6,12 +6,12 @@ pub mod error;
 
 use error::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
   pub local_port: u16,
   pub user_data_path: Option<PathBuf>,
   pub installation_path: Option<PathBuf>,
-  pub lobby_domain: String,
+  pub controller_domain: String,
 }
 
 impl Default for ClientConfig {
@@ -20,7 +20,7 @@ impl Default for ClientConfig {
       local_port: flo_constants::CLIENT_WS_PORT,
       user_data_path: None,
       installation_path: None,
-      lobby_domain: flo_constants::CONTROLLER_DOMAIN.to_string(),
+      controller_domain: flo_constants::CONTROLLER_DOMAIN.to_string(),
     }
   }
 }
@@ -66,7 +66,7 @@ impl ClientConfig {
     }
 
     if let Some(domain) = env::var("FLO_LOBBY_DOMAIN").ok() {
-      self.lobby_domain = domain;
+      self.controller_domain = domain;
     }
   }
 }

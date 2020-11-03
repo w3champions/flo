@@ -13,7 +13,7 @@ use flo_net::proto::flo_connect::{
 use crate::error::{Error, Result};
 use crate::node::PingUpdate;
 use crate::platform::PlatformStateError;
-pub use crate::types::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason};
+pub use crate::types::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason, MapDetail, MapForceOwned, MapPlayerOwned};
 use crate::types::{GameInfo, GameStatusUpdate, PlayerInfo, Slot, SlotSettings};
 
 #[derive(Debug, Deserialize)]
@@ -118,38 +118,6 @@ pub struct MapList {
 #[derive(Debug, Deserialize)]
 pub struct MapPath {
   pub path: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MapDetail {
-  pub path: String,
-  pub sha1: String,
-  pub crc32: u32,
-  pub name: String,
-  pub author: String,
-  pub description: String,
-  pub width: u32,
-  pub height: u32,
-  pub preview_jpeg_base64: String,
-  pub suggested_players: String,
-  pub num_players: usize,
-  pub players: Vec<MapPlayerOwned>,
-  pub forces: Vec<MapForceOwned>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MapPlayerOwned {
-  pub name: String,
-  pub r#type: u32,
-  pub race: u32,
-  pub flags: u32,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MapForceOwned {
-  pub name: String,
-  pub flags: u32,
-  pub player_set: u32,
 }
 
 #[derive(Debug, Serialize)]

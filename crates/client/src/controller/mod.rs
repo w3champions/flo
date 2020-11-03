@@ -18,13 +18,14 @@ use crate::controller::stream::{
 };
 use crate::error::*;
 use crate::node::{NodeInfo, NodeRegistry, NodeRegistryRef, PingUpdate};
-use crate::platform::PlatformStateRef;
+use crate::platform::{PlatformActor, GetClientPlatformInfo, CalcMapChecksum, GetClientConfig};
 use crate::types::{GameInfo, Slot};
 use crate::types::{GameStatusUpdate, PlayerInfo, PlayerSession};
 
 use crate::controller::ws::message::ClientUpdateSlotClientStatus;
 use ws::message::{self, OutgoingMessage};
 use ws::{Ws, WsEvent, WsMessageSender};
+use flo_state::Addr;
 
 pub type ControllerEventSender = Sender<ControllerEvent>;
 
@@ -37,7 +38,7 @@ pub struct ControllerClient {
 }
 
 impl ControllerClient {
-  pub async fn init(platform: PlatformStateRef, sender: ControllerEventSender) -> Result<Self> {
+  pub async fn init(platform: Addr<PlatformActor>, sender: ControllerEventSender) -> Result<Self> {
     let (ping_sender, ping_receiver) = channel(1);
     let nodes = NodeRegistry::new(ping_sender).into_ref();
 
@@ -191,7 +192,7 @@ impl NodePingUpdateHandler {
 #[derive(Debug)]
 struct State {
   id_counter: AtomicU64,
-  platform: PlatformStateRef,
+  platform: Addr<PlatformActor>,
   nodes: NodeRegistryRef,
   ws: Ws,
   event_sender: ControllerEventSender,
@@ -203,7 +204,7 @@ struct State {
 
 impl State {
   fn new(
-    platform: PlatformStateRef,
+    platform: Addr<PlatformActor>,
     nodes: NodeRegistryRef,
     ws: Ws,
     event_sender: ControllerEventSender,
@@ -250,14 +251,22 @@ impl State {
   async fn handle_ws_event(self: Arc<Self>, event: WsEvent) {
     match event {
       WsEvent::ConnectLobbyEvent(connect) => {
-        *self.conn.write() = Some(LobbyConn::new(
+        let conn = LobbyConn::new(
           self.id_counter.fetch_add(1, Ordering::SeqCst),
           self.platform.clone(),
           self.stream_event_sender.clone().into(),
           self.nodes.clone(),
           connect.sender,
           connect.token,
-        ));
+        ).await;
+        let conn = match conn {
+          Ok(v) => v,
+          Err(err) => {
+            tracing::error!("connect to controller: {}", err);
+            return
+          }
+        };
+        *self.conn.write() = Some(conn);
       }
       WsEvent::LobbyFrameEvent(frame) => {
         self.send_frame_or_disconnect_ws(frame).await;
@@ -416,18 +425,14 @@ impl State {
     let info = { self.current_game_info.read().clone() };
     if let Some(info) = info {
       if info.game_id == game_id {
-        let version = self
-          .platform
-          .map(|info| info.version.clone())
-          .map_err(|_| Error::War3NotLocated)?;
+        let client_info = self.platform.send(GetClientPlatformInfo).await?.map_err(|_| Error::War3NotLocated)?;
+        let version = client_info.version;
         let sha1 = self
           .platform
-          .with_storage(move |storage| -> Result<_> {
-            use flo_w3map::W3Map;
-            let (_map, checksum) = W3Map::open_storage_with_checksum(storage, &info.map_path)?;
-            Ok(checksum.sha1)
+          .send(CalcMapChecksum {
+            path: info.map_path.clone()
           })
-          .await?;
+          .await??.sha1;
         self
           .send_frame_or_disconnect_ws(
             flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest {
@@ -453,15 +458,15 @@ pub struct LobbyConn {
 }
 
 impl LobbyConn {
-  fn new(
+  async fn new(
     id: u64,
-    platform: PlatformStateRef,
+    platform: Addr<PlatformActor>,
     event_sender: ControllerStreamEventSender,
     nodes: NodeRegistryRef,
     ws_sender: WsMessageSender,
     token: String,
-  ) -> Self {
-    let domain = platform.with_config(|c| c.lobby_domain.clone());
+  ) -> Result<Self> {
+    let domain = platform.send(GetClientConfig).await?.controller_domain;
     let stream = ControllerStream::new(
       id,
       &domain,
@@ -471,12 +476,12 @@ impl LobbyConn {
       token,
     );
 
-    Self {
+    Ok(Self {
       id,
       stream,
       event_sender,
       ws_sender,
-    }
+    })
   }
 }
 

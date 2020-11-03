@@ -14,11 +14,12 @@ use flo_net::packet::Frame;
 use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
-use crate::platform::PlatformStateRef;
+use crate::platform::{PlatformActor, GetClientConfig};
 
 use handler::WsHandler;
 use message::OutgoingMessage;
 use stream::WsStream;
+use flo_state::Addr;
 
 pub type WsMessageSender = Sender<OutgoingMessage>;
 pub type WsEventSender = Sender<WsEvent>;
@@ -31,9 +32,9 @@ pub struct Ws {
 }
 
 impl Ws {
-  pub async fn init(platform: PlatformStateRef, event_sender: WsEventSender) -> Result<Self> {
+  pub async fn init(platform: Addr<PlatformActor>, event_sender: WsEventSender) -> Result<Self> {
     let scope = SpawnScope::new();
-    let port = platform.with_config(|c| c.local_port);
+    let port = platform.send(GetClientConfig).await?.local_port;
     let (ws_sender, mut ws_receiver) = channel(3);
     let state = Arc::new(State {
       port,
@@ -93,7 +94,7 @@ impl Ws {
 #[derive(Debug)]
 struct State {
   port: u16,
-  platform: PlatformStateRef,
+  platform: Addr<PlatformActor>,
   event_sender: WsEventSender,
   handler: Arc<RwLock<Option<WsHandler>>>,
 }

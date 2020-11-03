@@ -12,8 +12,9 @@ use crate::controller::LocalGameInfo;
 use crate::error::*;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
-use crate::platform::PlatformStateRef;
+use crate::platform::{PlatformActor, CalcMapChecksum};
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_state::Addr;
 
 #[derive(Debug)]
 pub struct Lan {
@@ -21,7 +22,7 @@ pub struct Lan {
 }
 
 impl Lan {
-  pub fn new(platform: PlatformStateRef, event_sender: Sender<LanEvent>) -> Self {
+  pub fn new(platform: Addr<PlatformActor>, event_sender: Sender<LanEvent>) -> Self {
     Lan {
       state: Arc::new(State {
         platform,
@@ -60,10 +61,10 @@ impl LanHandle {
     let checksum = self
       .0
       .platform
-      .with_storage(|storage| {
-        flo_w3map::W3Map::calc_checksum(storage, &game.map_path).map_err(Into::into)
+      .send(CalcMapChecksum {
+        path: game.map_path.clone()
       })
-      .await?;
+      .await??;
     if checksum.sha1 == game.map_sha1 {
       let lan_game = LanGame::create(
         my_player_id,
@@ -139,7 +140,7 @@ impl LanHandle {
 
 #[derive(Debug)]
 struct State {
-  platform: PlatformStateRef,
+  platform: Addr<PlatformActor>,
   event_sender: Sender<LanEvent>,
   active_game: Mutex<Option<LanGame>>,
 }

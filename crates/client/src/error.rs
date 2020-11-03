@@ -64,3 +64,19 @@ pub enum Error {
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+impl From<flo_state::error::Error> for Error {
+  fn from(err: flo_state::error::Error) -> Self {
+    match err {
+      flo_state::error::Error::WorkerGone => Self::TaskCancelled,
+    }
+  }
+}
+
+impl From<flo_state::RegistryError> for Error {
+  fn from(err: flo_state::RegistryError) -> Self {
+    match err {
+      flo_state::RegistryError::RegistryGone => Self::TaskCancelled,
+    }
+  }
+}

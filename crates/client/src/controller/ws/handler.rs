@@ -11,13 +11,14 @@ use flo_net::proto::flo_connect::{
 use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use super::message::{
-  ClientInfo, ErrorMessage, IncomingMessage, MapDetail, MapForceOwned, MapList, MapPath,
-  MapPlayerOwned, OutgoingMessage, War3Info,
+  ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
 };
 use super::stream::WsStream;
 use super::{ConnectLobbyEvent, WsEvent, WsEventSender};
 use crate::error::{Error, Result};
-use crate::platform::PlatformStateRef;
+use crate::platform::{PlatformActor, PlatformStateError, GetClientPlatformInfo, GetMapList, GetMapDetail, Reload};
+use flo_state::Addr;
+use flo_platform::ClientPlatformInfo;
 
 #[derive(Debug)]
 pub struct WsHandler {
@@ -26,7 +27,7 @@ pub struct WsHandler {
 }
 
 impl WsHandler {
-  pub fn new(platform: PlatformStateRef, event_sender: WsEventSender, stream: WsStream) -> Self {
+  pub fn new(platform: Addr<PlatformActor>, event_sender: WsEventSender, stream: WsStream) -> Self {
     let (ws_sender, ws_receiver) = channel(3);
     let scope = SpawnScope::new();
     let serve_state = Arc::new(ServeState {
@@ -69,7 +70,7 @@ async fn serve_stream(
   mut scope: SpawnScopeHandle,
   mut stream: WsStream,
 ) -> Result<()> {
-  let msg = state.get_client_info_message();
+  let msg = state.get_client_info_message().await?;
 
   stream.send(msg).await?;
 
@@ -115,7 +116,7 @@ async fn serve_stream(
 
 #[derive(Debug)]
 struct ServeState {
-  platform: PlatformStateRef,
+  platform: Addr<PlatformActor>,
   event_sender: WsEventSender,
 }
 
@@ -161,11 +162,12 @@ impl ServeState {
     Ok(())
   }
 
-  fn get_client_info_message(&self) -> OutgoingMessage {
-    OutgoingMessage::ClientInfo(ClientInfo {
+  async fn get_client_info_message(&self) -> Result<OutgoingMessage> {
+    let info = self.platform.send(GetClientPlatformInfo).await?;
+    Ok(OutgoingMessage::ClientInfo(ClientInfo {
       version: crate::version::FLO_VERSION_STRING.into(),
-      war3_info: get_war3_info(self.platform.clone()),
-    })
+      war3_info: get_war3_info(info),
+    }))
   }
 
   async fn handle_connect(&self, sender: Sender<OutgoingMessage>, token: String) -> Result<()> {
@@ -181,8 +183,8 @@ impl ServeState {
   }
 
   async fn handle_reload_client_info(&self, mut sender: Sender<OutgoingMessage>) -> Result<()> {
-    match self.platform.reload().await {
-      Ok(_) => sender.send(self.get_client_info_message()),
+    match self.platform.send(Reload).await? {
+      Ok(_) => sender.send(self.get_client_info_message().await?),
       Err(e) => sender.send(OutgoingMessage::ReloadClientInfoError(ErrorMessage {
         message: e.to_string(),
       })),
@@ -192,7 +194,7 @@ impl ServeState {
   }
 
   async fn handle_map_list(&self, mut sender: Sender<OutgoingMessage>) -> Result<()> {
-    let value = self.platform.get_map_list().await;
+    let value = self.platform.send(GetMapList).await?;
     match value {
       Ok(value) => {
         sender
@@ -215,44 +217,10 @@ impl ServeState {
   ) -> Result<()> {
     let detail = self
       .platform
-      .with_storage(move |storage| -> Result<_> {
-        use flo_w3map::W3Map;
-        let (map, checksum) = W3Map::open_storage_with_checksum(storage, &path)?;
-        let (width, height) = map.dimension();
-        Ok(MapDetail {
-          path,
-          sha1: checksum.get_sha1_hex_string(),
-          crc32: checksum.crc32,
-          name: map.name().to_string(),
-          author: map.author().to_string(),
-          description: map.description().to_string(),
-          width,
-          height,
-          preview_jpeg_base64: base64::encode(map.render_preview_jpeg()),
-          suggested_players: map.suggested_players().to_string(),
-          num_players: map.num_players(),
-          players: map
-            .get_players()
-            .into_iter()
-            .map(|p| MapPlayerOwned {
-              name: p.name.to_string(),
-              r#type: p.r#type,
-              race: p.race,
-              flags: p.flags,
-            })
-            .collect(),
-          forces: map
-            .get_forces()
-            .into_iter()
-            .map(|f| MapForceOwned {
-              name: f.name.to_string(),
-              flags: f.flags,
-              player_set: f.player_set,
-            })
-            .collect(),
-        })
+      .send(GetMapDetail {
+        path
       })
-      .await;
+      .await?;
     match detail {
       Ok(detail) => sender.send(OutgoingMessage::GetMapDetail(detail)).await?,
       Err(e) => {
@@ -315,14 +283,13 @@ impl ServeState {
   }
 }
 
-fn get_war3_info(platform: PlatformStateRef) -> War3Info {
-  let info = platform.map(|info| War3Info {
-    located: true,
-    version: info.version.clone().into(),
-    error: None,
-  });
+fn get_war3_info(info: Result<ClientPlatformInfo, PlatformStateError>) -> War3Info {
   match info {
-    Ok(info) => info,
+    Ok(info) => War3Info {
+      located: true,
+      version: info.version.clone().into(),
+      error: None,
+    },
     Err(e) => War3Info {
       located: false,
       version: None,

@@ -12,12 +12,15 @@ use flo_event::FloEvent;
 use crate::controller::{ControllerClient, ControllerEvent};
 use crate::lan::{Lan, LanEvent};
 use crate::node::stream::NodeStreamEvent;
-use crate::platform::PlatformState;
+use crate::platform::PlatformActor;
+use flo_state::Registry;
 
 pub async fn bootstrap() -> Result<(), Box<dyn std::error::Error>> {
   tracing::info!("version: {}", version::FLO_VERSION);
 
-  let platform = PlatformState::init().await?.into_ref();
+  let registry = Registry::new();
+
+  let platform = registry.resolve::<PlatformActor>().await?;
   let (ctrl_sender, mut ctrl_receiver) = channel(3);
   let ctrl = ControllerClient::init(platform.clone(), ctrl_sender).await?;
   let (lan_sender, mut lan_receiver) = LanEvent::channel(1);
