@@ -685,36 +685,10 @@ dependencies = [
 name = "flo"
 version = "0.0.3"
 dependencies = [
- "async-tungstenite",
- "base64",
  "dotenv",
- "flo-config",
- "flo-constants",
- "flo-event",
- "flo-lan",
- "flo-log",
+ "flo-client",
  "flo-log-subscriber",
- "flo-net",
- "flo-platform",
- "flo-state",
- "flo-task 0.1.0",
- "flo-types",
- "flo-util",
- "flo-w3gs",
- "flo-w3map",
- "flo-w3storage",
- "futures 0.3.7",
- "hash-ids",
- "http",
- "lazy_static",
- "parking_lot",
- "s2-grpc-utils",
- "serde",
- "serde_json",
- "thiserror",
  "tokio",
- "tracing",
- "tracing-futures",
 ]
 
 [[package]]
@@ -743,6 +717,36 @@ dependencies = [
 [[package]]
 name = "flo-client"
 version = "0.1.0"
+dependencies = [
+ "async-tungstenite",
+ "base64",
+ "flo-config",
+ "flo-constants",
+ "flo-event",
+ "flo-lan",
+ "flo-log",
+ "flo-net",
+ "flo-platform",
+ "flo-state",
+ "flo-task 0.1.0",
+ "flo-types",
+ "flo-util",
+ "flo-w3gs",
+ "flo-w3map",
+ "flo-w3storage",
+ "futures 0.3.7",
+ "hash-ids",
+ "http",
+ "lazy_static",
+ "parking_lot",
+ "s2-grpc-utils",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
 
 [[package]]
 name = "flo-codegen"
@@ -781,7 +785,6 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "flo-constants",
- "flo-event",
  "flo-grpc",
  "flo-log",
  "flo-log-subscriber",
@@ -979,6 +982,7 @@ dependencies = [
 [[package]]
 name = "flo-state"
 version = "0.4.0"
+source = "git+https://github.com/wc3tools/flo-state.git?branch=main#4321789d407cdf3f258a587ea2180e77413ca6cd"
 dependencies = [
  "async-trait",
  "flo-task 0.1.0 (git+https://github.com/wc3tools/flo-task.git)",
