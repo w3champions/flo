@@ -95,7 +95,7 @@ impl<'a> LobbyHandler<'a> {
           let next = if let Some(next) = next {
             next
           } else {
-            return Err(Error::TaskCancelled)
+            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
           };
           match next {
             Some(status) => {

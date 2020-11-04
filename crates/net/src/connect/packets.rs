@@ -14,11 +14,8 @@ packet_type!(ListNodesRequest, PacketListNodesRequest);
 packet_type!(ListNodes, PacketListNodes);
 packet_type!(GameSelectNodeRequest, PacketGameSelectNodeRequest);
 packet_type!(GameSelectNode, PacketGameSelectNode);
-packet_type!(
-  GamePlayerPingMapUpdateRequest,
-  PacketGamePlayerPingMapUpdateRequest
-);
-packet_type!(GamePlayerPingMapUpdate, PacketGamePlayerPingMapUpdate);
+packet_type!(PlayerPingMapUpdateRequest, PacketPlayerPingMapUpdateRequest);
+packet_type!(PlayerPingMapUpdate, PacketPlayerPingMapUpdate);
 packet_type!(
   GamePlayerPingMapSnapshotRequest,
   PacketGamePlayerPingMapSnapshotRequest

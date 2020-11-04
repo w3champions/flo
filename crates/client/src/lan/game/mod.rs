@@ -5,7 +5,6 @@ pub mod slot;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::Sender;
 use tokio::time::delay_for;
 use tracing_futures::Instrument;
 
@@ -14,20 +13,21 @@ use flo_task::SpawnScope;
 use flo_w3gs::protocol::game::GameSettings;
 use flo_w3map::MapChecksum;
 
-use crate::controller::LocalGameInfo;
 use crate::error::*;
+use crate::game::LocalGameInfo;
 use crate::lan::game::slot::LanSlotInfo;
-use crate::lan::{get_lan_game_name, LanEvent};
+use crate::lan::get_lan_game_name;
 use crate::node::stream::NodeConnectToken;
 use crate::node::NodeInfo;
 
+use crate::controller::ControllerClient;
 use crate::lan::game::proxy::PlayerEvent;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_state::Addr;
 use proxy::LanProxy;
 
-#[derive(Debug)]
 pub struct LanGame {
-  scope: SpawnScope,
+  _scope: SpawnScope,
   state: Arc<State>,
   proxy: LanProxy,
 }
@@ -47,7 +47,7 @@ impl LanGame {
     player_token: Vec<u8>,
     game: Arc<LocalGameInfo>,
     map_checksum: MapChecksum,
-    event_sender: Sender<LanEvent>,
+    client: Addr<ControllerClient>,
   ) -> Result<Self> {
     let game_id = game.game_id;
     let mut game_info = GameInfo::new(
@@ -71,13 +71,12 @@ impl LanGame {
       },
       node,
       token,
-      event_sender.clone().into(),
+      client.clone(),
     )
     .await?;
     game_info.set_port(proxy.port());
     let scope = SpawnScope::new();
     let state = Arc::new(State {
-      event_sender,
       game_id,
       my_player_id,
     });
@@ -106,7 +105,7 @@ impl LanGame {
     );
 
     Ok(Self {
-      scope,
+      _scope: scope,
       proxy,
       state,
     })
@@ -116,21 +115,15 @@ impl LanGame {
     self.state.game_id
   }
 
-  pub async fn update_game_status(&self, status: NodeGameStatus) -> Result<()> {
-    self.proxy.dispatch_game_status_change(status).await?;
-    Ok(())
+  pub async fn update_game_status(&self, status: NodeGameStatus) {
+    self.proxy.dispatch_game_status_change(status).await;
   }
 
-  pub async fn update_player_status(
-    &mut self,
-    player_id: i32,
-    status: SlotClientStatus,
-  ) -> Result<()> {
+  pub async fn update_player_status(&mut self, player_id: i32, status: SlotClientStatus) {
     self
       .proxy
       .dispatch_player_event(PlayerEvent::PlayerStatusChange { player_id, status })
-      .await?;
-    Ok(())
+      .await;
   }
 
   pub fn is_same_game(&self, game_id: i32, my_player_id: i32) -> bool {
@@ -138,9 +131,7 @@ impl LanGame {
   }
 }
 
-#[derive(Debug)]
 struct State {
-  event_sender: Sender<LanEvent>,
   game_id: i32,
   my_player_id: i32,
 }

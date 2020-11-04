@@ -8,3 +8,4 @@ flo.toml
 .idea/usage.statistics.xml
 .idea/tasks.xml
 /build/release
+/logs

@@ -1,15 +1,15 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq)]
 pub struct Version {
-  pub major: u8,
-  pub minor: u8,
-  pub patch: u8,
+  pub major: i32,
+  pub minor: i32,
+  pub patch: i32,
 }
 
 impl Version {
   pub fn parse(v: &'static str) -> Self {
-    let parts: Vec<u8> = v.split('.').map(|v| v.parse::<u8>().unwrap()).collect();
+    let parts: Vec<i32> = v.split('.').map(|v| v.parse::<i32>().unwrap()).collect();
     assert_eq!(parts.len(), 3);
     Version {
       major: parts[0],

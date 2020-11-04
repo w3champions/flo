@@ -1,68 +1,82 @@
 pub mod game;
 
-use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use flo_event::*;
 use game::LanGame;
 
-use crate::controller::LocalGameInfo;
+use crate::controller::ControllerClient;
 use crate::error::*;
+use crate::game::LocalGameInfo;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
-use crate::platform::{PlatformActor, CalcMapChecksum};
+use crate::platform::{CalcMapChecksum, PlatformActor};
 use crate::types::{NodeGameStatus, SlotClientStatus};
-use flo_state::Addr;
+use flo_state::{
+  async_trait, Actor, Addr, Context, Deferred, Handler, Message, RegistryRef, Service,
+};
 
-#[derive(Debug)]
 pub struct Lan {
-  state: Arc<State>,
+  platform: Addr<PlatformActor>,
+  client: Deferred<ControllerClient>,
+  active_game: Option<LanGame>,
 }
 
-impl Lan {
-  pub fn new(platform: Addr<PlatformActor>, event_sender: Sender<LanEvent>) -> Self {
-    Lan {
-      state: Arc::new(State {
-        platform,
-        event_sender,
-        active_game: Mutex::new(None),
-      }),
-    }
-  }
+impl Actor for Lan {}
 
-  pub fn handle(&self) -> LanHandle {
-    LanHandle(self.state.clone())
+#[async_trait]
+impl Service for Lan {
+  type Error = Error;
+
+  async fn create(registry: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
+    let platform = registry.resolve().await?;
+    Ok(Lan {
+      platform,
+      client: registry.deferred(),
+      active_game: None,
+    })
   }
 }
 
-#[derive(Debug)]
-pub struct LanHandle(Arc<State>);
+pub struct ReplaceLanGame {
+  pub my_player_id: i32,
+  pub node: Arc<NodeInfo>,
+  pub player_token: Vec<u8>,
+  pub game: Arc<LocalGameInfo>,
+}
 
-impl LanHandle {
-  pub async fn replace_game(
-    &self,
-    my_player_id: i32,
-    node: Arc<NodeInfo>,
-    player_token: Vec<u8>,
-    game: Arc<LocalGameInfo>,
-  ) -> Result<()> {
+impl Message for ReplaceLanGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<ReplaceLanGame> for Lan {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    ReplaceLanGame {
+      my_player_id,
+      node,
+      player_token,
+      game,
+    }: ReplaceLanGame,
+  ) -> <ReplaceLanGame as Message>::Result {
     let game_id = game.game_id;
-    let mut active_game = self.0.active_game.lock().await;
-    if active_game
+    if self
+      .active_game
       .as_ref()
       .map(|g| g.is_same_game(game_id, my_player_id))
       == Some(true)
     {
+      tracing::debug!("skip create: same game");
       return Ok(());
     }
 
     let checksum = self
-      .0
       .platform
       .send(CalcMapChecksum {
-        path: game.map_path.clone()
+        path: game.map_path.clone(),
       })
       .await??;
     if checksum.sha1 == game.map_sha1 {
@@ -72,26 +86,41 @@ impl LanHandle {
         player_token,
         game,
         checksum,
-        self.0.event_sender.clone(),
+        self.client.resolve().await?,
       )
       .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");
-      active_game.replace(lan_game);
+      self.active_game.replace(lan_game);
     } else {
-      active_game.take();
+      self.active_game.take();
       return Err(Error::MapChecksumMismatch);
     }
     Ok(())
   }
+}
 
-  pub async fn update_game_status(
-    &self,
-    game_id: i32,
-    status: NodeGameStatus,
-    updated_player_game_client_status_map: &HashMap<i32, SlotClientStatus>,
-  ) -> Result<()> {
-    let mut active_game = self.0.active_game.lock().await;
-    let game = if let Some(game) = active_game.as_mut() {
+pub struct UpdateLanGameStatus {
+  pub game_id: i32,
+  pub status: NodeGameStatus,
+  pub updated_player_game_client_status_map: HashMap<i32, SlotClientStatus>,
+}
+
+impl Message for UpdateLanGameStatus {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<UpdateLanGameStatus> for Lan {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateLanGameStatus {
+      game_id,
+      status,
+      updated_player_game_client_status_map,
+    }: UpdateLanGameStatus,
+  ) -> <UpdateLanGameStatus as Message>::Result {
+    let game = if let Some(game) = self.active_game.as_mut() {
       game
     } else {
       return Err(Error::NotInGame);
@@ -103,21 +132,36 @@ impl LanHandle {
     }
 
     for (player_id, status) in updated_player_game_client_status_map {
-      game.update_player_status(*player_id, *status).await?;
+      game.update_player_status(player_id, status).await;
     }
-    game.update_game_status(status).await?;
+    game.update_game_status(status).await;
 
     Ok(())
   }
+}
 
-  pub async fn update_player_status(
-    &self,
-    game_id: i32,
-    player_id: i32,
-    status: SlotClientStatus,
-  ) -> Result<()> {
-    let mut active_game = self.0.active_game.lock().await;
-    let game = if let Some(game) = active_game.as_mut() {
+pub struct UpdateLanGamePlayerStatus {
+  pub game_id: i32,
+  pub player_id: i32,
+  pub status: SlotClientStatus,
+}
+
+impl Message for UpdateLanGamePlayerStatus {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<UpdateLanGamePlayerStatus> for Lan {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateLanGamePlayerStatus {
+      game_id,
+      player_id,
+      status,
+    }: UpdateLanGamePlayerStatus,
+  ) -> <UpdateLanGamePlayerStatus as Message>::Result {
+    let game = if let Some(game) = self.active_game.as_mut() {
       game
     } else {
       return Err(Error::NotInGame);
@@ -128,21 +172,27 @@ impl LanHandle {
       return Ok(());
     }
 
-    game.update_player_status(player_id, status).await?;
+    game.update_player_status(player_id, status).await;
 
     Ok(())
   }
-
-  pub async fn stop_game(&self) {
-    self.0.active_game.lock().await.take();
-  }
 }
 
-#[derive(Debug)]
-struct State {
-  platform: Addr<PlatformActor>,
-  event_sender: Sender<LanEvent>,
-  active_game: Mutex<Option<LanGame>>,
+pub struct StopLanGame;
+
+impl Message for StopLanGame {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<StopLanGame> for Lan {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: StopLanGame,
+  ) -> <StopLanGame as Message>::Result {
+    self.active_game.take();
+  }
 }
 
 pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
@@ -162,16 +212,10 @@ pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
 
 #[derive(Debug)]
 pub enum LanEvent {
-  GameDisconnected,
+  LanGameDisconnected,
   NodeStreamEvent(NodeStreamEvent),
 }
 
-impl From<NodeStreamEvent> for LanEvent {
-  fn from(value: NodeStreamEvent) -> Self {
-    LanEvent::NodeStreamEvent(value)
-  }
-}
-
-impl FloEvent for LanEvent {
-  const NAME: &'static str = "LanEvent";
+impl Message for LanEvent {
+  type Result = ();
 }

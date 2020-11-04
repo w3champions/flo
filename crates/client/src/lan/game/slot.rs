@@ -45,7 +45,12 @@ pub fn build_player_slot_info(
     let mut b = SlotInfo::build();
     b.random_seed(random_seed)
       .num_slots(24)
-      .num_players(player_slots.len())
+      .num_players(
+        player_slots
+          .iter()
+          .filter(|(_, slot)| slot.settings.team != 24)
+          .count(),
+      )
       .build()
   };
 

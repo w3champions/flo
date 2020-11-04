@@ -8,6 +8,7 @@ use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::leave::LeaveAck;
 
 use crate::error::*;
+use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::types::{NodeGameStatus, SlotClientStatus};
@@ -23,6 +24,7 @@ pub struct GameHandler<'a> {
   info: &'a LanGameInfo,
   stream: &'a mut W3GSStream,
   node_stream: &'a mut NodeStreamHandle,
+  event_rx: &'a mut Receiver<PlayerEvent>,
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_rx: &'a mut Receiver<Packet>,
 }
@@ -32,6 +34,7 @@ impl<'a> GameHandler<'a> {
     info: &'a LanGameInfo,
     stream: &'a mut W3GSStream,
     node_stream: &'a mut NodeStreamHandle,
+    event_rx: &'a mut Receiver<PlayerEvent>,
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_rx: &'a mut Receiver<Packet>,
   ) -> Self {
@@ -39,6 +42,7 @@ impl<'a> GameHandler<'a> {
       info,
       stream,
       node_stream,
+      event_rx,
       status_rx,
       w3gs_rx,
     }
@@ -68,14 +72,26 @@ impl<'a> GameHandler<'a> {
 
             self.handle_packet(&mut loop_state, pkt).await?;
           } else {
+            tracing::error!("stream closed");
             return Ok(GameResult::Disconnected)
+          }
+        }
+        next = self.event_rx.recv() => {
+          match next {
+            Some(PlayerEvent::PlayerStatusChange {
+              player_id,
+              status
+            }) => {
+              tracing::debug!(game_id = self.info.game.game_id, player_id, "slot client status change: {:?}", status);
+            },
+            None => {}
           }
         }
         next = self.status_rx.recv() => {
           let next = if let Some(next) = next {
             next
           } else {
-            return Err(Error::TaskCancelled)
+            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
           };
           match next {
             Some(status) => {
@@ -88,7 +104,7 @@ impl<'a> GameHandler<'a> {
           if let Some(pkt) = next {
             self.handle_w3gs(&mut loop_state, pkt).await?;
           } else {
-            return Err(Error::TaskCancelled)
+            return Err(Error::TaskCancelled(anyhow::format_err!("w3g tx dropped")))
           }
         }
       }

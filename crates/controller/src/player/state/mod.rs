@@ -6,7 +6,7 @@ use crate::client::PlayerSender;
 use crate::error::Error;
 use crate::state::Data;
 use flo_state::{async_trait, Actor, RegistryRef, Service};
-use ping::PingStats;
+use flo_types::ping::PingStats;
 
 use std::collections::BTreeMap;
 

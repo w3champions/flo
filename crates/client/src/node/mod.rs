@@ -1,4 +1,6 @@
-mod ping;
 mod registry;
 pub mod stream;
-pub use registry::{NodeInfo, NodeRegistry, NodeRegistryRef, PingUpdate};
+pub use registry::{
+  GetNode, GetNodePingMap, NodeInfo, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap,
+  UpdateNodes,
+};

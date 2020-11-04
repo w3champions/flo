@@ -1,27 +1,25 @@
+use crate::controller::ControllerClient;
+use crate::error::*;
+use crate::lan::LanEvent;
+use crate::types::GameStatusUpdate;
+use crate::types::SlotClientStatus;
+use flo_net::packet::*;
+use flo_net::proto::flo_node as proto;
+use flo_net::stream::FloStream;
+use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
+use flo_state::Addr;
+use flo_task::{SpawnScope, SpawnScopeHandle};
+use flo_types::node::NodeGameStatusSnapshot;
+use flo_w3gs::packet::Packet as W3GSPacket;
+use flo_w3gs::protocol::packet::Packet;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing_futures::Instrument;
 
-use flo_event::*;
-use flo_net::packet::*;
-use flo_net::proto::flo_node as proto;
-use flo_net::stream::FloStream;
-use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
-use flo_task::{SpawnScope, SpawnScopeHandle};
-use flo_types::node::NodeGameStatusSnapshot;
-use flo_w3gs::packet::Packet as W3GSPacket;
-
-use crate::error::*;
-use crate::lan::LanEvent;
-use crate::types::GameStatusUpdate;
-use crate::types::SlotClientStatus;
-use flo_w3gs::protocol::packet::Packet;
-
-#[derive(Debug)]
 pub struct NodeStream {
-  scope: SpawnScope,
+  _scope: SpawnScope,
   state: Arc<State>,
 }
 
@@ -29,7 +27,7 @@ impl NodeStream {
   pub async fn connect(
     addr: SocketAddr,
     token: NodeConnectToken,
-    event_sender: NodeStreamEventSender,
+    client: Addr<ControllerClient>,
     w3gs_sender: Sender<W3GSPacket>,
   ) -> Result<Self> {
     let scope = SpawnScope::new();
@@ -71,8 +69,7 @@ impl NodeStream {
       game_id: initial_status.game_id,
       player_id,
       outgoing_sender,
-      event_sender,
-      token: token.to_vec(),
+      client,
     });
 
     tokio::spawn({
@@ -91,7 +88,10 @@ impl NodeStream {
       ))
     });
 
-    Ok(Self { scope, state })
+    Ok(Self {
+      _scope: scope,
+      state,
+    })
   }
 
   pub fn handle(&self) -> NodeStreamHandle {
@@ -110,14 +110,18 @@ impl NodeStream {
     initial_status: NodeGameStatusSnapshot,
     mut scope: SpawnScopeHandle,
   ) {
-    let mut event_sender = state.event_sender.clone();
+    let client = state.client.clone();
 
-    flo_log::result_ok!(
-      "send NodeStreamEvent::NodeGameStatusSnapshot",
-      event_sender
-        .send(NodeStreamEvent::GameInitialStatus(initial_status))
-        .await
-    );
+    if client
+      .notify(LanEvent::NodeStreamEvent(
+        NodeStreamEvent::GameInitialStatus(initial_status),
+      ))
+      .await
+      .is_err()
+    {
+      tracing::debug!("worker exiting: controller client gone");
+      return;
+    }
 
     loop {
       tokio::select! {
@@ -138,7 +142,7 @@ impl NodeStream {
                   }
                 }
                 _ => {
-                  if let Err(err) = Self::handle_node_frame(&mut event_sender, frame).await {
+                  if let Err(err) = Self::handle_node_frame(&client, frame).await {
                     tracing::debug!("handle node frame: {}", err);
                     break;
                   }
@@ -147,12 +151,12 @@ impl NodeStream {
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::debug!("stream closed");
-              event_sender.send_or_log_as_error(NodeStreamEvent::Disconnected).await;
+              client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
               break;
             },
             Err(err) => {
               tracing::error!("stream recv: {}", err);
-              event_sender.send_or_log_as_error(NodeStreamEvent::Disconnected).await;
+              client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
               break;
             }
           }
@@ -163,7 +167,7 @@ impl NodeStream {
             Some(frame) => {
               if let Err(err) = stream.send_frame(frame).await {
                 tracing::error!("stream send: {}", err);
-                event_sender.send_or_log_as_error(NodeStreamEvent::Disconnected).await;
+                client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
                 break;
               }
             },
@@ -184,28 +188,28 @@ impl NodeStream {
     tracing::debug!("exiting...");
   }
 
-  async fn handle_node_frame(event_sender: &mut NodeStreamEventSender, frame: Frame) -> Result<()> {
+  async fn handle_node_frame(client: &Addr<ControllerClient>, frame: Frame) -> Result<()> {
     flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientUpdateSlotClientStatus => {
           tracing::debug!(game_id = p.game_id, player_id = p.player_id, "update slot client status: {:?}", p.status());
           flo_log::result_ok!(
             "send NodeStreamEvent::SlotClientStatusUpdate",
-            event_sender.send(NodeStreamEvent::SlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)).await
+            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::SlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?))).await
           );
         }
         p: proto::PacketClientUpdateSlotClientStatusReject => {
           tracing::error!(game_id = p.game_id, player_id = p.player_id, "update slot client status rejected: {:?}", p.reason());
           flo_log::result_ok!(
             "send NodeStreamEvent::Disconnected",
-            event_sender.send(NodeStreamEvent::Disconnected).await
+            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await
           );
         }
         p: flo_net::proto::flo_node::PacketNodeGameStatusUpdate => {
           tracing::debug!(game_id = p.game_id, "update game status: {:?}", p);
           flo_log::result_ok!(
             "send NodeStreamEvent::GameStatusUpdate",
-            event_sender.send(NodeStreamEvent::GameStatusUpdate(p.into())).await
+            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::GameStatusUpdate(p.into()))).await
           );
         }
       }
@@ -243,11 +247,9 @@ impl NodeStreamHandle {
   }
 }
 
-#[derive(Debug)]
 struct State {
   outgoing_sender: Sender<Frame>,
-  event_sender: NodeStreamEventSender,
-  token: Vec<u8>,
+  client: Addr<ControllerClient>,
   game_id: i32,
   player_id: i32,
 }
@@ -270,8 +272,6 @@ impl NodeConnectToken {
   }
 }
 
-pub type NodeStreamEventSender = EventFromSender<LanEvent, NodeStreamEvent>;
-
 #[derive(Debug)]
 pub enum NodeStreamEvent {
   SlotClientStatusUpdate(SlotClientStatusUpdate),
@@ -291,8 +291,4 @@ pub struct SlotClientStatusUpdate {
   pub game_id: i32,
   #[s2_grpc(proto_enum)]
   pub status: SlotClientStatus,
-}
-
-impl FloEvent for NodeStreamEvent {
-  const NAME: &'static str = "NodeStreamEvent";
 }

@@ -215,7 +215,7 @@ pub fn add_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<Vec<Slo
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if status != GameStatus::Created {
+  if status != GameStatus::Preparing {
     return Err(Error::GameStarted);
   }
 

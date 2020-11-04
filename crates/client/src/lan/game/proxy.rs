@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::net::{SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -13,6 +12,7 @@ use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
 use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
 
+use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::lan::game::game::GameHandler;
 use crate::lan::game::lobby::{LobbyAction, LobbyHandler};
@@ -21,13 +21,12 @@ use crate::lan::LanEvent;
 use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamHandle};
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_state::Addr;
 
-#[derive(Debug)]
 pub struct LanProxy {
-  scope: SpawnScope,
+  _scope: SpawnScope,
+  _node_stream: NodeStream,
   port: u16,
-  node_stream: NodeStream,
-  state: Arc<State>,
   status_tx: watch::Sender<Option<NodeGameStatus>>,
   event_tx: Sender<PlayerEvent>,
 }
@@ -37,7 +36,7 @@ impl LanProxy {
     info: LanGameInfo,
     node: Arc<NodeInfo>,
     token: NodeConnectToken,
-    mut out_tx: Sender<LanEvent>,
+    client: Addr<ControllerClient>,
   ) -> Result<Self> {
     let scope = SpawnScope::new();
     let listener = W3GSListener::bind().await?;
@@ -45,13 +44,11 @@ impl LanProxy {
     let (status_tx, status_rx) = watch::channel(None);
     let (event_tx, event_rx) = channel(10);
     let (w3gs_tx, w3gs_rx) = channel(3);
-    let node_stream = NodeStream::connect(
-      SocketAddr::V4(SocketAddrV4::new(node.ip, flo_constants::NODE_CLIENT_PORT)),
-      token,
-      out_tx.clone().into(),
-      w3gs_tx,
-    )
-    .await?;
+
+    tracing::debug!("connecting to node: {}", node.client_socket_addr());
+
+    let node_stream =
+      NodeStream::connect(node.client_socket_addr(), token, client.clone(), w3gs_tx).await?;
 
     tracing::debug!("listening on port {}", port);
 
@@ -65,45 +62,33 @@ impl LanProxy {
       let state = state.clone();
       let scope = scope.handle();
       async move {
-        let res = state
-          .serve(listener, event_rx, w3gs_rx, &mut out_tx, scope)
-          .await;
+        let res = state.serve(listener, event_rx, w3gs_rx, scope).await;
 
         if let Err(res) = res {
           tracing::error!("lan: {}", res);
         }
 
-        out_tx.send(LanEvent::GameDisconnected).await.ok();
+        client.notify(LanEvent::LanGameDisconnected).await.ok();
         tracing::debug!("exiting");
       }
       .instrument(tracing::debug_span!("worker"))
     });
 
     Ok(LanProxy {
-      scope,
+      _scope: scope,
+      _node_stream: node_stream,
       port,
-      node_stream,
-      state,
       status_tx,
       event_tx,
     })
   }
 
-  pub async fn dispatch_game_status_change(&self, status: NodeGameStatus) -> Result<()> {
-    self
-      .status_tx
-      .broadcast(Some(status))
-      .map_err(|_| Error::TaskCancelled)?;
-    Ok(())
+  pub async fn dispatch_game_status_change(&self, status: NodeGameStatus) {
+    self.status_tx.broadcast(Some(status)).ok();
   }
 
-  pub async fn dispatch_player_event(&mut self, evt: PlayerEvent) -> Result<()> {
-    self
-      .event_tx
-      .send(evt)
-      .await
-      .map_err(|_| Error::TaskCancelled)?;
-    Ok(())
+  pub async fn dispatch_player_event(&mut self, evt: PlayerEvent) {
+    self.event_tx.send(evt).await.ok();
   }
 
   pub fn port(&self) -> u16 {
@@ -124,7 +109,6 @@ impl State {
     mut listener: W3GSListener,
     event_rx: Receiver<PlayerEvent>,
     mut w3gs_rx: Receiver<Packet>,
-    _out_tx: &mut Sender<LanEvent>,
     mut scope: SpawnScopeHandle,
   ) -> Result<()> {
     let mut node_stream = self.stream.clone();
@@ -185,16 +169,16 @@ impl State {
       }
     };
 
+    stop_collect_player_events_tx
+      .send(())
+      .expect("rx hold on stack");
+    let (slot_status_map, mut event_rx) = match (&mut collect_player_events).await {
+      Some(rx) => rx,
+      None => return Ok(()),
+    };
+
     // Load Screen
     {
-      stop_collect_player_events_tx
-        .send(())
-        .expect("rx hold on stack");
-      let (slot_status_map, mut event_rx) = match (&mut collect_player_events).await {
-        Some(rx) => rx,
-        None => return Ok(()),
-      };
-
       let load_screen = self.handle_load_screen(
         &self.info,
         &mut stream,
@@ -215,13 +199,14 @@ impl State {
       }
 
       tracing::debug!("all player loaded");
-    }
+    };
 
     // Game Loop
     let mut game_handler = GameHandler::new(
       &self.info,
       &mut stream,
       &mut node_stream,
+      &mut event_rx,
       &mut status_rx,
       &mut w3gs_rx,
     );
@@ -379,7 +364,7 @@ impl State {
           let next = if let Some(next) = next {
             next
           } else {
-            return Err(Error::TaskCancelled)
+            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
           };
           match next {
             Some(status) => {

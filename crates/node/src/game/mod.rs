@@ -493,7 +493,7 @@ impl State {
         || slot.client_status == SlotClientStatus::Disconnected
     }) {
       self.status = NodeGameStatus::Ended;
-      tracing::debug!("end game");
+      tracing::debug!("all player left, end game");
       self
         .g_event_sender
         .send(GlobalEvent::GameEnded(self.game_id))

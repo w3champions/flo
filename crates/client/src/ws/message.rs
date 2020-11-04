@@ -6,14 +6,17 @@ use std::str::FromStr;
 
 use flo_net::proto::flo_connect::{
   PacketGamePlayerLeave, PacketGamePlayerPingMapSnapshot, PacketGamePlayerPingMapSnapshotRequest,
-  PacketGamePlayerPingMapUpdate, PacketGameSelectNode, PacketGameSelectNodeRequest,
-  PacketGameStartReject, PacketGameStartRequest, PacketGameStarting,
+  PacketGameSelectNode, PacketGameSelectNodeRequest, PacketGameStartReject, PacketGameStartRequest,
+  PacketGameStarting, PacketPlayerPingMapUpdate,
 };
 
 use crate::error::{Error, Result};
-use crate::node::PingUpdate;
+use crate::ping::PingUpdate;
 use crate::platform::PlatformStateError;
-pub use crate::types::{DisconnectReason, PlayerSession, PlayerSessionUpdate, RejectReason, MapDetail, MapForceOwned, MapPlayerOwned};
+pub use crate::types::{
+  DisconnectReason, MapDetail, MapForceOwned, MapPlayerOwned, PlayerSession, PlayerSessionUpdate,
+  RejectReason,
+};
 use crate::types::{GameInfo, GameStatusUpdate, PlayerInfo, Slot, SlotSettings};
 
 #[derive(Debug, Deserialize)]
@@ -50,11 +53,12 @@ pub enum OutgoingMessage {
   ListNodes(NodeList),
   PingUpdate(PingUpdate),
   GameSelectNode(PacketGameSelectNode),
-  GamePlayerPingMapUpdate(PacketGamePlayerPingMapUpdate),
+  PlayerPingMapUpdate(PacketPlayerPingMapUpdate),
   GamePlayerPingMapSnapshot(PacketGamePlayerPingMapSnapshot),
   GameStartReject(PacketGameStartReject),
   GameStarting(PacketGameStarting),
   GameStarted(GameStarted),
+  GameStartError(ErrorMessage),
   GameSlotClientStatusUpdate(ClientUpdateSlotClientStatus),
   GameStatusUpdate(GameStatusUpdate),
 }
@@ -131,7 +135,7 @@ pub struct Node {
   pub name: String,
   pub location: String,
   pub country_id: String,
-  pub ping: Option<u32>,
+  pub ping: Option<PingStats>,
 }
 
 #[derive(Debug, Serialize)]
@@ -158,6 +162,7 @@ pub struct GameSlotUpdate {
 }
 
 pub use crate::node::stream::SlotClientStatusUpdate as ClientUpdateSlotClientStatus;
+use flo_types::ping::PingStats;
 
 #[derive(Debug, Serialize, S2ProtoUnpack)]
 #[s2_grpc(message_type(flo_net::proto::flo_connect::PacketGamePlayerEnter))]

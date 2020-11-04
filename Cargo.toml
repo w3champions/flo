@@ -24,6 +24,7 @@ members = [
   "crates/client",
 
   "binaries/flo",
+  "binaries/flo-windows",
   "binaries/flo-cli",
   "binaries/flo-controller-service",
   "binaries/flo-node-service",
@@ -44,5 +45,5 @@ casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
-#flo-state = { path = "../flo-state" }
-flo-state = { git = "https://github.com/wc3tools/flo-state.git", branch = "main" }
+flo-state = { path = "../flo-state" }
+#flo-state = { git = "https://github.com/wc3tools/flo-state.git", branch = "main" }

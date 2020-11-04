@@ -57,7 +57,7 @@ impl GameInfo {
           map_height: 0,
           map_checksum,
           map_path: CString::new(map_path).map_err(|_| Error::NullByteInString)?,
-          host_name: CString::new("Flo").unwrap(),
+          host_name: CString::new("W3Champions").unwrap(),
           map_sha1,
         },
         slots_total: 24,

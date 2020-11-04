@@ -1,65 +1,58 @@
+use crate::ping::PingError;
 use flo_types::node::NodeGameStatus;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-  #[error("unexpected node game status: {0:?}")]
+  #[error("Unexpected node game status: {0:?}")]
   UnexpectedNodeGameStatus(NodeGameStatus),
-  #[error("invalid node token")]
+  #[error("Invalid node token")]
   InvalidNodeToken,
-  #[error("not in game")]
+  #[error("Not in game")]
   NotInGame,
-  #[error("node connection rejected: {1} ({0:?})")]
+  #[error("Node connection rejected: {1} ({0:?})")]
   NodeConnectionRejected(flo_net::proto::flo_node::ClientConnectRejectReason, String),
-  #[error("map checksum mismatch")]
+  #[error("Map checksum mismatch")]
   MapChecksumMismatch,
-  #[error("unexpected controller packet")]
-  UnexpectedControllerPacket,
-  #[error("unexpected w3gs packet: {0:?}")]
+  #[error("Unexpected w3gs packet: {0:?}")]
   UnexpectedW3GSPacket(flo_w3gs::packet::Packet),
-  #[error("slot not resolved")]
+  #[error("Slot not resolved")]
   SlotNotResolved,
-  #[error("stream closed unexpectedly")]
+  #[error("Stream closed unexpectedly")]
   StreamClosed,
-  #[error("set ping interval failed")]
-  SetPingIntervalFailed,
-  #[error("invalid selected node id: {0}")]
-  InvalidSelectedNodeId(i32),
-  #[error("invalid map info")]
+  #[error("Invalid map info")]
   InvalidMapInfo,
-  #[error("broadcast nodes config failed")]
-  BroadcastNodesConfigFailed,
-  #[error("ping node timeout")]
-  PingNodeTimeout,
-  #[error("invalid ping node reply")]
-  InvalidPingNodeReply,
+  #[error("Ping: {0}")]
+  Ping(#[from] PingError),
   #[error("Warcraft ||| not located")]
   War3NotLocated,
-  #[error("connection request rejected by server: {0:?}")]
+  #[error("Connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(crate::types::RejectReason),
-  #[error("task cancelled")]
-  TaskCancelled,
-  #[error("lan: {0}")]
+  #[error("Local game info not yet received")]
+  LocalGameInfoNotFound,
+  #[error("Task cancelled: {0:?}")]
+  TaskCancelled(anyhow::Error),
+  #[error("Lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
-  #[error("websocket: {0}")]
+  #[error("Websocket: {0}")]
   Websocket(#[from] async_tungstenite::tungstenite::error::Error),
   #[error("W3GS: {0}")]
   W3GS(#[from] flo_w3gs::error::Error),
-  #[error("map: {0}")]
+  #[error("Map: {0}")]
   War3Map(#[from] flo_w3map::error::Error),
-  #[error("war3 data: {0}")]
+  #[error("War3 data: {0}")]
   War3Data(#[from] flo_w3storage::error::Error),
-  #[error("net: {0}")]
+  #[error("Net: {0}")]
   Net(#[from] flo_net::error::Error),
-  #[error("platform: {0}")]
+  #[error("Platform: {0}")]
   Platform(#[from] flo_platform::error::Error),
-  #[error("packet conversion: {0}")]
+  #[error("Packet conversion: {0}")]
   PacketConversion(#[from] s2_grpc_utils::result::Error),
-  #[error("task failed to execute to completion: {0}")]
+  #[error("Task failed to execute to completion: {0}")]
   TaskJoinError(#[from] tokio::task::JoinError),
-  #[error("json: {0}")]
+  #[error("Json: {0}")]
   Json(#[from] serde_json::Error),
-  #[error("io: {0}")]
+  #[error("Io: {0}")]
   Io(#[from] std::io::Error),
 }
 
@@ -68,7 +61,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 impl From<flo_state::error::Error> for Error {
   fn from(err: flo_state::error::Error) -> Self {
     match err {
-      flo_state::error::Error::WorkerGone => Self::TaskCancelled,
+      flo_state::error::Error::WorkerGone => Self::TaskCancelled(err.into()),
     }
   }
 }
@@ -76,7 +69,7 @@ impl From<flo_state::error::Error> for Error {
 impl From<flo_state::RegistryError> for Error {
   fn from(err: flo_state::RegistryError) -> Self {
     match err {
-      flo_state::RegistryError::RegistryGone => Self::TaskCancelled,
+      flo_state::RegistryError::RegistryGone => Self::TaskCancelled(err.into()),
     }
   }
 }

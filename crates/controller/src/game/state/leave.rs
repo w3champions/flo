@@ -125,30 +125,44 @@ async fn leave_game_abort(
       node_id,
       node_messages::NodePlayerLeave { game_id, player_id },
     )
-    .await?
-    .await
-    .or_cancelled();
+    .await;
+
   match res {
-    Ok(PlayerLeaveResponse::Accepted(_)) => {}
-    Ok(PlayerLeaveResponse::Rejected(reason)) => {
-      tracing::error!(
-        game_id,
-        node_id,
-        player_id,
-        "force leave node rejected: {:?}",
-        reason
-      );
+    Ok(deferred) => {
+      let res = deferred.await.or_cancelled();
+      match res {
+        Ok(PlayerLeaveResponse::Accepted(_)) => {}
+        Ok(PlayerLeaveResponse::Rejected(reason)) => {
+          tracing::error!(
+            game_id,
+            node_id,
+            player_id,
+            "force leave node rejected: {:?}",
+            reason
+          );
+        }
+        Err(err) => {
+          tracing::error!(
+            game_id,
+            node_id,
+            player_id,
+            "force leave node error: {}",
+            err
+          );
+        }
+      }
     }
     Err(err) => {
       tracing::error!(
         game_id,
         node_id,
         player_id,
-        "force leave node error: {}",
+        "force leave node error: {:?}",
         err
       );
     }
-  }
+  };
+
   let frame = {
     let mut pkt = flo_net::proto::flo_connect::PacketGameSlotClientStatusUpdate {
       game_id,

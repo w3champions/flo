@@ -5,8 +5,8 @@ use tracing_futures::Instrument;
 
 use flo_net::packet::FloPacket;
 use flo_net::proto::flo_connect::{
-  PacketGamePlayerPingMapSnapshotRequest, PacketGameSelectNodeRequest, PacketGameSlotUpdateRequest,
-  PacketGameStartRequest, PacketListNodesRequest,
+  PacketGamePlayerPingMapSnapshotRequest, PacketGameSlotUpdateRequest, PacketGameStartRequest,
+  PacketListNodesRequest,
 };
 use flo_task::{SpawnScope, SpawnScopeHandle};
 
@@ -14,26 +14,30 @@ use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
 };
 use super::stream::WsStream;
-use super::{ConnectLobbyEvent, WsEvent, WsEventSender};
+use super::{ConnectController, WsEvent};
+use crate::controller::{ControllerClient, SendFrame};
 use crate::error::{Error, Result};
-use crate::platform::{PlatformActor, PlatformStateError, GetClientPlatformInfo, GetMapList, GetMapDetail, Reload};
-use flo_state::Addr;
+use crate::platform::{
+  GetClientPlatformInfo, GetMapDetail, GetMapList, PlatformActor, PlatformStateError, Reload,
+};
 use flo_platform::ClientPlatformInfo;
+use flo_state::Addr;
 
 #[derive(Debug)]
-pub struct WsHandler {
+pub struct WsSession {
   scope: SpawnScope,
   ws_sender: Sender<OutgoingMessage>,
 }
 
-impl WsHandler {
-  pub fn new(platform: Addr<PlatformActor>, event_sender: WsEventSender, stream: WsStream) -> Self {
+impl WsSession {
+  pub fn new(
+    platform: Addr<PlatformActor>,
+    client: Addr<ControllerClient>,
+    stream: WsStream,
+  ) -> Self {
     let (ws_sender, ws_receiver) = channel(3);
     let scope = SpawnScope::new();
-    let serve_state = Arc::new(ServeState {
-      platform,
-      event_sender,
-    });
+    let serve_state = Arc::new(Worker { platform, client });
     tokio::spawn(
       {
         let scope = scope.handle();
@@ -65,7 +69,7 @@ impl WsSender {
 }
 
 async fn serve_stream(
-  state: Arc<ServeState>,
+  state: Arc<Worker>,
   mut ws_receiver: Receiver<OutgoingMessage>,
   mut scope: SpawnScopeHandle,
   mut stream: WsStream,
@@ -114,13 +118,12 @@ async fn serve_stream(
   Ok(())
 }
 
-#[derive(Debug)]
-struct ServeState {
+struct Worker {
   platform: Addr<PlatformActor>,
-  event_sender: WsEventSender,
+  client: Addr<ControllerClient>,
 }
 
-impl ServeState {
+impl Worker {
   async fn handle_message(
     &self,
     reply_sender: &Sender<OutgoingMessage>,
@@ -131,9 +134,7 @@ impl ServeState {
         self.handle_reload_client_info(reply_sender.clone()).await?;
       }
       IncomingMessage::Connect(connect) => {
-        self
-          .handle_connect(reply_sender.clone(), connect.token)
-          .await?;
+        self.handle_connect(connect.token).await?;
       }
       IncomingMessage::ListMaps => {
         self.handle_map_list(reply_sender.clone()).await?;
@@ -144,19 +145,23 @@ impl ServeState {
           .await?;
       }
       IncomingMessage::GameSlotUpdateRequest(req) => {
-        self.handle_slot_update(req.pack()?).await?;
+        self
+          .send_frame::<PacketGameSlotUpdateRequest>(req.pack()?)
+          .await?;
       }
       IncomingMessage::ListNodesRequest => {
-        self.handle_list_nodes_request().await?;
+        self.send_frame(PacketListNodesRequest {}).await?;
       }
       IncomingMessage::GameSelectNodeRequest(req) => {
-        self.handle_select_node(req).await?;
+        self.send_frame(req).await?;
       }
       IncomingMessage::GamePlayerPingMapSnapshotRequest(req) => {
-        self.handle_player_ping_map_snapshot_request(req).await?;
+        self
+          .send_frame::<PacketGamePlayerPingMapSnapshotRequest>(req)
+          .await?;
       }
       IncomingMessage::GameStartRequest(req) => {
-        self.handle_game_start_request(req).await?;
+        self.send_frame::<PacketGameStartRequest>(req).await?;
       }
     }
     Ok(())
@@ -170,14 +175,10 @@ impl ServeState {
     }))
   }
 
-  async fn handle_connect(&self, sender: Sender<OutgoingMessage>, token: String) -> Result<()> {
+  async fn handle_connect(&self, token: String) -> Result<()> {
     self
-      .event_sender
-      .clone()
-      .send(WsEvent::ConnectLobbyEvent(ConnectLobbyEvent {
-        sender,
-        token,
-      }))
+      .client
+      .notify(WsEvent::ConnectController(ConnectController { token }))
       .await?;
     Ok(())
   }
@@ -215,12 +216,7 @@ impl ServeState {
     mut sender: Sender<OutgoingMessage>,
     MapPath { path }: MapPath,
   ) -> Result<()> {
-    let detail = self
-      .platform
-      .send(GetMapDetail {
-        path
-      })
-      .await?;
+    let detail = self.platform.send(GetMapDetail { path }).await?;
     match detail {
       Ok(detail) => sender.send(OutgoingMessage::GetMapDetail(detail)).await?,
       Err(e) => {
@@ -232,53 +228,11 @@ impl ServeState {
     Ok(())
   }
 
-  async fn handle_slot_update(&self, req: PacketGameSlotUpdateRequest) -> Result<()> {
+  async fn send_frame<T: FloPacket>(&self, pkt: T) -> Result<()> {
     self
-      .event_sender
-      .clone()
-      .send(WsEvent::LobbyFrameEvent(req.encode_as_frame()?))
-      .await?;
-    Ok(())
-  }
-
-  async fn handle_list_nodes_request(&self) -> Result<()> {
-    self
-      .event_sender
-      .clone()
-      .send(WsEvent::LobbyFrameEvent(
-        PacketListNodesRequest {}.encode_as_frame()?,
-      ))
-      .await?;
-    Ok(())
-  }
-
-  async fn handle_select_node(&self, req: PacketGameSelectNodeRequest) -> Result<()> {
-    self
-      .event_sender
-      .clone()
-      .send(WsEvent::LobbyFrameEvent(req.encode_as_frame()?))
-      .await?;
-    Ok(())
-  }
-
-  async fn handle_player_ping_map_snapshot_request(
-    &self,
-    req: PacketGamePlayerPingMapSnapshotRequest,
-  ) -> Result<()> {
-    self
-      .event_sender
-      .clone()
-      .send(WsEvent::LobbyFrameEvent(req.encode_as_frame()?))
-      .await?;
-    Ok(())
-  }
-
-  async fn handle_game_start_request(&self, req: PacketGameStartRequest) -> Result<()> {
-    self
-      .event_sender
-      .clone()
-      .send(WsEvent::LobbyFrameEvent(req.encode_as_frame()?))
-      .await?;
+      .client
+      .send(SendFrame(pkt.encode_as_frame()?))
+      .await??;
     Ok(())
   }
 }
@@ -300,7 +254,6 @@ fn get_war3_info(info: Result<ClientPlatformInfo, PlatformStateError>) -> War3In
 
 impl From<tokio::sync::mpsc::error::SendError<OutgoingMessage>> for Error {
   fn from(_: tokio::sync::mpsc::error::SendError<OutgoingMessage>) -> Error {
-    tracing::debug!("OutgoingMessage dropped");
-    Error::TaskCancelled
+    Error::TaskCancelled(anyhow::format_err!("websocket message dropped"))
   }
 }

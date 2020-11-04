@@ -27,7 +27,8 @@ use crate::game::state::start::{StartGameCheck, StartGamePlayerAck};
 use crate::game::SlotSettings;
 use crate::node::messages::ListNode;
 use crate::player::state::conn::{Connect, Disconnect};
-use crate::player::state::ping::{GetPlayersPingSnapshot, PingUpdate, UpdatePing};
+use crate::player::state::ping::{GetPlayersPingSnapshot, UpdatePing};
+use flo_types::ping::PingStats;
 pub use sender::{PlayerReceiver, PlayerSender, PlayerSenderMessage};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
@@ -57,6 +58,17 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
 
       let player_id = accepted.player_id;
       tracing::debug!("accepted: player_id = {}", player_id);
+
+      if accepted.client_version < flo_constants::MIN_FLO_VERSION {
+        stream
+          .send(proto::flo_connect::PacketClientConnectReject {
+            lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
+            reason: proto::flo_connect::ClientConnectRejectReason::ClientVersionTooOld.into(),
+          })
+          .await?;
+        stream.flush().await?;
+        return Ok(());
+      }
 
       let receiver = {
         let (sender, r) = PlayerSender::new(player_id);
@@ -156,8 +168,8 @@ async fn handle_stream(
             _packet: proto::flo_connect::PacketListNodesRequest => {
               handle_list_nodes_request(state.clone(), player_id).await?;
             }
-            packet: proto::flo_connect::PacketGamePlayerPingMapUpdateRequest => {
-              handle_game_player_ping_map_update_request(state.clone(), player_id, packet).await?;
+            packet: proto::flo_connect::PacketPlayerPingMapUpdateRequest => {
+              handle_player_ping_map_update_request(state.clone(), player_id, packet).await?;
             }
             packet: proto::flo_connect::PacketGamePlayerPingMapSnapshotRequest => {
               handle_game_player_ping_map_snapshot_request(state.clone(), player_id, packet.game_id).await?;
@@ -275,29 +287,29 @@ async fn handle_list_nodes_request(state: ControllerStateRef, player_id: i32) ->
   Ok(())
 }
 
-async fn handle_game_player_ping_map_update_request(
+async fn handle_player_ping_map_update_request(
   state: ControllerStateRef,
   player_id: i32,
-  packet: proto::flo_connect::PacketGamePlayerPingMapUpdateRequest,
+  packet: proto::flo_connect::PacketPlayerPingMapUpdateRequest,
 ) -> Result<()> {
-  let game_id = packet.game_id;
-  let mut node_ids = vec![];
-  let items = packet
+  use std::collections::BTreeMap;
+  let ping_map: BTreeMap<_, _> = packet
     .ping_map
     .clone()
     .into_iter()
-    .map(|(node_id, stats)| {
-      node_ids.push(node_id);
-      PingUpdate {
-        node_id,
-        avg: stats.avg,
-        current: stats.current,
-        loss_rate: stats.loss_rate,
-      }
-    })
+    .map(|(k, v)| Ok((k, PingStats::unpack(v)?)))
+    .collect::<Result<Vec<_>>>()?
+    .into_iter()
     .collect();
+  let mut node_ids: Vec<_> = ping_map.keys().cloned().collect();
 
-  state.players.send(UpdatePing { player_id, items }).await?;
+  state
+    .players
+    .send(UpdatePing {
+      player_id,
+      ping_map,
+    })
+    .await?;
 
   node_ids.sort();
   node_ids.dedup();
@@ -314,8 +326,7 @@ async fn handle_game_player_ping_map_update_request(
     .player_packet_sender
     .broadcast(
       targets,
-      proto::flo_connect::PacketGamePlayerPingMapUpdate {
-        game_id,
+      proto::flo_connect::PacketPlayerPingMapUpdate {
         player_id,
         ping_map: packet.ping_map,
       }

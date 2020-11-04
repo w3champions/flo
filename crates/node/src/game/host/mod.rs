@@ -1,3 +1,4 @@
+mod broadcast;
 mod clock;
 mod dispatch;
 
@@ -153,6 +154,7 @@ impl GameHost {
               match msg {
                 PeerMessage::Incoming(frame) => {
                   if dispatch_tx.send(Message::Incoming { player_id, slot_player_id, frame}).await.is_err() {
+                    tracing::debug!("dispatch rx gone");
                     break;
                   }
                 },
@@ -161,7 +163,10 @@ impl GameHost {
                 }
               }
             }
-            None => break,
+            None => {
+              tracing::debug!("peer stream gone");
+              break;
+            }
           }
         }
         next = rx.recv() => {
@@ -169,7 +174,10 @@ impl GameHost {
             Some(frame) => {
               stream.get_mut().send_frame(frame).await?;
             }
-            None => break,
+            None => {
+              tracing::debug!("sender gone");
+              break;
+            }
           }
         }
       }

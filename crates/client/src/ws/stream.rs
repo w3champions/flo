@@ -1,11 +1,10 @@
+use super::message::{IncomingMessage, OutgoingMessage};
+use crate::error::Result;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::WebSocketStream;
 use futures::{SinkExt, StreamExt};
 use std::time::Duration;
 use tokio::net::TcpStream;
-
-use super::message::{IncomingMessage, OutgoingMessage};
-use crate::error::Result;
 
 type InnerStream = WebSocketStream<async_tungstenite::tokio::TokioAdapter<TcpStream>>;
 

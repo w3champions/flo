@@ -18,6 +18,7 @@ use flo_w3gs::protocol::leave::LeaveReq;
 use flo_w3gs::protocol::leave::{LeaveAck, PlayerLeft};
 use flo_w3gs::protocol::packet::*;
 
+use super::broadcast;
 use crate::error::*;
 use crate::game::{
   GameEvent, GameEventSender, PlayerSlot, SlotClientStatus, SlotClientStatusUpdateSource,
@@ -25,6 +26,7 @@ use crate::game::{
 
 use super::clock::ActionTickStream;
 use crate::game::host::clock::Tick;
+use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::constants::LeaveReason;
 
 #[derive(Debug)]
@@ -170,6 +172,7 @@ struct State {
   max_lag_time: u32,
   player_map: Arc<Mutex<PlayerMap>>,
   player_ack_map: BTreeMap<i32, AtomicUsize>,
+  game_player_id_lookup: BTreeMap<u8, i32>,
 }
 
 impl State {
@@ -180,6 +183,10 @@ impl State {
       player_ack_map: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, AtomicUsize::new(0)))
+        .collect(),
+      game_player_id_lookup: slots
+        .into_iter()
+        .map(|slot| ((slot.id + 1) as u8, slot.player.player_id))
         .collect(),
     }
   }
@@ -253,14 +260,15 @@ impl State {
           ))
           .await
           .map_err(|_| Error::Cancelled)?;
-        let pkt = Packet::simple(PlayerLeft {
-          player_id: slot_player_id,
-          reason: LeaveReason::LeaveDisconnect,
-        })?;
         {
           let mut guard = self.player_map.lock();
-          guard.get_player(player_id)?.tx.take();
-          guard.broadcast(pkt, None)?;
+          if let Some(_) = guard.get_player(player_id)?.tx.take() {
+            let pkt = Packet::simple(PlayerLeft {
+              player_id: slot_player_id,
+              reason: LeaveReason::LeaveDisconnect,
+            })?;
+            guard.broadcast(pkt, broadcast::Everyone)?;
+          }
         }
       }
     }
@@ -272,7 +280,7 @@ impl State {
     &mut self,
     player_id: i32,
     slot_player_id: u8,
-    mut packet: Packet,
+    packet: Packet,
     out_tx: &mut GameEventSender,
   ) -> Result<DispatchResult> {
     use flo_w3gs::protocol::constants::PacketTypeId;
@@ -289,12 +297,10 @@ impl State {
 
         {
           let mut guard = self.player_map.lock();
-          {
-            let player = guard.get_player(player_id)?;
-            player.send_w3gs(Packet::simple(LeaveAck)?).ok();
-            player.disconnect();
-          }
-          guard.broadcast(pkt, Some(&[player_id]))?;
+          let player = guard.get_player(player_id)?;
+          player.send_w3gs(Packet::simple(LeaveAck)?).ok();
+          player.disconnect();
+          guard.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
         }
         out_tx
           .send(GameEvent::PlayerStatusChange(
@@ -306,11 +312,7 @@ impl State {
           .map_err(|_| Error::Cancelled)?;
       }
       PacketTypeId::ChatToHost => {
-        packet.header.type_id = PacketTypeId::ChatFromHost;
-        self
-          .player_map
-          .lock()
-          .broadcast(packet, Some(&[player_id]))?;
+        self.dispatch_chat(player_id, packet).await?;
       }
       PacketTypeId::OutgoingKeepAlive => {
         self.ack_tick(player_id);
@@ -346,6 +348,34 @@ impl State {
     }
     Ok(())
   }
+
+  pub async fn dispatch_chat(&mut self, player_id: i32, mut packet: Packet) -> Result<()> {
+    use flo_w3gs::protocol::constants::PacketTypeId;
+
+    let chat: ChatToHost = packet.decode_simple()?;
+    packet.header.type_id = PacketTypeId::ChatFromHost;
+    self.player_map.lock().broadcast(
+      packet,
+      broadcast::AllowList(
+        &chat
+          .to_players
+          .into_iter()
+          .filter_map(|id| {
+            if let Some(id) = self.game_player_id_lookup.get(&id).cloned() {
+              if id != player_id {
+                Some(id)
+              } else {
+                None
+              }
+            } else {
+              None
+            }
+          })
+          .collect::<Vec<_>>(),
+      ),
+    )?;
+    Ok(())
+  }
 }
 
 #[derive(Debug)]
@@ -373,18 +403,24 @@ impl PlayerMap {
   }
 
   pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<()> {
-    self.broadcast(Packet::with_payload(IncomingAction::from(tick))?, None)?;
+    self.broadcast(
+      Packet::with_payload(IncomingAction::from(tick))?,
+      broadcast::Everyone,
+    )?;
     Ok(())
   }
 
-  pub fn broadcast(&mut self, packet: Packet, excludes: Option<&[i32]>) -> Result<()> {
+  pub fn broadcast<T: broadcast::BroadcastTarget>(
+    &mut self,
+    packet: Packet,
+    target: T,
+  ) -> Result<()> {
     let frame = w3gs_to_frame(packet);
-    let excludes = excludes.unwrap_or(&[] as &[i32]);
     let errors: Vec<_> = self
       .map
       .iter_mut()
       .filter_map(|(player_id, info)| {
-        if excludes.contains(player_id) {
+        if !target.contains(*player_id) {
           return None;
         }
         if info.connected() {
@@ -400,7 +436,7 @@ impl PlayerMap {
         match err {
           PlayerSendError::Closed(_frame) => {
             tracing::info!(player_id, "removing player: stream broken");
-            self.map.remove(&player_id);
+            self.get_player(player_id)?.tx.take();
           }
           PlayerSendError::Lagged => {
             tracing::info!(player_id, "removing player: lagged");

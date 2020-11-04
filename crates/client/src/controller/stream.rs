@@ -1,128 +1,89 @@
-use parking_lot::RwLock;
-use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
-use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing_futures::Instrument;
-
-use flo_event::*;
+use crate::controller::{ControllerClient, SendWs};
+use crate::error::*;
+use crate::game::LocalGameInfo;
+use crate::node::{GetNodePingMap, NodeRegistry, UpdateNodes};
+use crate::ping::PingUpdate;
+use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, PlatformActor};
+use crate::types::*;
+use crate::ws::message;
+use crate::ws::message::OutgoingMessage;
 use flo_net::packet::*;
 use flo_net::proto::flo_connect as proto;
 use flo_net::stream::FloStream;
-use flo_task::SpawnScope;
+use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
+use s2_grpc_utils::S2ProtoPack;
+use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::time::delay_for;
+use tracing_futures::Instrument;
 
-use super::ws::{message, WsMessageSender};
-use crate::controller::ws::message::OutgoingMessage;
-use crate::controller::LocalGameInfo;
-use crate::error::*;
-use crate::node::NodeRegistryRef;
-use crate::types::*;
-
-pub type ControllerStreamEventSender = EventSender<ControllerStreamEvent>;
-
-#[derive(Debug)]
 pub struct ControllerStream {
-  frame_sender: Sender<Frame>,
-  state: Arc<State>,
-  scope: SpawnScope,
-}
-
-#[derive(Debug)]
-struct State {
-  event_sender: ControllerStreamEventSender,
-  nodes_reg: NodeRegistryRef,
-  current_game_info: Arc<RwLock<Option<Arc<LocalGameInfo>>>>,
-  ws_sender: WsMessageSender,
-}
-
-impl State {
-  async fn mutate_local_game_info<F, R>(&self, f: F) -> Option<R>
-  where
-    F: FnOnce(&mut LocalGameInfo) -> R,
-  {
-    let r = { self.current_game_info.read().clone() }?;
-    let mut mutated = r.clone();
-
-    let res = f(Arc::make_mut(&mut mutated));
-    if !Arc::ptr_eq(&r, &mutated) {
-      self.current_game_info.write().replace(mutated.clone());
-    }
-    self
-      .event_sender
-      .clone()
-      .send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(
-        GameInfoUpdateEvent {
-          game_info: Some(mutated),
-        },
-      ))
-      .await;
-    Some(res)
-  }
+  id: u64,
+  domain: String,
+  token: String,
+  parent: Addr<ControllerClient>,
+  frame_tx: Sender<Frame>,
+  frame_rx: Option<Receiver<Frame>>,
+  current_game_info: Option<Arc<LocalGameInfo>>,
+  platform: Addr<PlatformActor>,
+  nodes: Addr<NodeRegistry>,
 }
 
 impl ControllerStream {
   pub fn new(
+    parent: Addr<ControllerClient>,
+    platform: Addr<PlatformActor>,
+    nodes: Addr<NodeRegistry>,
     id: u64,
     domain: &str,
-    mut ws_sender: WsMessageSender,
-    event_sender: ControllerStreamEventSender,
-    nodes_reg: NodeRegistryRef,
     token: String,
   ) -> Self {
-    let (frame_sender, frame_receiver) = channel(5);
-    let scope = SpawnScope::new();
-    let state = Arc::new(State {
-      event_sender: event_sender.clone(),
-      nodes_reg,
-      current_game_info: Arc::new(RwLock::new(None)),
-      ws_sender: ws_sender.clone(),
-    });
-
-    tokio::spawn(
-      {
-        let state = state.clone();
-        let domain = domain.to_string();
-        let mut event_sender = event_sender.clone();
-        let mut scope = scope.handle();
-        async move {
-          let serve = Self::connect_and_serve(id, &domain, token, frame_receiver, state);
-
-          let result = tokio::select! {
-            _ = scope.left() => {
-              Ok(())
-            }
-            res = serve => {
-              res
-            }
-          };
-
-          if let Err(err) = result {
-            ws_sender
-              .send(OutgoingMessage::ConnectRejected(
-                message::ErrorMessage::new(match &err {
-                  Error::ConnectionRequestRejected(reason) => {
-                    format!("server rejected: {:?}", reason)
-                  }
-                  other => other.to_string(),
-                }),
-              ))
-              .await
-              .ok();
-            event_sender
-              .send_or_log_as_error(ControllerStreamEvent::ConnectionErrorEvent(id, err))
-              .await;
-          }
-
-          tracing::debug!("exiting");
-        }
-      }
-      .instrument(tracing::debug_span!("worker")),
-    );
-
+    let (frame_tx, frame_rx) = channel(5);
     Self {
-      frame_sender,
-      state,
-      scope,
+      id,
+      domain: domain.to_string(),
+      token: token.to_string(),
+      parent,
+      frame_tx,
+      frame_rx: Some(frame_rx),
+      current_game_info: None,
+      platform,
+      nodes,
     }
+  }
+
+  async fn report_ping(
+    id: u64,
+    mut frame_tx: Sender<Frame>,
+    parent: &Addr<ControllerClient>,
+    nodes: &Addr<NodeRegistry>,
+  ) -> Result<()> {
+    let ping_map = nodes.send(GetNodePingMap).await??;
+    parent
+      .notify(SendWs::new(
+        id,
+        OutgoingMessage::PingUpdate(PingUpdate {
+          ping_map: ping_map.clone(),
+        }),
+      ))
+      .await?;
+    frame_tx
+      .send(
+        proto::PacketPlayerPingMapUpdateRequest {
+          ping_map: ping_map
+            .into_iter()
+            .map(|(k, v)| Ok((k, v.pack()?)))
+            .collect::<Result<Vec<(i32, proto::PingStats)>>>()?
+            .into_iter()
+            .collect(),
+        }
+        .encode_as_frame()?,
+      )
+      .await
+      .map_err(|_| Error::TaskCancelled(anyhow::format_err!("controller stream worker gone")))?;
+    Ok(())
   }
 
   async fn connect_and_serve(
@@ -130,15 +91,15 @@ impl ControllerStream {
     domain: &str,
     token: String,
     mut frame_receiver: Receiver<Frame>,
-    state: Arc<State>,
+    owner: Addr<Self>,
+    parent: Addr<ControllerClient>,
   ) -> Result<()> {
-    let mut event_sender = state.event_sender.clone();
-    let mut ws_sender = state.ws_sender.clone();
-
     let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
     tracing::debug!("connect addr: {}", addr);
 
     let mut stream = FloStream::connect(addr).await?;
+
+    tracing::debug!("connected");
 
     stream
       .send(proto::PacketClientConnect {
@@ -152,7 +113,6 @@ impl ControllerStream {
     let (session, nodes): (PlayerSession, _) = flo_net::try_flo_packet! {
       reply => {
         p: proto::PacketClientConnectAccept => {
-          state.nodes_reg.update_nodes(p.nodes.clone())?;
           (
             PlayerSession::unpack(p.session)?,
             p.nodes
@@ -166,35 +126,28 @@ impl ControllerStream {
 
     let player_id = session.player.id;
 
-    event_sender
-      .send(ControllerStreamEvent::ConnectedEvent)
-      .await
-      .map_err(|_| Error::TaskCancelled)?;
-    event_sender
-      .send(ControllerStreamEvent::PlayerSessionUpdateEvent(
-        PlayerSessionUpdateEvent::Full(session.clone()),
-      ))
-      .await
-      .map_err(|_| Error::TaskCancelled)?;
-    ws_sender
-      .send({
-        let mut list = message::NodeList {
-          nodes: Vec::with_capacity(nodes.len()),
-        };
-        for node in nodes {
-          list.nodes.push(message::Node {
-            id: node.id,
-            name: node.name,
-            location: node.location,
-            country_id: node.country_id,
-            ping: state.nodes_reg.get_current_ping(node.id),
-          })
-        }
-        message::OutgoingMessage::ListNodes(list)
-      })
+    tracing::debug!(
+      player_id,
+      "player = {}, status = {:?}",
+      session.player.id,
+      session.status
+    );
+
+    parent
+      .notify(ControllerEventData::Connected.wrap(id))
       .await?;
-    ws_sender
-      .send(message::OutgoingMessage::PlayerSession(session))
+    parent
+      .notify(
+        ControllerEventData::PlayerSessionUpdate(PlayerSessionUpdateEvent::Full(session.clone()))
+          .wrap(id),
+      )
+      .await?;
+    parent.send(UpdateNodes { nodes }).await??;
+    parent
+      .notify(SendWs::new(
+        id,
+        message::OutgoingMessage::PlayerSession(session),
+      ))
       .await?;
 
     loop {
@@ -229,7 +182,7 @@ impl ControllerStream {
                 }
               }
 
-              match Self::dispatch(player_id, &mut event_sender, &mut ws_sender, &state, frame).await {
+              match Self::handle_frame(id, player_id, frame, &mut stream, &owner, &parent).await {
                 Ok(_) => {},
                 Err(e) => {
                   tracing::debug!("exiting: dispatch: {}", e);
@@ -246,202 +199,488 @@ impl ControllerStream {
       }
     }
 
-    ws_sender
-      .send(OutgoingMessage::Disconnect(message::Disconnect {
-        reason: message::DisconnectReason::Unknown,
-        message: "Server connection closed".to_string(),
-      }))
-      .await
-      .ok();
-    event_sender
-      .send(ControllerStreamEvent::DisconnectedEvent(id))
-      .await
-      .ok();
+    parent
+      .notify(SendWs::new(
+        id,
+        OutgoingMessage::Disconnect(message::Disconnect {
+          reason: message::DisconnectReason::Unknown,
+          message: "Server connection closed".to_string(),
+        }),
+      ))
+      .await?;
+
+    parent
+      .notify(ControllerEventData::Disconnected.wrap(id))
+      .await?;
+
     tracing::debug!("exiting");
 
     Ok(())
   }
 
-  pub fn get_sender_cloned(&self) -> Sender<Frame> {
-    self.frame_sender.clone()
-  }
-
-  pub fn current_game_id(&self) -> Option<i32> {
-    self
-      .state
-      .current_game_info
-      .read()
-      .as_ref()
-      .map(|info| info.game_id)
-  }
-
   // handle controller packets
-  async fn dispatch(
+  async fn handle_frame(
+    id: u64,
     player_id: i32,
-    event_sender: &mut ControllerStreamEventSender,
-    ws_sender: &mut WsMessageSender,
-    state: &State,
     frame: Frame,
+    stream: &mut FloStream,
+    owner: &Addr<Self>,
+    parent: &Addr<ControllerClient>,
   ) -> Result<()> {
-    let msg = flo_net::try_flo_packet! {
+    flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientDisconnect => {
-          message::OutgoingMessage::Disconnect(message::Disconnect {
-            reason: S2ProtoEnum::unpack_i32(p.reason)?,
-            message: format!("Server closed the connection: {:?}", p.reason)
-          })
+          SendWs::new(id, OutgoingMessage::Disconnect(message::Disconnect {
+              reason: S2ProtoEnum::unpack_i32(p.reason)?,
+              message: format!("Server closed the connection: {:?}", p.reason)
+            })).notify(parent).await?;
         }
         p: proto::PacketGameInfo => {
-          state.nodes_reg.set_selected_node(p.game.as_ref().and_then(|g| {
+          parent.notify(ControllerEventData::SelectNode(p.game.as_ref().and_then(|g| {
             g.node.as_ref().map(|node| node.id)
-          }))?;
+          })).wrap(id)).await?;
 
           let game = GameInfo::unpack(p.game)?;
 
           let local_game_info = Arc::new(LocalGameInfo::from_game_info(player_id, &game)?);
-          state.current_game_info.write().replace(local_game_info.clone());
+          owner.send(SetLocalGameInfo(local_game_info.clone().into())).await??;
 
-          let evt = ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
-            game_info: Some(local_game_info)
-          });
-
-          event_sender.send_or_log_as_error(evt).await;
-
-          OutgoingMessage::CurrentGameInfo(game)
+          SendWs::new(id, OutgoingMessage::CurrentGameInfo(game)).notify(parent).await?;
         }
         p: proto::PacketGamePlayerEnter => {
-          state.mutate_local_game_info(|info| -> Result<_> {
-            if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
-              *slot = Slot::unpack(p.slot.clone())?;
-              Ok(())
-            } else {
-              tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", p.slot_index);
-              Err(Error::InvalidMapInfo)
+          let slot_index = p.slot_index;
+          let slot = p.slot.clone();
+          owner.send(UpdateLocalGameInfo::new(
+            move |info| -> Result<_> {
+              if let Some(r) = info.slots.get_mut(slot_index as usize) {
+                *r = Slot::unpack(slot)?;
+                Ok(())
+              } else {
+                tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", slot_index);
+                Err(Error::InvalidMapInfo)
+              }
             }
-          }).await.ok_or_else(|| {
-            tracing::error!("PacketGamePlayerEnter came before PacketGameInfo");
-            Error::UnexpectedControllerPacket
-          })??;
-          OutgoingMessage::GamePlayerEnter(S2ProtoUnpack::unpack(p)?)
+          )).await??;
+          SendWs::new(
+            id,
+            OutgoingMessage::GamePlayerEnter(S2ProtoUnpack::unpack(p)?)
+          ).notify(parent).await?;
         }
         p: proto::PacketGamePlayerLeave => {
-          state.mutate_local_game_info(|info| -> Result<_> {
-            if let Some(slot) = info.slots.iter_mut().find(|s| s.player.as_ref().map(|p| p.id) == Some(p.player_id)) {
-              *slot = Slot::default();
-              Ok(())
-            } else {
-              tracing::error!(game_id = p.game_id, player_id = p.player_id, "PacketGamePlayerLeave: player slot not found");
-              Err(Error::InvalidMapInfo)
+          owner.send(UpdateLocalGameInfo::new({
+            let p = p.clone();
+            move |info| -> Result<_> {
+              if let Some(slot) = info.slots.iter_mut().find(|s| s.player.as_ref().map(|p| p.id) == Some(p.player_id)) {
+                *slot = Slot::default();
+                Ok(())
+              } else {
+                tracing::error!(game_id = p.game_id, player_id = p.player_id, "PacketGamePlayerLeave: player slot not found");
+                Err(Error::InvalidMapInfo)
+              }
             }
-          }).await.ok_or_else(|| {
-            tracing::error!(game_id = p.game_id, player_id = p.player_id, "PacketGamePlayerLeave came before PacketGameInfo");
-            Error::UnexpectedControllerPacket
-          })??;
-          OutgoingMessage::GamePlayerLeave(p)
+          })).await??;
+          SendWs::new(
+            id,
+            OutgoingMessage::GamePlayerLeave(p)
+          ).notify(parent).await?;
         }
         p: proto::PacketGameSlotUpdate => {
-          state.mutate_local_game_info(|info| -> Result<_> {
-            if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
-              slot.settings = SlotSettings::unpack(p.slot_settings.clone())?;
-              Ok(())
-            } else {
-              tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", p.slot_index);
-              Err(Error::InvalidMapInfo)
+          owner.send(UpdateLocalGameInfo::new({
+            let p = p.clone();
+            move |info| -> Result<_> {
+              if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
+                slot.settings = SlotSettings::unpack(p.slot_settings.clone())?;
+                Ok(())
+              } else {
+                tracing::error!("PacketGamePlayerEnter: invalid slot index: {}", p.slot_index);
+                Err(Error::InvalidMapInfo)
+              }
             }
-          }).await.ok_or_else(|| {
-            tracing::error!("PacketGamePlayerEnter came before PacketGameInfo");
-            Error::UnexpectedControllerPacket
-          })??;
-          OutgoingMessage::GameSlotUpdate(S2ProtoUnpack::unpack(p)?)
+          })).await??;
+          SendWs::new(
+            id,
+            OutgoingMessage::GameSlotUpdate(S2ProtoUnpack::unpack(p)?)
+          ).notify(parent).await?;
         }
         p: proto::PacketPlayerSessionUpdate => {
           let session = PlayerSessionUpdate::unpack(p)?;
-          event_sender.send_or_log_as_error(ControllerStreamEvent::PlayerSessionUpdateEvent(PlayerSessionUpdateEvent::Partial(session.clone()))).await;
+          parent.notify(ControllerEventData::PlayerSessionUpdate(PlayerSessionUpdateEvent::Partial(session.clone())).wrap(id)).await?;
           if session.game_id.is_none() {
-            state.nodes_reg.set_selected_node(None)?;
-            state.current_game_info.write().take();
-            event_sender.send_or_log_as_error(ControllerStreamEvent::GameInfoUpdateEvent(GameInfoUpdateEvent {
-              game_info: None
-            })).await;
+            owner.send(SetLocalGameInfo(None)).await??;
           }
-          OutgoingMessage::PlayerSessionUpdate(session)
+          SendWs::new(
+            id,
+            OutgoingMessage::PlayerSessionUpdate(session)
+          ).notify(parent).await?;
         }
         p: proto::PacketListNodes => {
-          state.nodes_reg.update_nodes(p.nodes.clone())?;
-          let mut list = message::NodeList {
-            nodes: Vec::with_capacity(p.nodes.len())
-          };
-          for node in p.nodes {
-            list.nodes.push(message::Node {
-              id: node.id,
-              name: node.name,
-              location: node.location,
-              country_id: node.country_id,
-              ping: state.nodes_reg.get_current_ping(node.id),
-            })
-          }
-          OutgoingMessage::ListNodes(list)
+          parent
+            .send(UpdateNodes{ nodes: p.nodes.clone() })
+            .await??;
         }
         p: proto::PacketGameSelectNode => {
-          state.nodes_reg.set_selected_node(p.node_id)?;
-          state.mutate_local_game_info(|info| info.node_id = p.node_id).await.ok_or_else(|| {
-            tracing::error!("PacketGameSelectNode came before PacketGameInfo");
-            Error::UnexpectedControllerPacket
-          })?;
-          OutgoingMessage::GameSelectNode(p)
+          parent.notify(ControllerEventData::SelectNode(p.node_id).wrap(id)).await?;
+          owner.send(UpdateLocalGameInfo::new({
+            let node_id = p.node_id;
+            move |info| -> Result<_> {
+              info.node_id = node_id;
+              Ok(())
+            }
+          })).await??;
+          SendWs::new(
+            id,
+            OutgoingMessage::GameSelectNode(p)
+          ).notify(parent).await?;
         }
-        p: proto::PacketGamePlayerPingMapUpdate => {
-          OutgoingMessage::GamePlayerPingMapUpdate(p)
+        p: proto::PacketPlayerPingMapUpdate => {
+          SendWs::new(
+            id,
+            OutgoingMessage::PlayerPingMapUpdate(p)
+          ).notify(parent).await?;
         }
         p: proto::PacketGamePlayerPingMapSnapshot => {
-          OutgoingMessage::GamePlayerPingMapSnapshot(p)
+          SendWs::new(
+            id,
+            OutgoingMessage::GamePlayerPingMapSnapshot(p)
+          ).notify(parent).await?;
         }
         p: proto::PacketGameStartReject => {
-          OutgoingMessage::GameStartReject(p)
+          SendWs::new(
+            id,
+            OutgoingMessage::GameStartReject(p)
+          ).notify(parent).await?;
         }
         p: proto::PacketGameStarting => {
-          event_sender.send_or_log_as_error(ControllerStreamEvent::GameStartingEvent(GameStartingEvent {
-            game_id: p.game_id,
-          })).await;
-          OutgoingMessage::GameStarting(p)
+          let info = owner.send(GetGameStartClientInfo {
+            game_id: p.game_id
+          }).await??;
+          if let Some(info) = info {
+            stream.send(flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest {
+              game_id: p.game_id,
+              war3_version: info.war3_version,
+              map_sha1: info.map_sha1,
+            }).await?;
+            SendWs::new(
+              id,
+              OutgoingMessage::GameStarting(p)
+            ).notify(parent).await?;
+          }
         }
         p: proto::PacketGamePlayerToken => {
-          event_sender.send_or_log_as_error(ControllerStreamEvent::GameReceivedEvent(GameReceivedEvent {
-            node_id: p.node_id,
-            game_id: p.game_id,
-            player_token: p.player_token,
-          })).await;
-          OutgoingMessage::GameStarted(message::GameStarted{
-            game_id: p.game_id,
-            lan_game_name: {
-              crate::lan::get_lan_game_name(p.game_id, p.player_id)
+          let info = owner.send(GetLocalGameInfo).await?;
+          if let Some(info) = info {
+            if info.game_id == p.game_id {
+              parent.notify(ControllerEventData::GameReceived(GameReceivedEvent {
+                node_id: p.node_id,
+                game_info: info,
+                player_token: p.player_token,
+              }).wrap(id)).await?;
+            } else {
+              tracing::warn!("received player for game#{} but the active game id is {}", p.game_id, info.game_id);
             }
-          })
+          } else {
+            tracing::warn!("received player token but there is no active game");
+          }
         }
         // client status update from node
         p: proto::PacketGameSlotClientStatusUpdate => {
-          OutgoingMessage::GameSlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)
+          SendWs::new(
+            id,
+            OutgoingMessage::GameSlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)
+          ).notify(parent).await?;
         }
         p: flo_net::proto::flo_node::PacketNodeGameStatusUpdate => {
-          OutgoingMessage::GameStatusUpdate(p.into())
+          SendWs::new(
+            id,
+            OutgoingMessage::GameStatusUpdate(p.into())
+          ).notify(parent).await?;
         }
       }
     };
-
-    ws_sender.send(msg).await?;
     Ok(())
   }
 }
 
+#[async_trait]
+impl Actor for ControllerStream {
+  async fn started(&mut self, ctx: &mut Context<Self>) {
+    let frame_rx = if let Some(rx) = self.frame_rx.take() {
+      rx
+    } else {
+      let (frame_tx, frame_rx) = channel(5);
+      self.frame_tx = frame_tx;
+      frame_rx
+    };
+
+    ctx.spawn({
+      let id = self.id;
+      let frame_tx = self.frame_tx.clone();
+      let parent = self.parent.clone();
+      let nodes = self.nodes.clone();
+      async move {
+        loop {
+          if let Err(err) = Self::report_ping(id, frame_tx.clone(), &parent, &nodes).await {
+            tracing::error!("report ping: {}", err)
+          }
+          delay_for(Duration::from_secs(5)).await;
+        }
+      }
+    });
+
+    ctx.spawn(
+      {
+        let id = self.id;
+        let domain = self.domain.clone();
+        let token = self.token.clone();
+        let owner = ctx.addr();
+        let parent = self.parent.clone();
+        async move {
+          if let Err(err) =
+            Self::connect_and_serve(id, &domain, token, frame_rx, owner, parent.clone()).await
+          {
+            tracing::error!("controller stream error: {}", err);
+
+            SendWs::new(
+              id,
+              OutgoingMessage::ConnectRejected(message::ErrorMessage::new(match &err {
+                Error::ConnectionRequestRejected(reason) => {
+                  format!("server rejected: {:?}", reason)
+                }
+                other => other.to_string(),
+              })),
+            )
+            .notify(&parent)
+            .await
+            .ok();
+
+            parent
+              .notify(ControllerEventData::ConnectionError(err).wrap(id))
+              .await
+              .ok();
+          }
+
+          tracing::debug!("exiting");
+        }
+      }
+      .instrument(tracing::debug_span!("worker", id = self.id)),
+    );
+  }
+}
+
+struct UpdateLocalGameInfo<F>
+where
+  F: FnOnce(&mut LocalGameInfo) -> Result<()>,
+{
+  f: F,
+}
+
+impl<F> UpdateLocalGameInfo<F>
+where
+  F: FnOnce(&mut LocalGameInfo) -> Result<()> + Send + 'static,
+{
+  fn new(f: F) -> Self {
+    Self { f }
+  }
+}
+
+impl<F> Message for UpdateLocalGameInfo<F>
+where
+  F: FnOnce(&mut LocalGameInfo) -> Result<()> + Send + 'static,
+{
+  type Result = Result<Arc<LocalGameInfo>>;
+}
+
+#[async_trait]
+impl<F> Handler<UpdateLocalGameInfo<F>> for ControllerStream
+where
+  F: FnOnce(&mut LocalGameInfo) -> Result<()> + Send + 'static,
+{
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateLocalGameInfo { f }: UpdateLocalGameInfo<F>,
+  ) -> <UpdateLocalGameInfo<F> as Message>::Result {
+    let r = self
+      .current_game_info
+      .clone()
+      .ok_or_else(|| Error::LocalGameInfoNotFound)?;
+    let mut mutated = r.clone();
+
+    f(Arc::make_mut(&mut mutated))?;
+    if !Arc::ptr_eq(&r, &mutated) {
+      self.current_game_info.replace(mutated.clone());
+    }
+
+    self
+      .parent
+      .notify(
+        ControllerEventData::GameInfoUpdate(GameInfoUpdateEvent {
+          game_info: Some(mutated.clone()),
+        })
+        .wrap(self.id),
+      )
+      .await?;
+
+    Ok(mutated)
+  }
+}
+
+struct SetLocalGameInfo(Option<Arc<LocalGameInfo>>);
+
+impl Message for SetLocalGameInfo {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<SetLocalGameInfo> for ControllerStream {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    SetLocalGameInfo(info): SetLocalGameInfo,
+  ) -> <SetLocalGameInfo as Message>::Result {
+    if let Some(info) = info {
+      self
+        .parent
+        .notify(ControllerEventData::SelectNode(info.node_id.clone()).wrap(self.id))
+        .await?;
+      self
+        .parent
+        .notify(
+          ControllerEventData::GameInfoUpdate(GameInfoUpdateEvent {
+            game_info: Some(info.clone()),
+          })
+          .wrap(self.id),
+        )
+        .await?;
+      self.current_game_info.replace(info);
+    } else {
+      self.current_game_info.take();
+      self
+        .parent
+        .notify(ControllerEventData::SelectNode(None).wrap(self.id))
+        .await?;
+      self
+        .parent
+        .notify(
+          ControllerEventData::GameInfoUpdate(GameInfoUpdateEvent { game_info: None })
+            .wrap(self.id),
+        )
+        .await?;
+    }
+    Ok(())
+  }
+}
+
+struct GetLocalGameInfo;
+
+impl Message for GetLocalGameInfo {
+  type Result = Option<Arc<LocalGameInfo>>;
+}
+
+#[async_trait]
+impl Handler<GetLocalGameInfo> for ControllerStream {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: GetLocalGameInfo,
+  ) -> <GetLocalGameInfo as Message>::Result {
+    self.current_game_info.clone()
+  }
+}
+
+struct GetGameStartClientInfo {
+  game_id: i32,
+}
+
+struct GameStartClientInfo {
+  war3_version: String,
+  map_sha1: Vec<u8>,
+}
+
+impl Message for GetGameStartClientInfo {
+  type Result = Result<Option<GameStartClientInfo>>;
+}
+
+#[async_trait]
+impl Handler<GetGameStartClientInfo> for ControllerStream {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    GetGameStartClientInfo { game_id }: GetGameStartClientInfo,
+  ) -> <GetGameStartClientInfo as Message>::Result {
+    if let Some(info) = self.current_game_info.as_ref() {
+      if info.game_id == game_id {
+        let client_info = self
+          .platform
+          .send(GetClientPlatformInfo)
+          .await?
+          .map_err(|_| Error::War3NotLocated)?;
+        let war3_version = client_info.version;
+        let map_sha1 = self
+          .platform
+          .send(CalcMapChecksum {
+            path: info.map_path.clone(),
+          })
+          .await??
+          .sha1
+          .to_vec();
+        return Ok(Some(GameStartClientInfo {
+          war3_version,
+          map_sha1,
+        }));
+      }
+    }
+    Ok(None)
+  }
+}
+
+pub struct SendFrame(pub Frame);
+
+impl Message for SendFrame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<SendFrame> for ControllerStream {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    SendFrame(frame): SendFrame,
+  ) -> <SendFrame as Message>::Result {
+    match self.frame_tx.send(frame).await {
+      Ok(_) => Ok(()),
+      Err(_) => Err(Error::TaskCancelled(anyhow::format_err!(
+        "controller stream worker gone"
+      ))),
+    }
+  }
+}
+
 #[derive(Debug)]
-pub enum ControllerStreamEvent {
-  ConnectedEvent,
-  ConnectionErrorEvent(u64, Error),
-  PlayerSessionUpdateEvent(PlayerSessionUpdateEvent),
-  GameInfoUpdateEvent(GameInfoUpdateEvent),
-  GameStartingEvent(GameStartingEvent),
-  GameReceivedEvent(GameReceivedEvent),
-  DisconnectedEvent(u64),
+pub struct ControllerEvent {
+  pub id: u64,
+  pub data: ControllerEventData,
+}
+
+impl Message for ControllerEvent {
+  type Result = ();
+}
+
+#[derive(Debug)]
+pub enum ControllerEventData {
+  Connected,
+  ConnectionError(Error),
+  PlayerSessionUpdate(PlayerSessionUpdateEvent),
+  GameInfoUpdate(GameInfoUpdateEvent),
+  GameReceived(GameReceivedEvent),
+  SelectNode(Option<i32>),
+  Disconnected,
+}
+
+impl ControllerEventData {
+  fn wrap(self, id: u64) -> ControllerEvent {
+    ControllerEvent { id, data: self }
+  }
 }
 
 #[derive(Debug)]
@@ -456,17 +695,8 @@ pub struct GameInfoUpdateEvent {
 }
 
 #[derive(Debug)]
-pub struct GameStartingEvent {
-  pub game_id: i32,
-}
-
-#[derive(Debug)]
 pub struct GameReceivedEvent {
   pub node_id: i32,
-  pub game_id: i32,
+  pub game_info: Arc<LocalGameInfo>,
   pub player_token: Vec<u8>,
-}
-
-impl FloEvent for ControllerStreamEvent {
-  const NAME: &'static str = "LobbyStreamEvent";
 }
