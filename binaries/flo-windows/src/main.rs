@@ -129,6 +129,13 @@ impl App {
 }
 
 fn main() {
+  unsafe {
+    winapi::um::processthreadsapi::SetPriorityClass(
+      winapi::um::processthreadsapi::GetCurrentProcess(),
+      winapi::um::winbase::HIGH_PRIORITY_CLASS,
+    );
+  }
+
   log::init();
 
   tracing::info!("start");
