@@ -16,8 +16,8 @@ use winapi::um::shellapi::ShellExecuteA;
 
 #[derive(Default, NwgUi)]
 pub struct App {
-  #[nwg_control(size: (300, 115), position: (300, 300), title: "Flo", flags: "WINDOW|VISIBLE")]
-  #[nwg_events( OnWindowClose: [App::say_goodbye], OnInit: [App::init] )]
+  #[nwg_control(size: (300, 300), title: "Flo", flags: "WINDOW|VISIBLE")]
+  #[nwg_events( OnWindowClose: [App::on_close(SELF, EVT_DATA)], OnInit: [App::init] )]
   window: nwg::Window,
 
   #[nwg_resource]
@@ -26,17 +26,17 @@ pub struct App {
   #[nwg_layout(parent: window, spacing: 1)]
   grid: nwg::GridLayout,
 
-  #[nwg_control(text: "Starting...")]
+  #[nwg_control(text: "Starting...", h_align: nwg::HTextAlign::Center)]
   #[nwg_layout_item(layout: grid, row: 0, col: 0)]
   status_label: nwg::Label,
 
   #[nwg_control(text: "Open UI")]
-  #[nwg_layout_item(layout: grid, col: 0, row: 1, row_span: 2)]
+  #[nwg_layout_item(layout: grid, col: 0, row: 1)]
   #[nwg_events( OnButtonClick: [App::open_ui] )]
   ui_button: nwg::Button,
 
   #[nwg_control(text: "Logs")]
-  #[nwg_layout_item(layout: grid, col: 0, row: 3, row_span: 2)]
+  #[nwg_layout_item(layout: grid, col: 0, row: 2)]
   #[nwg_events( OnButtonClick: [App::open_logs] )]
   logs_button: nwg::Button,
 
@@ -54,10 +54,11 @@ enum ClientState {
 impl App {
   fn init(&self) {
     let em = &self.embed;
-    self.window.set_icon(em.icon_str("MAINICON", None).as_ref());
-    self
-      .window
-      .set_text(&format!("W3Champions Flo v{}", flo_client::FLO_VERSION));
+
+    let icon = em.icon_str("MAINICON", None).unwrap();
+
+    self.window.set_icon(Some(&icon));
+    self.window.set_text("W3Champions Test Client");
 
     let sender = self.start_notice.sender();
     *self.start_result.borrow_mut() = Some(ClientState::Pending(thread::spawn(move || {
@@ -98,9 +99,25 @@ impl App {
     }
   }
 
-  fn say_goodbye(&self) {
-    nwg::modal_info_message(&self.window, "Goodbye", &format!("Goodbye"));
-    nwg::stop_thread_dispatch();
+  fn on_close(&self, data: &nwg::EventData) {
+    let p = nwg::MessageParams {
+      title: "Quit",
+      content: "Are you sure? Ongoing game will disconnect.",
+      buttons: nwg::MessageButtons::YesNo,
+      icons: nwg::MessageIcons::Warning,
+    };
+    let data = if let nwg::EventData::OnWindowClose(ref data) = data {
+      data
+    } else {
+      return;
+    };
+
+    if nwg::modal_message(&self.window, &p) == nwg::MessageChoice::Yes {
+      data.close(true);
+      nwg::stop_thread_dispatch();
+    } else {
+      data.close(false);
+    }
   }
 
   fn read_flo_start_result(&self) {
@@ -110,17 +127,26 @@ impl App {
         Ok(res) => match res {
           Ok(rt) => {
             data.replace(ClientState::Started(rt));
-            format!("Client Started")
+            format!("v{}", flo_client::FLO_VERSION)
           }
-          Err(err) => format!("Failed to start: {}", err),
+          Err(err) => {
+            nwg::modal_error_message(&self.window, "W3Champions", &err.to_string());
+            nwg::stop_thread_dispatch();
+            return;
+          }
         },
-        Err(err) => format!(
-          "Crashed: {}",
-          match err.downcast_ref::<String>() {
-            None => format!("Unknown"),
-            Some(display) => display.to_string(),
-          }
-        ),
+        Err(err) => {
+          let msg = format!(
+            "Crashed: {}",
+            match err.downcast_ref::<String>() {
+              None => format!("Unknown Error"),
+              Some(display) => display.to_string(),
+            }
+          );
+          nwg::modal_error_message(&self.window, "W3Champions", &msg);
+          nwg::stop_thread_dispatch();
+          return;
+        }
       },
       _ => unreachable!(),
     };
@@ -141,7 +167,18 @@ fn main() {
   tracing::info!("start");
 
   nwg::init().expect("Failed to init Native Windows GUI");
-  nwg::Font::set_global_family("Segoe UI").expect("Failed to set default font");
+  // nwg::Font::set_global_family("Segoe UI").expect("Failed to set default font");
+
+  let mut font = nwg::Font::default();
+
+  nwg::Font::builder()
+    // .size(16)
+    .family("Segoe UI")
+    .build(&mut font)
+    .unwrap();
+
+  nwg::Font::set_global_default(Some(font));
+
   let _app = App::build_ui(Default::default()).expect("Failed to build UI");
   nwg::dispatch_thread_events();
 }

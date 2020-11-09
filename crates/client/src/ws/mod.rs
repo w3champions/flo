@@ -11,16 +11,24 @@ use http::{Request, Response};
 pub use session::WsSession;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use stream::WsStream;
+use tokio::net::TcpListener;
 use tracing_futures::Instrument;
 
 pub struct WsListener {
   platform: Addr<PlatformActor>,
   client: Addr<ControllerClient>,
+  listener: Option<TcpListener>,
 }
 
 #[async_trait]
 impl Actor for WsListener {
   async fn started(&mut self, ctx: &mut Context<Self>) {
+    let listener = if let Some(listener) = self.listener.take() {
+      listener
+    } else {
+      return;
+    };
+
     let worker = Worker {
       platform: self.platform.clone(),
       client: self.client.clone(),
@@ -28,7 +36,7 @@ impl Actor for WsListener {
     ctx.spawn(
       {
         async move {
-          if let Err(err) = worker.serve().await {
+          if let Err(err) = worker.serve(listener).await {
             tracing::error!("serve: {}", err);
             worker.client.notify(WsEvent::WorkerError(err)).await.ok();
           }
@@ -46,7 +54,18 @@ impl Service for WsListener {
   async fn create(registry: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
     let platform = registry.resolve().await?;
     let client = registry.resolve().await?;
-    Ok(WsListener { platform, client })
+
+    let port = platform.send(GetClientConfig).await?.local_port;
+
+    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await?;
+
+    tracing::debug!("listen on {}", listener.local_addr()?);
+
+    Ok(WsListener {
+      platform,
+      client,
+      listener: listener.into(),
+    })
   }
 }
 
@@ -56,15 +75,9 @@ struct Worker {
 }
 
 impl Worker {
-  pub async fn serve(&self) -> Result<()> {
+  pub async fn serve(&self, mut listener: TcpListener) -> Result<()> {
     use async_tungstenite::tokio::accept_hdr_async;
     use async_tungstenite::tungstenite::Error as WsError;
-    use tokio::net::TcpListener;
-
-    let port = self.platform.send(GetClientConfig).await?.local_port;
-    let mut listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await?;
-
-    tracing::debug!("listen on {}", listener.local_addr()?);
 
     let mut incoming = listener.incoming();
 
