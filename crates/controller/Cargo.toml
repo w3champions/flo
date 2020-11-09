@@ -9,10 +9,10 @@ flo-w3gs = { path = "../w3gs" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 flo-net = { path = "../net" }
 flo-constants = { path = "../constants" }
-flo-event = { path = "../event" }
 flo-log = { path = "../log" }
 flo-task = { path = "../task" }
-flo-state = "0.4"
+flo-state = "0.5"
+flo-types = { path = "../types" }
 
 thiserror = "1.0.20"
 serde = { version = "1", features = ["derive"] }

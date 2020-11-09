@@ -10,7 +10,7 @@ mod war3;
 
 use error::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientPlatformInfo {
   pub user_data_path: PathBuf,
   pub installation_path: PathBuf,

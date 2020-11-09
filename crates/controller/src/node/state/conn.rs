@@ -421,7 +421,10 @@ fn parse_addr(addr: &str) -> Result<(Ipv4Addr, u16)> {
       return Err(Error::InvalidNodeAddress(addr.to_string()));
     };
 
-    (addr.ip().clone(), addr.port())
+    (
+      addr.ip().clone(),
+      addr.port() + flo_constants::NODE_CONTROLLER_PORT_OFFSET,
+    )
   } else {
     let addr: Ipv4Addr = if let Some(addr) = addr.parse::<Ipv4Addr>().ok() {
       addr

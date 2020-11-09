@@ -169,8 +169,6 @@ impl GameActor {
       }
     };
 
-    self.start_state.take();
-
     self.player_client_status_map = self
       .players
       .iter()
@@ -412,7 +410,18 @@ impl Handler<StartGamePlayerAck> for GameActor {
       .await??;
 
     if let Some(proceed) = res {
-      self.start_game_proceed(proceed).await?;
+      self.start_state.take();
+      if let Err(err) = self.start_game_proceed(proceed).await {
+        let pkt = proto::flo_connect::PacketGameStartReject {
+          game_id: self.game_id,
+          message: format!("Internal error: {}", err),
+          ..Default::default()
+        };
+        self
+          .player_packet_sender
+          .send(self.host_player, pkt.encode_as_frame()?)
+          .await?;
+      }
     }
 
     Ok(())

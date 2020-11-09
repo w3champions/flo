@@ -5,37 +5,8 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-flo-constants = { path = "../../crates/constants" }
-flo-types = { path = "../../crates/types" }
-flo-log = { path = "../../crates/log" }
+flo-client = { path = "../../crates/client" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
-flo-lan = { path = "../../crates/lan" }
-flo-net = { path = "../../crates/net" }
-flo-config = { path = "../../crates/config" }
-flo-platform = { path = "../../crates/platform" }
-flo-w3storage = { path = "../../crates/w3storage" }
-flo-w3map = { path = "../../crates/w3map" }
-flo-event = { path = "../../crates/event" }
-flo-w3gs = { path = "../../crates/w3gs" }
-flo-util = { path = "../../crates/util" }
-flo-task = { path = "../../crates/task" }
-flo-state = "0.4"
 
-s2-grpc-utils = "0.2"
 dotenv = "0.15.0"
 tokio = { version = "0.2.22", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "signal", "rt-threaded"] }
-async-tungstenite = { version = "0.7.1", features = ["tokio-runtime"] }
-tracing = "0.1"
-tracing-futures = "0.2.4"
-thiserror = "1.0.20"
-parking_lot = "0.11.0"
-http = "0.2.1"
-futures = "0.3.5"
-serde = { version = "1", features = ["derive", "rc"] }
-serde_json = "1.0.56"
-base64 = "0.12.3"
-lazy_static = "1.4"
-hash-ids = "0.2.1"
-
-[build-dependencies]
-flo-constants = { path = "../../crates/constants" }

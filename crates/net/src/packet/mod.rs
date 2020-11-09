@@ -199,9 +199,9 @@ pub enum PacketTypeId {
   #[bin(value = 0x10)]
   GameSelectNode,
   #[bin(value = 0x11)]
-  GamePlayerPingMapUpdateRequest,
+  PlayerPingMapUpdateRequest,
   #[bin(value = 0x12)]
-  GamePlayerPingMapUpdate,
+  PlayerPingMapUpdate,
   #[bin(value = 0x13)]
   GamePlayerPingMapSnapshotRequest,
   #[bin(value = 0x14)]

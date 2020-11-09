@@ -215,7 +215,7 @@ pub fn add_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<Vec<Slo
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
 
-  if status != GameStatus::Created {
+  if status != GameStatus::Preparing {
     return Err(Error::GameStarted);
   }
 
@@ -520,6 +520,7 @@ pub fn get_player_active_slots(conn: &DbConn, player_id: i32) -> Result<Vec<Play
     .select((game_used_slot::game_id, UsedSlotInfo::columns()))
     .filter(game::status.eq(any(GameStatus::active_variants())))
     .filter(game_used_slot::player_id.eq(player_id))
+    .filter(game_used_slot::client_status.ne(SlotClientStatus::Left))
     .order(game_used_slot::created_at)
     .load(conn)?;
   Ok(rows)
