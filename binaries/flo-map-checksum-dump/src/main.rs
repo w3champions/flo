@@ -24,6 +24,10 @@ fn main() {
 
   for (i, path) in maps.iter().enumerate() {
     println!("[{}/{}] processing: {}", i + 1, maps.len(), path);
+    if path == "SIZE" {
+      continue;
+    }
+
     if path.contains("scenario") {
       println!("skip scenario map");
       continue;
@@ -63,6 +67,7 @@ fn process_map(path: &str) -> ([u8; 20], u32) {
 
   let mut proc = Command::new(WAR3_PATH)
     .arg("-launch")
+    .arg("-window")
     .arg("-loadfile")
     .arg(path)
     .spawn()
