@@ -6,7 +6,7 @@ pub mod error;
 
 use error::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClientConfig {
   pub local_port: u16,
   pub user_data_path: Option<PathBuf>,
@@ -35,7 +35,21 @@ impl ClientConfig {
   }
 
   pub fn load() -> Result<Self> {
-    let mut config: Self = toml::from_str(&fs::read_to_string("flo.toml")?)?;
+    #[derive(Debug, Serialize, Deserialize)]
+    struct TomlConfig {
+      pub local_port: Option<u16>,
+      pub user_data_path: Option<PathBuf>,
+      pub installation_path: Option<PathBuf>,
+      pub controller_domain: Option<String>,
+    }
+
+    let config: TomlConfig = toml::from_str(&fs::read_to_string("flo.toml")?)?;
+    let mut config = ClientConfig {
+      local_port: config.local_port.unwrap_or(flo_constants::CLIENT_WS_PORT),
+      user_data_path: None,
+      installation_path: None,
+      controller_domain: config.controller_domain.unwrap_or_else(|| flo_constants::CONTROLLER_DOMAIN.to_string())
+    };
 
     config.apply_env();
 

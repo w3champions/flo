@@ -18,8 +18,6 @@ pub enum Error {
   ReplayInvalidGameInfoRecord,
   #[error("string contains null byte")]
   NullByteInString,
-  #[error("get ip: {0}")]
-  GetIp(#[from] ipconfig::error::Error),
   #[error("bin decode: {0}")]
   BinDecode(#[from] flo_util::binary::BinDecodeError),
   #[error("dns client: {0}")]
@@ -28,6 +26,8 @@ pub enum Error {
   DNSProtocol(#[from] trust_dns_client::proto::error::ProtoError),
   #[error("w3gs: {0}")]
   W3GS(#[from] flo_w3gs::error::Error),
+  #[error("platform: {0}")]
+  Platform(#[from] flo_platform::error::Error),
   #[error("protobuf encode: {0}")]
   ProtoBufEncode(#[from] prost::EncodeError),
   #[error("protobuf decode: {0}")]

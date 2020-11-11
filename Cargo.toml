@@ -24,12 +24,9 @@ members = [
   "crates/client",
 
   "binaries/flo",
-  "binaries/flo-windows",
   "binaries/flo-cli",
   "binaries/flo-controller-service",
   "binaries/flo-node-service",
-  "binaries/flo-map-checksum-dump",
-  "binaries/flo-map-checksum-import",
 
   "deps/flo-grpc"
 ]

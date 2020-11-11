@@ -1,4 +1,5 @@
 pub mod binary;
+pub mod chat;
 pub mod dword_string;
 pub mod error;
 pub mod stat_string;

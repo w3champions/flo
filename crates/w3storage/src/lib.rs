@@ -5,6 +5,7 @@ use casclib::Storage;
 use glob::Pattern;
 use parking_lot::Mutex;
 use std::path::PathBuf;
+use walkdir::WalkDir;
 
 use flo_platform::ClientPlatformInfo;
 
@@ -27,7 +28,7 @@ impl W3Storage {
       handle: Mutex::new(None),
     };
 
-    inst.add_override("maps/**/*", platform.user_data_path.clone())?;
+    inst.add_override("maps", platform.user_data_path.clone())?;
 
     Ok(inst)
   }
@@ -37,26 +38,45 @@ impl W3Storage {
     Self::new(&platform)
   }
 
-  pub fn add_override(&mut self, pattern: &str, path: PathBuf) -> Result<()> {
+  pub fn add_override(&mut self, sub_path: &str, path: PathBuf) -> Result<()> {
     self.overrides.push(OverridePath {
-      pattern: Pattern::new(pattern)?,
-      path,
+      pattern: Pattern::new(&format!("{}/**/*", sub_path))?,
+      base_path: path,
+      sub_path: sub_path.to_string(),
     });
     Ok(())
   }
 
   pub fn list_storage_files(&self, mask: &str) -> Result<Vec<String>> {
-    let mask = Self::get_storage_path(mask);
-    self
-      .with_storage(|s| -> Result<_, casclib::CascError> {
-        use std::iter::FromIterator;
-        Result::<_, casclib::CascError>::from_iter(
-          s.files_with_mask(mask)
-            .into_iter()
-            .map(|f| f.map(|f| f.get_name().to_string())),
-        )
-      })?
-      .map_err(Into::into)
+    let cast_mask = Self::get_storage_path(mask);
+    let mut paths: Vec<_> = self.with_storage(|s| -> Result<_, casclib::CascError> {
+      use std::iter::FromIterator;
+      Result::<_, casclib::CascError>::from_iter(
+        s.files_with_mask(cast_mask)
+          .into_iter()
+          .map(|f| f.map(|f| f.get_name().to_string())),
+      )
+    })??;
+
+    for override_path in &self.overrides {
+      let fs_mask = Pattern::new(mask)?;
+      for entry in WalkDir::new(&override_path.base_path.join(&override_path.sub_path))
+        .into_iter()
+        .filter_map(|e| e.ok())
+      {
+        if entry.file_type().is_file() {
+          if let Some(path) = entry.path().strip_prefix(&override_path.base_path).ok() {
+            if fs_mask.matches_path(path) {
+              if let Some(path_str) = path.to_str() {
+                paths.push(path_str.to_string());
+              }
+            }
+          }
+        }
+      }
+    }
+
+    Ok(paths)
   }
 
   pub fn resolve_file(&self, path: &str) -> Result<Option<File>> {
@@ -109,7 +129,7 @@ impl W3Storage {
       .iter()
       .filter_map(|o| {
         if o.pattern.matches(path) {
-          Some(o.path.clone())
+          Some(o.base_path.clone())
         } else {
           None
         }
@@ -189,7 +209,8 @@ impl Data {
 #[derive(Debug)]
 pub struct OverridePath {
   pattern: Pattern,
-  path: PathBuf,
+  base_path: PathBuf,
+  sub_path: String,
 }
 
 #[test]
@@ -197,15 +218,15 @@ fn test_storage() {
   let p = ClientPlatformInfo::from_env().unwrap();
   let mut s = W3Storage::new(&p).unwrap();
   let crate_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-  s.add_override("cargo*", crate_dir.clone()).unwrap();
+  s.add_override("src", crate_dir.clone()).unwrap();
   assert!(s.resolve_file("___SHOULD_NOT_EXIST").unwrap().is_none());
   assert_eq!(
-    s.resolve_file("Cargo.toml")
+    s.resolve_file("src/lib.rs")
       .unwrap()
       .unwrap()
       .read_all()
       .unwrap(),
-    std::fs::read(crate_dir.join("Cargo.toml")).unwrap()
+    std::fs::read(crate_dir.join("src/lib.rs")).unwrap()
   );
   assert!(s.resolve_file("scripts/common.j").unwrap().is_some());
 }

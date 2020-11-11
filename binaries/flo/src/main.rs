@@ -2,8 +2,12 @@
 async fn main() {
   flo_log_subscriber::init_env_override("flo=debug,flo_lan=debug");
 
+  let task = flo_client::start().await.unwrap();
+  let join = tokio::spawn(task);
+  let ctrl_c = tokio::signal::ctrl_c();
+
   tokio::select! {
-    res = flo_client::start() => res.unwrap().await,
-    _ = tokio::signal::ctrl_c() => {},
+    res = join => res.unwrap(),
+    _ = ctrl_c => {},
   }
 }

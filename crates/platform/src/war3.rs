@@ -38,7 +38,7 @@ mod windows {
       if r == GetProcessPathByWindowTitleResult::WindowNotFound {
         return Ok(None);
       } else {
-        return Err(Error::GetRunningWar3Path(r));
+        return Err(Error::GetRunningWar3Path(r as u32));
       }
     }
 
@@ -53,6 +53,35 @@ mod windows {
     Ok(Some(path))
   }
 }
-
 #[cfg(windows)]
 pub use self::windows::*;
+
+#[cfg(target_os = "macos")]
+mod macos {
+  use std::path::Path;
+  use serde::Deserialize;
+  use crate::error::Result;
+
+  pub fn get_war3_version(path: &Path) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Plist {
+      #[serde(rename = "CFBundleVersion")]
+      cf_bundle_version: String,
+    }
+
+    let value: Plist = plist::from_file(path.join("Contents/Info.plist"))?;
+
+    Ok(value.cf_bundle_version)
+  }
+
+  #[test]
+  fn get_mac_war3_version() {
+    use crate::path::detect_installation_path;
+    let path = detect_installation_path().unwrap().join("_retail_/x86_64/Warcraft III.app");
+    dbg!(&path);
+    let v = get_war3_version(&path).unwrap();
+    dbg!(v);
+  }
+}
+#[cfg(target_os = "macos")]
+pub use self::macos::*;

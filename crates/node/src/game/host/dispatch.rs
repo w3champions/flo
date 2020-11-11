@@ -2,7 +2,6 @@ use futures::stream::StreamExt;
 use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoEnum;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -169,20 +168,20 @@ enum ActionMsg {
 
 #[derive(Debug)]
 struct State {
-  max_lag_time: u32,
+  sent_tick: u32,
   player_map: Arc<Mutex<PlayerMap>>,
-  player_ack_map: BTreeMap<i32, AtomicUsize>,
+  player_ack_map: BTreeMap<i32, usize>,
   game_player_id_lookup: BTreeMap<u8, i32>,
 }
 
 impl State {
   fn new(slots: &[PlayerSlot]) -> Self {
     State {
-      max_lag_time: 0,
+      sent_tick: 0,
       player_map: Arc::new(Mutex::new(PlayerMap::new(slots))),
       player_ack_map: slots
         .into_iter()
-        .map(|slot| (slot.player.player_id, AtomicUsize::new(0)))
+        .map(|slot| (slot.player.player_id, 0))
         .collect(),
       game_player_id_lookup: slots
         .into_iter()
@@ -191,10 +190,11 @@ impl State {
     }
   }
 
-  fn ack_tick(&self, player_id: i32) {
-    self.player_ack_map.get(&player_id).map(|counter| {
-      counter.fetch_add(1, Ordering::SeqCst);
-    });
+  fn ack_tick(&mut self, player_id: i32) {
+    self
+      .player_ack_map
+      .get_mut(&player_id)
+      .map(|tick| *tick += 1);
   }
 
   pub async fn dispatch(
@@ -403,10 +403,8 @@ impl PlayerMap {
   }
 
   pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<()> {
-    self.broadcast(
-      Packet::with_payload(IncomingAction::from(tick))?,
-      broadcast::Everyone,
-    )?;
+    let action_packet = Packet::with_payload(IncomingAction::from(tick))?;
+    self.broadcast(action_packet, broadcast::Everyone)?;
     Ok(())
   }
 
@@ -438,8 +436,8 @@ impl PlayerMap {
             tracing::info!(player_id, "removing player: stream broken");
             self.get_player(player_id)?.tx.take();
           }
-          PlayerSendError::Lagged => {
-            tracing::info!(player_id, "removing player: lagged");
+          PlayerSendError::ChannelFull => {
+            tracing::info!(player_id, "removing player: channel full");
           }
           _ => {}
         }
@@ -452,17 +450,15 @@ impl PlayerMap {
 
 #[derive(Debug)]
 struct PlayerDispatchInfo {
-  lagging: bool,
   ticks: usize,
-  overflow_frames: Vec<Frame>,
+  pending_ack_packets: Vec<Packet>,
   tx: Option<Sender<Frame>>,
 }
 
 impl PlayerDispatchInfo {
   fn new(_slot: &PlayerSlot) -> Self {
     Self {
-      lagging: false,
-      overflow_frames: vec![],
+      pending_ack_packets: vec![],
       ticks: 0,
       tx: None,
     }
@@ -482,19 +478,10 @@ impl PlayerDispatchInfo {
 
   fn send(&mut self, frame: Frame) -> Result<(), PlayerSendError> {
     if let Some(tx) = self.tx.as_mut() {
-      if self.lagging {
-        self.overflow_frames.push(frame);
-        Err(PlayerSendError::Lagged)
-      } else {
-        match tx.try_send(frame) {
-          Ok(_) => Ok(()),
-          Err(TrySendError::Closed(frame)) => Err(PlayerSendError::Closed(frame)),
-          Err(TrySendError::Full(frame)) => {
-            self.lagging = true;
-            self.overflow_frames.push(frame);
-            Err(PlayerSendError::Lagged)
-          }
-        }
+      match tx.try_send(frame) {
+        Ok(_) => Ok(()),
+        Err(TrySendError::Closed(frame)) => Err(PlayerSendError::Closed(frame)),
+        Err(TrySendError::Full(_)) => Err(PlayerSendError::ChannelFull),
       }
     } else {
       Err(PlayerSendError::NotConnected(frame))
@@ -505,7 +492,7 @@ impl PlayerDispatchInfo {
 enum PlayerSendError {
   NotConnected(Frame),
   Closed(Frame),
-  Lagged,
+  ChannelFull,
 }
 
 #[derive(Debug)]
