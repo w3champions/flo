@@ -38,7 +38,7 @@ mod windows {
       if r == GetProcessPathByWindowTitleResult::WindowNotFound {
         return Ok(None);
       } else {
-        return Err(Error::GetRunningWar3Path(r));
+        return Err(Error::GetRunningWar3Path(r as u32));
       }
     }
 

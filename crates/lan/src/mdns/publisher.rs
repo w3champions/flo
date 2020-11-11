@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::stream::StreamExt;
@@ -20,6 +20,7 @@ use crate::constants;
 use crate::error::*;
 use crate::game_info::GameInfo;
 use trust_dns_client::serialize::binary::BinEncodable;
+use flo_platform::net::IpInfo;
 
 type GameInfoRef = Arc<RwLock<GameInfo>>;
 type UpdateTx = mpsc::Sender<oneshot::Sender<()>>;
@@ -58,7 +59,7 @@ impl MdnsPublisher {
     let game_info = Arc::new(RwLock::new(game_info));
     let (update_tx, mut update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
     let (drop_tx, drop_rx) = oneshot::channel();
-    let ip_info: IpInfo = get_ip_info()?;
+    let ip_info: IpInfo = flo_platform::net::get_ip_info()?;
     let hostname = hostname::get().map_err(Error::GetHostName)?;
     let hostname = if let Some(v) = hostname.to_str() {
       v.to_string()
@@ -346,34 +347,7 @@ fn broadcast_cancel(sender: &BufStreamHandle, name: &Name) -> Result<()> {
   Ok(())
 }
 
-#[derive(Debug)]
-struct IpInfo {
-  ips_v4: Vec<Ipv4Addr>,
-  ips_v6: Vec<Ipv6Addr>,
-}
 
-fn get_ip_info() -> Result<IpInfo> {
-  let mut info = IpInfo {
-    ips_v4: vec![],
-    ips_v6: vec![],
-  };
-
-  for adapter in ipconfig::get_adapters()? {
-    if adapter.oper_status() == ipconfig::OperStatus::IfOperStatusUp
-      && adapter.if_type() != ipconfig::IfType::SoftwareLoopback
-    {
-      for ip in adapter.ip_addresses() {
-        use std::net::IpAddr;
-        match ip {
-          IpAddr::V4(ref ip) => info.ips_v4.push(ip.clone()),
-          IpAddr::V6(ref ip) => info.ips_v6.push(ip.clone()),
-        }
-      }
-    }
-  }
-
-  Ok(info)
-}
 
 fn get_txt_record(name: &Name) -> Record {
   let mut record = Record::with(name.clone(), RecordType::TXT, 4500);

@@ -11,11 +11,15 @@ pub enum Error {
   #[error("unable to get Warcraft III version")]
   GetWar3Version,
 
-  #[error("unable to get running Warcraft III path (code: {0:?})")]
-  GetRunningWar3Path(crate::windows_bindings::GetProcessPathByWindowTitleResult),
+  #[error("unable to get running Warcraft III path ({0})")]
+  GetRunningWar3Path(u32),
 
   #[error("config: {0}")]
   Config(#[from] flo_config::error::Error),
+
+  #[cfg(windows)]
+  #[error("ipconfig: {0}")]
+  IpConfig(#[from] ipconfig::error::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
