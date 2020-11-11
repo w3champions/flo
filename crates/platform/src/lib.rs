@@ -73,7 +73,25 @@ impl ClientPlatformInfo {
 
   #[cfg(target_os = "macos")]
   pub fn with_config(config: &ClientConfig) -> Result<Self> {
-    unimplemented!()
+    let installation_path = config
+      .installation_path
+      .clone()
+      .or_else(|| path::detect_installation_path())
+      .ok_or_else(|| Error::NoInstallationFolder)?;
+
+    let executable_path = installation_path.join("_retail_/x86_64/Warcraft III.app");
+    let version = crate::war3::get_war3_version(&executable_path)?;
+
+    Ok(ClientPlatformInfo {
+      user_data_path: config
+        .user_data_path
+        .clone()
+        .or_else(|| path::detect_user_data_path())
+        .ok_or_else(|| Error::NoUserDataPath)?,
+      installation_path,
+      version,
+      executable_path,
+    })
   }
 
 

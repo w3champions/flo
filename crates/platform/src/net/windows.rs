@@ -23,3 +23,8 @@ pub fn get_ip_info() -> Result<IpInfo> {
 
   Ok(info)
 }
+
+#[test]
+fn test_get_if_addrs() {
+  dbg!(get_ip_info().unwrap());
+}

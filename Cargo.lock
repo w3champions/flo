@@ -961,8 +961,11 @@ dependencies = [
  "cc",
  "dotenv",
  "flo-config",
+ "home-dir",
+ "if-addrs",
  "ipconfig",
  "plist",
+ "serde",
  "thiserror",
  "widestring",
  "winapi 0.3.9",
@@ -1331,6 +1334,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "home-dir"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "572c4f9690c3ac7058775be826d1b508ca20fd6633261435c27ac30ad0598212"
+dependencies = [
+ "nix",
+ "thiserror",
+]
+
+[[package]]
 name = "hostname"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1413,6 +1426,27 @@ dependencies = [
  "matches",
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "if-addrs"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28538916eb3f3976311f5dfbe67b5362d0add1293d0a9cad17debf86f8e3aa48"
+dependencies = [
+ "if-addrs-sys",
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "if-addrs-sys"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de74b9dd780476e837e5eb5ab7c88b49ed304126e412030a0adba99c8efe79ea"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -1770,6 +1804,18 @@ name = "nibble_vec"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d77f3db4bce033f4d04db08079b2ef1c3d02b44e86f25d08886fafa7756ffa"
+
+[[package]]
+name = "nix"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 0.1.10",
+ "libc",
+]
 
 [[package]]
 name = "num-bigint"

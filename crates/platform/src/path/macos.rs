@@ -1,39 +1,21 @@
 use std::path::PathBuf;
+use home_dir::HomeDirExt;
 
 pub fn detect_user_data_path() -> Option<PathBuf> {
-  // let mut path = PathBuf::from("")?;
-  // path.push("Warcraft III");
-  // if std::fs::metadata(&path).is_ok() {
-  //   Some(path)
-  // } else {
-  //   None
-  // }
-  unimplemented!()
+  let path = PathBuf::from("~/Library/Application Support/Blizzard/Warcraft III").expand_home().ok()?;
+  if std::fs::metadata(&path).is_ok() {
+    Some(path)
+  } else {
+    None
+  }
 }
 
 pub fn detect_installation_path() -> Option<PathBuf> {
-  // let try_list = vec![
-  //   {
-  //     let mut path = get_known_folder_path(winapi::um::knownfolders::FOLDERID_ProgramFilesX86)?;
-  //     path.push("Warcraft III");
-  //     path
-  //   },
-  //   {
-  //     let mut path = get_known_folder_path(winapi::um::knownfolders::FOLDERID_ProgramFilesX64)?;
-  //     path.push("Warcraft III");
-  //     path
-  //   },
-  // ];
-  //
-  // for path in try_list {
-  //   let full = path.join("Warcraft III Launcher.exe");
-  //   if std::fs::metadata(full).is_ok() {
-  //     return Some(path);
-  //   }
-  // }
-  //
-  // None
-  unimplemented!()
+  let path = PathBuf::from("/Applications/Warcraft III");
+  if std::fs::metadata(path.join("Warcraft III Launcher.app")).is_ok() {
+    return Some(path);
+  }
+  None
 }
 
 #[test]
