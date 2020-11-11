@@ -13,6 +13,7 @@ flo-constants = { path = "../constants" }
 flo-event = { path = "../event" }
 flo-log = { path = "../log" }
 flo-task = { path = "../task" }
+flo-state = "0.5"
 
 thiserror = "1.0.20"
 bytes = "0.5.6"

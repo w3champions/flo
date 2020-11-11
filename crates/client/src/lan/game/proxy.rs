@@ -47,8 +47,13 @@ impl LanProxy {
 
     tracing::debug!("connecting to node: {}", node.client_socket_addr());
 
-    let node_stream =
-      NodeStream::connect(node.client_socket_addr(), token, client.clone(), w3gs_tx).await?;
+    let node_stream = NodeStream::connect(
+      node.client_socket_addr(),
+      token,
+      client.clone(),
+      w3gs_tx.clone(),
+    )
+    .await?;
 
     tracing::debug!("listening on port {}", port);
 
@@ -62,7 +67,9 @@ impl LanProxy {
       let state = state.clone();
       let scope = scope.handle();
       async move {
-        let res = state.serve(listener, event_rx, w3gs_rx, scope).await;
+        let res = state
+          .serve(listener, event_rx, w3gs_tx, w3gs_rx, scope)
+          .await;
 
         if let Err(res) = res {
           tracing::error!("lan: {}", res);
@@ -108,6 +115,7 @@ impl State {
     self: Arc<Self>,
     mut listener: W3GSListener,
     event_rx: Receiver<PlayerEvent>,
+    mut w3gs_tx: Sender<Packet>,
     mut w3gs_rx: Receiver<Packet>,
     mut scope: SpawnScopeHandle,
   ) -> Result<()> {
@@ -208,6 +216,7 @@ impl State {
       &mut node_stream,
       &mut event_rx,
       &mut status_rx,
+      &mut w3gs_tx,
       &mut w3gs_rx,
     );
     let game_res = tokio::select! {

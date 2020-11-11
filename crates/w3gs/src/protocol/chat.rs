@@ -14,12 +14,24 @@ pub struct ChatToHost {
 }
 
 impl ChatToHost {
-  pub fn chat(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
+  pub fn lobby(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
     ChatToHost {
       to_players_len: to.len() as u8,
       to_players: to.to_vec(),
       from_player: from,
       message: ChatMessage::Chat(message.into_c_string_lossy()),
+    }
+  }
+
+  pub fn in_game(scope: MessageScope, from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
+    ChatToHost {
+      to_players_len: to.len() as u8,
+      to_players: to.to_vec(),
+      from_player: from,
+      message: ChatMessage::Scoped {
+        scope,
+        message: message.into_c_string_lossy(),
+      },
     }
   }
 }
@@ -147,7 +159,7 @@ impl BinEncode for MessageScope {
       Self::All => 0x00,
       Self::Allies => 0x01,
       Self::Observers => 0x02,
-      Self::Player(v) => v as u32,
+      Self::Player(v) => 0x02 + v as u32,
     });
   }
 }
@@ -162,8 +174,18 @@ impl From<ChatToHost> for ChatFromHost {
 }
 
 impl ChatFromHost {
-  pub fn chat(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
-    ChatToHost::chat(from, to, message).into()
+  pub fn lobby(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
+    ChatToHost::lobby(from, to, message).into()
+  }
+
+  pub fn private_to_self(player_id: u8, message: impl IntoCStringLossy) -> Self {
+    ChatToHost::in_game(
+      MessageScope::Player(player_id),
+      player_id,
+      &[player_id],
+      message,
+    )
+    .into()
   }
 }
 

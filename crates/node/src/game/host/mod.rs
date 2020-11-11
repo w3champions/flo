@@ -136,11 +136,11 @@ impl GameHost {
       .encode_as_frame()?])
       .await?;
 
-    let (tx, mut rx) = channel(crate::constants::PEER_W3GS_CHANNEL_SIZE);
+    let (peer_tx, mut peer_rx) = channel(crate::constants::PEER_W3GS_CHANNEL_SIZE);
     dispatch_tx
       .send(Message::PlayerConnect {
         player_id: stream.player_id(),
-        tx,
+        tx: peer_tx,
         slot_player_id,
       })
       .await
@@ -169,7 +169,7 @@ impl GameHost {
             }
           }
         }
-        next = rx.recv() => {
+        next = peer_rx.recv() => {
           match next {
             Some(frame) => {
               stream.get_mut().send_frame(frame).await?;

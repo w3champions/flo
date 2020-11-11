@@ -215,7 +215,7 @@ impl<'a> LobbyHandler<'a> {
       ChatToHost::PACKET_TYPE_ID => {
         self
           .stream
-          .send(Packet::simple(ChatFromHost::chat(
+          .send(Packet::simple(ChatFromHost::lobby(
             slot_info.slot_player_id,
             &[slot_info.slot_player_id],
             "Setting changes and chat are disabled.",

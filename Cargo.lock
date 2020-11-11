@@ -972,6 +972,7 @@ dependencies = [
  "flo-event",
  "flo-log",
  "flo-net",
+ "flo-state",
  "flo-task 0.1.0",
  "flo-types",
  "flo-util",
