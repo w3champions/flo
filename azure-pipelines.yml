@@ -28,7 +28,7 @@ steps:
     repository: 'fluxxu/flo-controller'
     command: 'buildAndPush'
     Dockerfile: './build/controller.Dockerfile'
-    buildContext: "."
+    buildContext: "./build"
     tags: |
       $(Build.BuildID)
       latest
