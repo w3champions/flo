@@ -13,10 +13,10 @@ use flo_task::{SpawnScope, SpawnScopeHandle};
 use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
 };
-use super::stream::WsStream;
-use super::{ConnectController, WsEvent};
+use super::{ConnectController, MessageEvent};
 use crate::controller::{ControllerClient, SendFrame};
 use crate::error::{Error, Result};
+use crate::message::listener::MessageStream;
 use crate::platform::{
   GetClientPlatformInfo, GetMapDetail, GetMapList, PlatformActor, PlatformStateError, Reload,
 };
@@ -24,25 +24,25 @@ use flo_platform::ClientPlatformInfo;
 use flo_state::Addr;
 
 #[derive(Debug)]
-pub struct WsSession {
+pub struct Session {
   scope: SpawnScope,
-  ws_sender: Sender<OutgoingMessage>,
+  tx: Sender<OutgoingMessage>,
 }
 
-impl WsSession {
+impl Session {
   pub fn new(
     platform: Addr<PlatformActor>,
     client: Addr<ControllerClient>,
-    stream: WsStream,
+    stream: Box<dyn MessageStream>,
   ) -> Self {
-    let (ws_sender, ws_receiver) = channel(3);
+    let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
     let serve_state = Arc::new(Worker { platform, client });
     tokio::spawn(
       {
         let scope = scope.handle();
         async move {
-          if let Err(e) = serve_stream(serve_state.clone(), ws_receiver, scope, stream).await {
+          if let Err(e) = serve_stream(serve_state.clone(), rx, scope, stream).await {
             tracing::error!("serve stream: {}", e);
           } else {
             tracing::debug!("exiting");
@@ -51,11 +51,11 @@ impl WsSession {
       }
       .instrument(tracing::debug_span!("worker")),
     );
-    Self { scope, ws_sender }
+    Self { scope, tx: tx }
   }
 
   pub fn sender(&self) -> WsSender {
-    WsSender(self.ws_sender.clone())
+    WsSender(self.tx.clone())
   }
 }
 
@@ -70,9 +70,9 @@ impl WsSender {
 
 async fn serve_stream(
   state: Arc<Worker>,
-  mut ws_receiver: Receiver<OutgoingMessage>,
+  mut rx: Receiver<OutgoingMessage>,
   mut scope: SpawnScopeHandle,
-  mut stream: WsStream,
+  mut stream: Box<dyn MessageStream>,
 ) -> Result<()> {
   let msg = state.get_client_info_message().await?;
 
@@ -83,14 +83,14 @@ async fn serve_stream(
   loop {
     tokio::select! {
       _ = scope.left() => {
-        ws_receiver.close();
-        while let Some(msg) = ws_receiver.try_recv().ok() {
+        rx.close();
+        while let Some(msg) = rx.try_recv().ok() {
           stream.send(msg).await?;
         }
         stream.flush().await;
         break;
       }
-      msg = ws_receiver.recv() => {
+      msg = rx.recv() => {
         if let Some(msg) = msg {
           stream.send(msg).await?;
         } else {
@@ -178,7 +178,7 @@ impl Worker {
   async fn handle_connect(&self, token: String) -> Result<()> {
     self
       .client
-      .notify(WsEvent::ConnectController(ConnectController { token }))
+      .notify(MessageEvent::ConnectController(ConnectController { token }))
       .await?;
     Ok(())
   }

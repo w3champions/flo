@@ -9,15 +9,16 @@ use crate::error::*;
 use crate::lan::{
   Lan, LanEvent, ReplaceLanGame, StopLanGame, UpdateLanGamePlayerStatus, UpdateLanGameStatus,
 };
+use crate::message::message::{self, OutgoingMessage};
+use crate::message::ConnectController;
+use crate::message::{MessageEvent, Session};
 use crate::node::stream::NodeStreamEvent;
 use crate::node::{
   GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
 };
 use crate::platform::{GetClientConfig, PlatformActor};
 use crate::types::PlayerSession;
-use crate::ws::message::{self, OutgoingMessage};
-use crate::ws::ConnectController;
-use crate::ws::{WsEvent, WsSession};
+use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_state::{
   async_trait, Actor, Addr, Container, Context, Handler, Message, RegistryRef, Service,
@@ -31,11 +32,25 @@ pub struct ControllerClient {
   lan: Addr<Lan>,
   conn: Option<Container<ControllerStream>>,
   conn_id: u64,
-  ws_conn: Option<WsSession>,
+  ws_conn: Option<Session>,
   current_session: Option<PlayerSession>,
+  initial_token: Option<String>,
 }
 
 impl ControllerClient {
+  fn connect(&mut self, ctx: &mut Context<Self>, token: String) {
+    self.conn_id = self.conn_id.wrapping_add(1);
+    let stream = ControllerStream::new(
+      ctx.addr(),
+      self.platform.clone(),
+      self.nodes.clone(),
+      self.conn_id,
+      &self.config.controller_domain,
+      token,
+    );
+    self.conn.replace(stream.start());
+  }
+
   async fn ws_send(&self, message: OutgoingMessage) {
     if let Some(sender) = self.ws_conn.as_ref().map(|v| v.sender()) {
       sender.send_or_discard(message).await;
@@ -100,13 +115,20 @@ impl ControllerClient {
   }
 }
 
-impl Actor for ControllerClient {}
+#[async_trait]
+impl Actor for ControllerClient {
+  async fn started(&mut self, ctx: &mut Context<Self>) {
+    if let Some(token) = self.initial_token.take() {
+      self.connect(ctx, token);
+    }
+  }
+}
 
 #[async_trait]
-impl Service for ControllerClient {
+impl Service<StartConfig> for ControllerClient {
   type Error = Error;
 
-  async fn create(registry: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
+  async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     let platform = registry.resolve::<PlatformActor>().await?;
     let config = platform.send(GetClientConfig).await?;
     Ok(Self {
@@ -118,6 +140,7 @@ impl Service for ControllerClient {
       conn_id: 0,
       ws_conn: None,
       current_session: None,
+      initial_token: registry.data().token.clone(),
     })
   }
 }
@@ -261,26 +284,17 @@ impl Handler<UpdateNodes> for ControllerClient {
 }
 
 #[async_trait]
-impl Handler<WsEvent> for ControllerClient {
+impl Handler<MessageEvent> for ControllerClient {
   async fn handle(
     &mut self,
     ctx: &mut Context<Self>,
-    message: WsEvent,
-  ) -> <WsEvent as Message>::Result {
+    message: MessageEvent,
+  ) -> <MessageEvent as Message>::Result {
     match message {
-      WsEvent::ConnectController(ConnectController { token }) => {
-        self.conn_id = self.conn_id.wrapping_add(1);
-        let stream = ControllerStream::new(
-          ctx.addr(),
-          self.platform.clone(),
-          self.nodes.clone(),
-          self.conn_id,
-          &self.config.controller_domain,
-          token,
-        );
-        self.conn.replace(stream.start());
+      MessageEvent::ConnectController(ConnectController { token }) => {
+        self.connect(ctx, token);
       }
-      WsEvent::WorkerError(_) => {}
+      MessageEvent::WorkerError(_) => {}
     }
   }
 }
@@ -302,19 +316,19 @@ impl Handler<SendFrame> for ControllerClient {
   }
 }
 
-pub struct ReplaceWsSession(pub WsSession);
+pub struct ReplaceSession(pub Session);
 
-impl Message for ReplaceWsSession {
+impl Message for ReplaceSession {
   type Result = ();
 }
 
 #[async_trait]
-impl Handler<ReplaceWsSession> for ControllerClient {
+impl Handler<ReplaceSession> for ControllerClient {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    ReplaceWsSession(sess): ReplaceWsSession,
-  ) -> <ReplaceWsSession as Message>::Result {
+    ReplaceSession(sess): ReplaceSession,
+  ) -> <ReplaceSession as Message>::Result {
     if let Some(replaced) = self.ws_conn.replace(sess) {
       replaced
         .sender()
@@ -418,170 +432,3 @@ impl Handler<LanEvent> for ControllerClient {
     }
   }
 }
-
-// impl State {
-//   fn new(
-//     platform: Addr<PlatformActor>,
-//     nodes: NodeRegistryRef,
-//     ws: Ws,
-//     event_sender: ControllerEventSender,
-//     stream_event_sender: Sender<ControllerStreamEvent>,
-//   ) -> Self {
-//     State {
-//       id_counter: AtomicU64::new(0),
-//       platform,
-//       nodes,
-//       ws,
-//       event_sender,
-//       stream_event_sender,
-//       conn: RwLock::new(None),
-//       current_game_info: RwLock::new(None),
-//       current_session: RwLock::new(None),
-//     }
-//   }
-//
-//   // try send a frame
-//   // if not connected, discard the frame
-//   // if connected, but the send failed, send disconnect msg to the conn's ws connection
-//   pub async fn send_frame_or_disconnect_ws(&self, frame: Frame) -> bool {
-//     let senders = self
-//       .conn
-//       .read()
-//       .as_ref()
-//       .map(|conn| (conn.ws_sender.clone(), conn.stream.get_sender_cloned()));
-//     if let Some((mut ws_sender, mut frame_sender)) = senders {
-//       if let Err(_) = frame_sender.send(frame).await {
-//         ws_sender
-//           .send(OutgoingMessage::Disconnect(message::Disconnect {
-//             reason: message::DisconnectReason::Unknown,
-//             message: "Connection closed unexpectedly.".to_string(),
-//           }))
-//           .await
-//           .ok();
-//       } else {
-//         return true;
-//       }
-//     }
-//     false
-//   }
-//
-//   async fn handle_ws_event(self: Arc<Self>, event: WsEvent) {
-//     match event {
-//       WsEvent::ConnectControllerEvent(connect) => {
-//         let conn = ControllerConn::new(
-//           self.id_counter.fetch_add(1, Ordering::SeqCst),
-//           self.platform.clone(),
-//           self.stream_event_sender.clone().into(),
-//           self.nodes.clone(),
-//           connect.sender,
-//           connect.token,
-//         )
-//         .await;
-//         let conn = match conn {
-//           Ok(v) => v,
-//           Err(err) => {
-//             tracing::error!("connect to controller: {}", err);
-//             return;
-//           }
-//         };
-//         *self.conn.write() = Some(conn);
-//       }
-//       WsEvent::LobbyFrameEvent(frame) => {
-//         self.send_frame_or_disconnect_ws(frame).await;
-//       }
-//       WsEvent::WorkerErrorEvent(err) => {
-//         self
-//           .event_sender
-//           .clone()
-//           .send_or_log_as_error(ControllerEvent::WsWorkerErrorEvent(err))
-//           .await;
-//       }
-//     }
-//   }
-//
-//   async fn handle_stream_event(self: Arc<Self>, event: ControllerStreamEvent) {
-//     match event {
-//       ControllerStreamEvent::ConnectedEvent => {
-//         self
-//           .event_sender
-//           .clone()
-//           .send_or_log_as_error(ControllerEvent::ConnectedEvent)
-//           .await;
-//       }
-//       ControllerStreamEvent::DisconnectedEvent(id) => {
-//         self.current_session.write().take();
-//         self.remove_conn(id);
-//         self
-//           .event_sender
-//           .clone()
-//           .send_or_log_as_error(ControllerEvent::DisconnectedEvent)
-//           .await;
-//       }
-//       ControllerStreamEvent::ConnectionErrorEvent(id, err) => {
-//         tracing::error!("server connection: {}", err);
-//         self.remove_conn(id);
-//         self
-//           .event_sender
-//           .clone()
-//           .send_or_log_as_error(ControllerEvent::DisconnectedEvent)
-//           .await;
-//       }
-//       ControllerStreamEvent::PlayerSessionUpdateEvent(event) => match event {
-//         PlayerSessionUpdateEvent::Full(session) => {
-//           *self.current_session.write() = Some(session);
-//         }
-//         PlayerSessionUpdateEvent::Partial(update) => {
-//           let mut guard = self.current_session.write();
-//           if let Some(current) = guard.as_mut() {
-//             current.game_id = update.game_id;
-//             current.status = update.status;
-//           } else {
-//             tracing::error!(
-//               "PlayerSessionUpdateEvent emitted by there is no active player session."
-//             )
-//           }
-//         }
-//       },
-//       ControllerStreamEvent::GameInfoUpdateEvent(event) => {
-//         let game_info = event.game_info;
-//         *self.current_game_info.write() = game_info.clone();
-//         self
-//           .event_sender
-//           .clone()
-//           .send_or_log_as_error(ControllerEvent::GameInfoUpdateEvent(game_info))
-//           .await;
-//       }
-//       ControllerStreamEvent::GameStartingEvent(event) => {
-//         let game_id = event.game_id;
-//         if let Err(err) = self.handle_game_start(game_id).await {
-//           tracing::error!("get client info: {}", err);
-//         }
-//       }
-//       ControllerStreamEvent::GameReceivedEvent(event) => {
-//         let game_info = { self.current_game_info.read().clone() };
-//         if let Some(game_info) = game_info {
-//           self
-//             .event_sender
-//             .clone()
-//             .send_or_log_as_error(ControllerEvent::GameStartedEvent(event, game_info))
-//             .await;
-//         } else {
-//           tracing::error!(
-//             node_id = event.node_id,
-//             game_id = event.game_id,
-//             "game info unavailable"
-//           );
-//         }
-//       }
-//     }
-//   }
-//
-//   fn remove_conn(&self, id: u64) -> Option<ControllerConn> {
-//     let mut guard = self.conn.write();
-//     if let Some(current_id) = guard.as_ref().map(|conn| conn.id) {
-//       if id == current_id {
-//         return guard.take();
-//       }
-//     }
-//     None
-//   }

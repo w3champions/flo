@@ -705,11 +705,16 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dotenv",
+ "flo-client",
  "flo-controller",
+ "flo-grpc",
  "flo-log-subscriber",
  "flo-net",
+ "flo-w3map",
+ "flo-w3storage",
  "structopt",
  "tokio",
+ "tonic",
  "tracing",
  "tracing-futures",
 ]

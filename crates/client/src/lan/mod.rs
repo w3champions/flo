@@ -13,23 +13,24 @@ use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
 use crate::platform::{CalcMapChecksum, PlatformActor};
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use crate::StartConfig;
 use flo_state::{
   async_trait, Actor, Addr, Context, Deferred, Handler, Message, RegistryRef, Service,
 };
 
 pub struct Lan {
   platform: Addr<PlatformActor>,
-  client: Deferred<ControllerClient>,
+  client: Deferred<ControllerClient, StartConfig>,
   active_game: Option<LanGame>,
 }
 
 impl Actor for Lan {}
 
 #[async_trait]
-impl Service for Lan {
+impl Service<StartConfig> for Lan {
   type Error = Error;
 
-  async fn create(registry: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
+  async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     let platform = registry.resolve().await?;
     Ok(Lan {
       platform,

@@ -1,5 +1,6 @@
 use crate::error::*;
 use crate::ping::{GetPingMap, PingActor, SetActiveAddress, UpdateAddresses};
+use crate::StartConfig;
 use flo_net::proto::flo_connect::Node;
 use flo_state::{async_trait, Actor, Container, Context, Handler, Message, RegistryRef, Service};
 use flo_types::ping::PingStats;
@@ -24,10 +25,10 @@ impl NodeRegistry {
 impl Actor for NodeRegistry {}
 
 #[async_trait]
-impl Service for NodeRegistry {
+impl Service<StartConfig> for NodeRegistry {
   type Error = Error;
 
-  async fn create(_: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
+  async fn create(_: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     Ok(NodeRegistry::new())
   }
 }

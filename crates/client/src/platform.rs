@@ -1,5 +1,6 @@
 use crate::error::{Error, Result};
 use crate::types::{MapDetail, MapForceOwned, MapPlayerOwned};
+use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
 use flo_platform::ClientPlatformInfo;
@@ -32,10 +33,10 @@ impl PlatformActor {
 impl Actor for PlatformActor {}
 
 #[async_trait]
-impl Service for PlatformActor {
+impl Service<StartConfig> for PlatformActor {
   type Error = Error;
 
-  async fn create(_registry: &mut RegistryRef<()>) -> Result<Self, Self::Error> {
+  async fn create(_registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     PlatformActor::new().await
   }
 }

@@ -1,6 +1,8 @@
 use structopt::StructOpt;
 
 mod client;
+mod game;
+mod grpc;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -16,7 +18,7 @@ enum Opt {
 #[tokio::main]
 async fn main() -> Result<()> {
   dotenv::dotenv()?;
-  flo_log_subscriber::init_env_override("flo_lobby_service=debug,flo_lobby=debug,flo_cli=debug");
+  flo_log_subscriber::init_env_override("flo_client,flo_cli");
 
   let opt = Opt::from_args();
 

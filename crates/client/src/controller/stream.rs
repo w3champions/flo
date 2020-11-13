@@ -1,12 +1,12 @@
 use crate::controller::{ControllerClient, SendWs};
 use crate::error::*;
 use crate::game::LocalGameInfo;
+use crate::message::message;
+use crate::message::message::OutgoingMessage;
 use crate::node::{GetNodePingMap, NodeRegistry, UpdateNodes};
 use crate::ping::PingUpdate;
 use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, PlatformActor};
 use crate::types::*;
-use crate::ws::message;
-use crate::ws::message::OutgoingMessage;
 use flo_net::packet::*;
 use flo_net::proto::flo_connect as proto;
 use flo_net::stream::FloStream;
@@ -418,6 +418,7 @@ impl Actor for ControllerStream {
       let parent = self.parent.clone();
       let nodes = self.nodes.clone();
       async move {
+        delay_for(Duration::from_secs(2)).await;
         loop {
           if let Err(err) = Self::report_ping(id, frame_tx.clone(), &parent, &nodes).await {
             tracing::error!("report ping: {}", err)
