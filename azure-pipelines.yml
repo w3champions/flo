@@ -7,7 +7,7 @@ trigger:
 - master
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'Flux Self-hosted'
 
 
 steps:
@@ -16,11 +16,12 @@ steps:
   displayName: 'install rust'
  
 - script: |
-    cargo build -p flo-controller-service
+    cargo build -p flo-controller-service --release
   displayName: 'build flo controller'
 
 - script: |
-    mv ./target/debug ./build
+    mkdir -p ./build/release &&
+    cp ./target/release/flo-controller-service ./build/release/flo-controller-service
   displayName: 'move files for docker'
 
 - task: Docker@2
