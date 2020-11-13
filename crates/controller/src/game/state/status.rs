@@ -93,6 +93,7 @@ impl Handler<GameStatusUpdate> for GameActor {
       .await?;
 
     let frame_game_status = message.to_packet().encode_as_frame()?;
+    self.status = GameStatus::from(message.status);
 
     let ended = match self.status {
       GameStatus::Ended | GameStatus::Terminated => true,
@@ -120,7 +121,6 @@ impl Handler<GameStatusUpdate> for GameActor {
       })
       .collect::<Result<Vec<_>>>()?;
 
-    self.status = GameStatus::from(message.status);
     self
       .player_client_status_map
       .extend(message.updated_player_game_client_status_map);
