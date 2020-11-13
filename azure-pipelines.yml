@@ -13,10 +13,6 @@ steps:
 - script: |
     curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
   displayName: 'install rust'
-
-- script: |
-    cargo build --all
-  displayName: 'install dependencies'
  
 - script: |
     cargo build -p flo-controller-service --release
