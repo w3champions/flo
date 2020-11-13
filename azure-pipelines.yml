@@ -15,7 +15,7 @@ steps:
   displayName: 'install rust'
  
 - script: |
-    cargo build -p flo-controller-service --release
+    cargo build -p flo-controller-service
   displayName: 'build flo controller'
 
 - script: |
