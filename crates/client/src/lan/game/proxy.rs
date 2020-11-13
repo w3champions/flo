@@ -219,16 +219,22 @@ impl State {
       &mut w3gs_tx,
       &mut w3gs_rx,
     );
-    let game_res = tokio::select! {
+    tokio::select! {
       _ = &mut dropped => {
         return Ok(())
       }
       res = game_handler.run() => {
-        res?
+        match res {
+          Ok(res) => {
+            tracing::debug!("game ended: {:?}", res);
+          },
+          Err(err) => {
+            tracing::error!("game ended with error: {}", err);
+          }
+        }
       }
     };
 
-    tracing::debug!("game ended: {:?}", game_res);
     stream.flush().await.ok();
     Ok(())
   }
