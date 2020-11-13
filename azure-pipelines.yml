@@ -9,6 +9,7 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+
 steps:
 - script: |
     curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
@@ -19,7 +20,7 @@ steps:
   displayName: 'build flo controller'
 
 - script: |
-    mv ./target/release ./build
+    mv ./target/debug ./build
   displayName: 'move files for docker'
 
 - task: Docker@2
