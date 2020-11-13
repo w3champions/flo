@@ -11,8 +11,12 @@ pool:
 
 steps:
 - script: |
-    git submodule update --init --recursive
-  displayName: 'install dependencies'
+    curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
+  displayName: 'install rust'
+
+# - script: |
+#     git submodule update --init --recursive
+#   displayName: 'install dependencies'
 
 - script: |
     cargo build --all
