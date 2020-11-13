@@ -19,5 +19,16 @@ steps:
   displayName: 'build flo controller'
 
 - script: |
-    cargo build -p flo-node-service --release
-  displayName: 'build flo node service'
+    mv ./target/release ./build
+  displayName: 'move files for docker'
+
+- task: Docker@2
+  inputs:
+    containerRegistry: 'Fluxxu Docker Hub'
+    repository: 'fluxxu/flo-controller'
+    command: 'buildAndPush'
+    Dockerfile: './build/controller.Dockerfile'
+    buildContext: "."
+    tags: |
+      $(Build.BuildID)
+      latest
