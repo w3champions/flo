@@ -15,10 +15,6 @@ steps:
   displayName: 'install rust'
 
 - script: |
-    git submodule update --init --recursive
-  displayName: 'install dependencies'
-
-- script: |
     cargo build --all
   displayName: 'install dependencies'
  
