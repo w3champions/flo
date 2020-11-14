@@ -13,7 +13,7 @@ flo-w3storage = { path = "../w3storage" }
 flo-w3replay = { path = "../w3replay" }
 flo-platform = { path = "../platform" }
 
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2.22", features = ["time", "sync", "stream"] }
 trust-dns-client = { version = "0.20", features = ["mdns"] }
 hostname = "^0.3"
 pretty-hex = "0.1.1"

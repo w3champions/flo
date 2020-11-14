@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::net::{Ipv4Addr};
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::stream::StreamExt;
@@ -19,8 +19,8 @@ use tracing_futures::Instrument;
 use crate::constants;
 use crate::error::*;
 use crate::game_info::GameInfo;
-use trust_dns_client::serialize::binary::BinEncodable;
 use flo_platform::net::IpInfo;
+use trust_dns_client::serialize::binary::BinEncodable;
 
 type GameInfoRef = Arc<RwLock<GameInfo>>;
 type UpdateTx = mpsc::Sender<oneshot::Sender<()>>;
@@ -56,11 +56,17 @@ impl MdnsPublisher {
         .into_iter()
         .chain(constants::BLIZZARD_SERVICE_NAME.iter()),
     )?;
+
+    tracing::debug!("service name = {:?}", name);
+
     let game_info = Arc::new(RwLock::new(game_info));
     let (update_tx, mut update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
     let (drop_tx, drop_rx) = oneshot::channel();
     let ip_info: IpInfo = flo_platform::net::get_ip_info()?;
     let hostname = hostname::get().map_err(Error::GetHostName)?;
+
+    tracing::debug!("hostname = {:?}", hostname);
+
     let hostname = if let Some(v) = hostname.to_str() {
       v.to_string()
     } else {
@@ -68,6 +74,8 @@ impl MdnsPublisher {
       hostname.to_string_lossy().to_string()
     };
     let hostname = Name::from_labels(vec![hostname.as_bytes(), "local".as_bytes()])?;
+
+    tracing::debug!("mdns hostname = {:?}", hostname);
 
     let (connect, sender) = MdnsStream::new_ipv4(
       MdnsQueryType::OneShotJoin,
@@ -346,8 +354,6 @@ fn broadcast_cancel(sender: &BufStreamHandle, name: &Name) -> Result<()> {
 
   Ok(())
 }
-
-
 
 fn get_txt_record(name: &Name) -> Record {
   let mut record = Record::with(name.clone(), RecordType::TXT, 4500);
