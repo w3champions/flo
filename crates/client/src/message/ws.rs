@@ -1,11 +1,11 @@
-use super::listener::{MessageListener, MessageStream};
 use super::message::{IncomingMessage, OutgoingMessage};
 use crate::error::Result;
+use crate::StartConfig;
 use async_tungstenite::tokio::accept_hdr_async;
 use async_tungstenite::tungstenite::Error as WsError;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use async_tungstenite::WebSocketStream;
-use flo_state::async_trait;
+use flo_state::RegistryRef;
 use futures::{SinkExt, StreamExt};
 use http::{Request, Response};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -14,25 +14,43 @@ use tokio::net::{TcpListener, TcpStream};
 
 type InnerStream = WebSocketStream<async_tungstenite::tokio::TokioAdapter<TcpStream>>;
 
-pub struct WsListener {
+pub struct WsMessageListener {
   transport: TcpListener,
+  port: u16,
 }
 
-impl WsListener {
-  pub async fn bind(port: Option<u16>) -> Result<Self> {
+impl WsMessageListener {
+  pub async fn bind(_registry: &mut RegistryRef<StartConfig>) -> Result<Self> {
+    #[cfg(feature = "worker")]
+    let port = None;
+
+    #[cfg(not(feature = "worker"))]
+    let port = {
+      use crate::platform::{GetClientConfig, Platform};
+      let platform = _registry.resolve::<Platform>().await?;
+      Some(platform.send(GetClientConfig).await?.local_port)
+    };
+
     let transport =
       TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port.unwrap_or(0))).await?;
-    Ok(WsListener { transport })
+    let port = transport.local_addr()?.port();
+
+    tracing::debug!("listen on {}", port);
+
+    Ok(WsMessageListener { transport, port })
+  }
+
+  pub fn port(&self) -> u16 {
+    self.port
   }
 }
 
-#[async_trait]
-impl MessageListener for WsListener {
-  async fn accept(&mut self) -> Result<Option<Box<dyn MessageStream>>> {
+impl WsMessageListener {
+  pub async fn accept(&mut self) -> Result<Option<WsMessageStream>> {
     loop {
       let (stream, _) = self.transport.accept().await?;
       match accept_hdr_async(stream, check_origin).await {
-        Ok(stream) => return Ok(Some(Box::new(WsStream(stream)))),
+        Ok(stream) => return Ok(Some(WsMessageStream(stream))),
         Err(WsError::Http(_)) => continue,
         Err(e) => {
           tracing::error!("ws accept: {}", e);
@@ -43,11 +61,10 @@ impl MessageListener for WsListener {
   }
 }
 
-pub struct WsStream(InnerStream);
+pub struct WsMessageStream(InnerStream);
 
-#[async_trait]
-impl MessageStream for WsStream {
-  async fn send(&mut self, msg: OutgoingMessage) -> Result<()> {
+impl WsMessageStream {
+  pub async fn send(&mut self, msg: OutgoingMessage) -> Result<()> {
     let msg = msg.serialize()?;
     match self.0.send(WsMessage::Text(msg)).await {
       Ok(_) => Ok(()),
@@ -55,7 +72,7 @@ impl MessageStream for WsStream {
     }
   }
 
-  async fn recv(&mut self) -> Option<IncomingMessage> {
+  pub async fn recv(&mut self) -> Option<IncomingMessage> {
     loop {
       let msg = match self.0.next().await {
         Some(Ok(msg)) => msg,
@@ -88,7 +105,7 @@ impl MessageStream for WsStream {
     }
   }
 
-  async fn flush(&mut self) {
+  pub async fn flush(&mut self) {
     tokio::time::timeout(Duration::from_secs(3), self.0.flush())
       .await
       .ok()

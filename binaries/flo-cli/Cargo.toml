@@ -13,7 +13,7 @@ flo-net = { path = "../../crates/net" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 flo-w3storage = { path = "../../crates/w3storage" }
 flo-w3map = { path = "../../crates/w3map" }
-flo-client = { path = "../../crates/client" }
+flo-client = { path = "../../crates/client", features = ["worker"] }
 tonic = "0.3.1"
 
 dotenv = "0.15.0"

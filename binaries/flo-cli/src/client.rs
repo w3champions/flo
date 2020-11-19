@@ -18,8 +18,8 @@ impl Command {
         let token = flo_controller::player::token::create_player_token(player_id)?;
         tracing::debug!("token generated: {}", token);
         let client = flo_client::start(flo_client::StartConfig {
-          dynamic_port: true,
           token: Some(token),
+          ..Default::default()
         })
         .await
         .unwrap();

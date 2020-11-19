@@ -1,23 +1,23 @@
-mod listener;
 pub mod message;
 mod session;
+
+#[cfg(feature = "ws")]
 mod ws;
+#[cfg(feature = "ws")]
+pub(crate) use ws::{WsMessageListener as MessageListener, WsMessageStream as MessageStream};
 
 use crate::controller::{ControllerClient, ReplaceSession};
 use crate::error::*;
-use crate::platform::{GetClientConfig, PlatformActor};
+use crate::platform::Platform;
 use crate::StartConfig;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, RegistryRef, Service};
-pub use listener::{MessageListener, MessageStream};
 pub use session::Session;
-use std::net::{Ipv4Addr, SocketAddrV4};
-use tokio::net::TcpListener;
 use tracing_futures::Instrument;
 
 pub struct Listener {
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   client: Addr<ControllerClient>,
-  listener: Option<Box<dyn MessageListener>>,
+  listener: Option<MessageListener>,
   port: u16,
 }
 
@@ -60,33 +60,25 @@ impl Service<StartConfig> for Listener {
     let platform = registry.resolve().await?;
     let client = registry.resolve().await?;
 
-    let port = if registry.data().dynamic_port {
-      0
-    } else {
-      platform.send(GetClientConfig).await?.local_port
-    };
-
-    let listener = if let Some(v) = registry {};
-
-    let sock_addr = listener.local_addr()?;
-    tracing::debug!("listen on {}", sock_addr);
+    let listener = MessageListener::bind(registry).await?;
+    let port = listener.port();
 
     Ok(Listener {
       platform,
       client,
       listener: listener.into(),
-      port: sock_addr.port(),
+      port,
     })
   }
 }
 
 struct Worker {
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   client: Addr<ControllerClient>,
 }
 
 impl Worker {
-  pub async fn serve(&self, mut listener: Box<dyn MessageListener>) -> Result<()> {
+  pub async fn serve(&self, mut listener: MessageListener) -> Result<()> {
     loop {
       let stream = if let Some(stream) = listener.accept().await? {
         stream

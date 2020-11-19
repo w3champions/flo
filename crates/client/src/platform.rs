@@ -9,19 +9,22 @@ use flo_w3map::MapChecksum;
 use flo_w3storage::W3Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 
 #[derive(Debug)]
-pub struct PlatformActor {
+pub struct Platform {
+  installation_path: Option<PathBuf>,
   config: ClientConfig,
   info: Result<ClientPlatformInfo, PlatformStateError>,
   storage: Option<W3Storage>,
   maps: Option<Value>,
 }
 
-impl PlatformActor {
-  async fn new() -> Result<Self> {
-    let (config, info) = load().await;
-    Ok(PlatformActor {
+impl Platform {
+  async fn new(installation_path: Option<PathBuf>) -> Result<Self> {
+    let (config, info) = load(installation_path.clone()).await;
+    Ok(Platform {
+      installation_path,
       config,
       info,
       storage: None,
@@ -30,14 +33,14 @@ impl PlatformActor {
   }
 }
 
-impl Actor for PlatformActor {}
+impl Actor for Platform {}
 
 #[async_trait]
-impl Service<StartConfig> for PlatformActor {
+impl Service<StartConfig> for Platform {
   type Error = Error;
 
-  async fn create(_registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
-    PlatformActor::new().await
+  async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
+    Platform::new(registry.data().installation_path.clone()).await
   }
 }
 
@@ -55,9 +58,9 @@ impl Message for Reload {
 }
 
 #[async_trait]
-impl Handler<Reload> for PlatformActor {
+impl Handler<Reload> for Platform {
   async fn handle(&mut self, _: &mut Context<Self>, _: Reload) -> <Reload as Message>::Result {
-    let (config, info) = load().await;
+    let (config, info) = load(self.installation_path.clone()).await;
     self.config = config;
     self.info = info;
     self.maps.take();
@@ -72,7 +75,7 @@ impl Message for GetMapList {
 }
 
 #[async_trait]
-impl Handler<GetMapList> for PlatformActor {
+impl Handler<GetMapList> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
@@ -105,7 +108,7 @@ impl Message for GetClientPlatformInfo {
 }
 
 #[async_trait]
-impl Handler<GetClientPlatformInfo> for PlatformActor {
+impl Handler<GetClientPlatformInfo> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
@@ -124,7 +127,7 @@ impl Message for CalcMapChecksum {
 }
 
 #[async_trait]
-impl Handler<CalcMapChecksum> for PlatformActor {
+impl Handler<CalcMapChecksum> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
@@ -143,7 +146,7 @@ impl Message for GetClientConfig {
 }
 
 #[async_trait]
-impl Handler<GetClientConfig> for PlatformActor {
+impl Handler<GetClientConfig> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
@@ -162,7 +165,7 @@ impl Message for GetMapDetail {
 }
 
 #[async_trait]
-impl Handler<GetMapDetail> for PlatformActor {
+impl Handler<GetMapDetail> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
@@ -210,7 +213,7 @@ impl Handler<GetMapDetail> for PlatformActor {
   }
 }
 
-impl PlatformActor {
+impl Platform {
   pub async fn with_storage<F, R>(&mut self, f: F) -> Result<R>
   where
     F: FnOnce(&W3Storage) -> Result<R> + Send,
@@ -234,8 +237,16 @@ impl PlatformActor {
   }
 }
 
-async fn load() -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
+async fn load(
+  installation_path: Option<PathBuf>,
+) -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
   tokio::task::block_in_place(move || {
+    #[cfg(feature = "worker")]
+    let config = ClientConfig {
+      installation_path,
+      ..Default::default()
+    };
+    #[cfg(not(feature = "worker"))]
     let config = ClientConfig::load()
       .map_err(|err| tracing::error!("load config: {}", err))
       .unwrap_or_default();

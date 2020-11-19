@@ -11,7 +11,7 @@ use crate::error::*;
 use crate::game::LocalGameInfo;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
-use crate::platform::{CalcMapChecksum, PlatformActor};
+use crate::platform::{CalcMapChecksum, Platform};
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use crate::StartConfig;
 use flo_state::{
@@ -19,7 +19,7 @@ use flo_state::{
 };
 
 pub struct Lan {
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   client: Deferred<ControllerClient, StartConfig>,
   active_game: Option<LanGame>,
 }

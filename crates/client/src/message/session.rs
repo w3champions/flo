@@ -1,27 +1,25 @@
-use s2_grpc_utils::S2ProtoPack;
-use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing_futures::Instrument;
-
-use flo_net::packet::FloPacket;
-use flo_net::proto::flo_connect::{
-  PacketGamePlayerPingMapSnapshotRequest, PacketGameSlotUpdateRequest, PacketGameStartRequest,
-  PacketListNodesRequest,
-};
-use flo_task::{SpawnScope, SpawnScopeHandle};
-
 use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
 };
 use super::{ConnectController, MessageEvent};
 use crate::controller::{ControllerClient, SendFrame};
 use crate::error::{Error, Result};
-use crate::message::listener::MessageStream;
+use crate::message::MessageStream;
 use crate::platform::{
-  GetClientPlatformInfo, GetMapDetail, GetMapList, PlatformActor, PlatformStateError, Reload,
+  GetClientPlatformInfo, GetMapDetail, GetMapList, Platform, PlatformStateError, Reload,
+};
+use flo_net::packet::FloPacket;
+use flo_net::proto::flo_connect::{
+  PacketGamePlayerPingMapSnapshotRequest, PacketGameSlotUpdateRequest, PacketGameStartRequest,
+  PacketListNodesRequest,
 };
 use flo_platform::ClientPlatformInfo;
 use flo_state::Addr;
+use flo_task::{SpawnScope, SpawnScopeHandle};
+use s2_grpc_utils::S2ProtoPack;
+use std::sync::Arc;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tracing_futures::Instrument;
 
 #[derive(Debug)]
 pub struct Session {
@@ -31,9 +29,9 @@ pub struct Session {
 
 impl Session {
   pub fn new(
-    platform: Addr<PlatformActor>,
+    platform: Addr<Platform>,
     client: Addr<ControllerClient>,
-    stream: Box<dyn MessageStream>,
+    stream: MessageStream,
   ) -> Self {
     let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
@@ -72,7 +70,7 @@ async fn serve_stream(
   state: Arc<Worker>,
   mut rx: Receiver<OutgoingMessage>,
   mut scope: SpawnScopeHandle,
-  mut stream: Box<dyn MessageStream>,
+  mut stream: MessageStream,
 ) -> Result<()> {
   let msg = state.get_client_info_message().await?;
 
@@ -119,7 +117,7 @@ async fn serve_stream(
 }
 
 struct Worker {
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   client: Addr<ControllerClient>,
 }
 

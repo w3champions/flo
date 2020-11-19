@@ -34,6 +34,7 @@ pub enum Error {
   TaskCancelled(anyhow::Error),
   #[error("Lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
+  #[cfg(feature = "ws")]
   #[error("Websocket: {0}")]
   Websocket(#[from] async_tungstenite::tungstenite::error::Error),
   #[error("W3GS: {0}")]

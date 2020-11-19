@@ -33,6 +33,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/controller/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-windows/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/binaries/flo-worker/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

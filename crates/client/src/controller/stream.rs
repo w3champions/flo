@@ -5,7 +5,7 @@ use crate::message::message;
 use crate::message::message::OutgoingMessage;
 use crate::node::{GetNodePingMap, NodeRegistry, UpdateNodes};
 use crate::ping::PingUpdate;
-use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, PlatformActor};
+use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
 use crate::types::*;
 use flo_net::packet::*;
 use flo_net::proto::flo_connect as proto;
@@ -27,14 +27,14 @@ pub struct ControllerStream {
   frame_tx: Sender<Frame>,
   frame_rx: Option<Receiver<Frame>>,
   current_game_info: Option<Arc<LocalGameInfo>>,
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   nodes: Addr<NodeRegistry>,
 }
 
 impl ControllerStream {
   pub fn new(
     parent: Addr<ControllerClient>,
-    platform: Addr<PlatformActor>,
+    platform: Addr<Platform>,
     nodes: Addr<NodeRegistry>,
     id: u64,
     domain: &str,

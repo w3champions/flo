@@ -11,12 +11,13 @@ mod version;
 
 use crate::message::{GetPort, Listener};
 use flo_state::Registry;
-pub use message::{MessageListener, MessageStream};
+use std::path::PathBuf;
+pub use version::FLO_VERSION;
 
 #[derive(Default)]
 pub struct StartConfig {
-  pub listener: Option<Box<dyn MessageListener>>,
   pub token: Option<String>,
+  pub installation_path: Option<PathBuf>,
 }
 
 pub struct FloClient {
@@ -45,5 +46,3 @@ pub async fn start(config: StartConfig) -> Result<FloClient, error::Error> {
     _registry: registry,
   })
 }
-
-pub use version::FLO_VERSION;

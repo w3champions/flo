@@ -12,6 +12,7 @@ extern "C" {
   ) -> GetProcessPathByWindowTitleResult;
 }
 
+#[allow(unused)]
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum GetProcessPathByWindowTitleResult {

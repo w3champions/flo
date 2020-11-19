@@ -16,7 +16,7 @@ use crate::node::stream::NodeStreamEvent;
 use crate::node::{
   GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
 };
-use crate::platform::{GetClientConfig, PlatformActor};
+use crate::platform::{GetClientConfig, Platform};
 use crate::types::PlayerSession;
 use crate::StartConfig;
 use flo_config::ClientConfig;
@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 pub struct ControllerClient {
   config: ClientConfig,
-  platform: Addr<PlatformActor>,
+  platform: Addr<Platform>,
   nodes: Addr<NodeRegistry>,
   lan: Addr<Lan>,
   conn: Option<Container<ControllerStream>>,
@@ -129,7 +129,7 @@ impl Service<StartConfig> for ControllerClient {
   type Error = Error;
 
   async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
-    let platform = registry.resolve::<PlatformActor>().await?;
+    let platform = registry.resolve::<Platform>().await?;
     let config = platform.send(GetClientConfig).await?;
     Ok(Self {
       config,
@@ -329,6 +329,7 @@ impl Handler<ReplaceSession> for ControllerClient {
     _: &mut Context<Self>,
     ReplaceSession(sess): ReplaceSession,
   ) -> <ReplaceSession as Message>::Result {
+    #[cfg(not(feature = "worker"))]
     if let Some(replaced) = self.ws_conn.replace(sess) {
       replaced
         .sender()
@@ -337,6 +338,11 @@ impl Handler<ReplaceSession> for ControllerClient {
           message: "Another browser window took up the connection.".to_string(),
         }))
         .await;
+    }
+
+    #[cfg(feature = "worker")]
+    if self.ws_conn.is_none() {
+      self.ws_conn.replace(sess);
     }
   }
 }
