@@ -27,6 +27,7 @@ members = [
   "binaries/flo-cli",
   "binaries/flo-controller-service",
   "binaries/flo-node-service",
+  "binaries/flo-worker",
 
   "deps/flo-grpc"
 ]
