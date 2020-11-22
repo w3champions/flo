@@ -118,18 +118,14 @@ impl ConfigStorage {
         create_api_players(conn)?;
 
         let api_player_map: BTreeMap<i32, i32> = player::table
-          .select((player::realm, player::id))
+          .select((player::api_client_id, player::id))
           .filter(
             player::source
               .eq(PlayerSource::Api)
               .and(player::source_id.eq("")),
           )
-          .load::<(Option<String>, i32)>(conn)?
+          .load::<(i32, i32)>(conn)?
           .into_iter()
-          .filter_map(|(realm, player_id)| {
-            let id: i32 = realm.as_ref()?.parse().ok()?;
-            Some((id, player_id))
-          })
           .collect();
 
         let items = api_client::table
@@ -162,19 +158,19 @@ impl ConfigStorage {
 // Create API players if not exist
 //
 // every api client has a special player which
+// - api_client_id
 // - source = `PlayerSource::Api`
 // - source_id = ''
-// - realm = api client id as string
 fn create_api_players(conn: &DbConn) -> Result<()> {
   let sql = r#"
-    insert into player(name, source, source_id, realm)
+    insert into player(name, source, source_id, api_client_id)
     select
         c.name,
         2,
         '',
-        c.id::text
+        c.id
     from api_client c
-    left join player p on p.source = 2 and p.realm = c.id::text and p.source_id = ''
+    left join player p on p.source = 2 and p.api_client_id = c.id and p.source_id = ''
     where p.id is null;
   "#;
   diesel::sql_query(sql).execute(conn)?;

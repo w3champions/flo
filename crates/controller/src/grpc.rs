@@ -9,10 +9,11 @@ use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer};
 use crate::game::state::start::{StartGameCheckAsBot, StartGameCheckAsBotResult};
 use crate::node::messages::ListNode;
 use crate::player::state::ping::GetPlayersPingSnapshot;
+use crate::player::{PlayerSource, SourceState};
 use crate::state::{ActorMapExt, ControllerStateRef};
 use flo_grpc::controller::flo_controller_server::*;
 use flo_grpc::controller::*;
-use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
@@ -78,11 +79,24 @@ impl FloController for FloControllerService {
     request: Request<UpdateAndGetPlayerRequest>,
   ) -> Result<Response<UpdateAndGetPlayerReply>, Status> {
     use crate::player::db;
-    use std::convert::TryFrom;
     let api_client_id = request.get_api_client_id();
     let mut req = request.into_inner();
     req.realm = Some(api_client_id.to_string());
-    let upsert: db::UpsertPlayer = TryFrom::try_from(req)?;
+    let upsert = db::UpsertPlayer {
+      api_client_id,
+      source: PlayerSource::unpack_enum(req.source()),
+      name: req.name,
+      source_id: req.source_id,
+      source_state: {
+        let state = req
+          .source_state
+          .map(|state| SourceState::unpack(state))
+          .transpose()
+          .map_err(Error::from)?;
+        Some(serde_json::to_value(&state).map_err(Error::from)?)
+      },
+      realm: S2ProtoUnpack::unpack(req.realm).map_err(Error::from)?,
+    };
     let player = self
       .state
       .db

@@ -4,11 +4,8 @@ use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
 use crate::schema::player;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use s2_grpc_utils::S2ProtoEnum;
-use s2_grpc_utils::S2ProtoUnpack;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
   player::table
@@ -31,20 +28,23 @@ pub fn get_ref(conn: &DbConn, id: i32) -> Result<PlayerRef> {
     .map_err(Into::into)
 }
 
-pub fn get_ref_with_game_info(conn: &DbConn, id: i32) -> Result<PlayerRef> {
-  use player::dsl;
-  player::table
-    .find(id)
-    .select((dsl::id, dsl::name, dsl::source, dsl::realm))
-    .first::<PlayerRef>(conn)
-    .optional()?
-    .ok_or_else(|| Error::PlayerNotFound)
-    .map_err(Into::into)
-}
-
 pub fn get_refs_by_ids(conn: &DbConn, ids: &[i32]) -> Result<Vec<PlayerRef>> {
   use player::dsl;
   player::table
+    .filter(dsl::id.eq_any(ids))
+    .select((dsl::id, dsl::name, dsl::source, dsl::realm))
+    .load(conn)
+    .map_err(Into::into)
+}
+
+pub fn get_client_refs_by_ids(
+  conn: &DbConn,
+  api_client_id: i32,
+  ids: &[i32],
+) -> Result<Vec<PlayerRef>> {
+  use player::dsl;
+  player::table
+    .filter(dsl::api_client_id.eq(api_client_id))
     .filter(dsl::id.eq_any(ids))
     .select((dsl::id, dsl::name, dsl::source, dsl::realm))
     .load(conn)
@@ -61,7 +61,7 @@ pub fn get_player_map_by_api_source_ids(
     .filter(
       dsl::source
         .eq(PlayerSource::Api)
-        .and(dsl::realm.eq(api_client_id.to_string())),
+        .and(dsl::api_client_id.eq(api_client_id)),
     )
     .filter(dsl::source_id.eq_any(ids))
     .select((
@@ -75,31 +75,12 @@ pub fn get_player_map_by_api_source_ids(
 #[derive(Debug, Insertable)]
 #[table_name = "player"]
 pub struct UpsertPlayer {
+  pub api_client_id: i32,
   pub name: String,
   pub source: PlayerSource,
   pub source_id: String,
   pub source_state: Option<Value>,
   pub realm: Option<String>,
-}
-
-impl TryFrom<flo_grpc::controller::UpdateAndGetPlayerRequest> for UpsertPlayer {
-  type Error = Error;
-
-  fn try_from(value: flo_grpc::controller::UpdateAndGetPlayerRequest) -> Result<Self, Self::Error> {
-    Ok(UpsertPlayer {
-      source: PlayerSource::unpack_enum(value.source()),
-      name: value.name,
-      source_id: value.source_id,
-      source_state: {
-        let state = value
-          .source_state
-          .map(|state| SourceState::unpack(state))
-          .transpose()?;
-        Some(serde_json::to_value(&state)?)
-      },
-      realm: S2ProtoUnpack::unpack(value.realm)?,
-    })
-  }
 }
 
 pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Player> {
@@ -111,7 +92,7 @@ pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Player> {
 
   diesel::insert_into(player::table)
     .values(data)
-    .on_conflict((dsl::source, dsl::source_id))
+    .on_conflict((dsl::api_client_id, dsl::source, dsl::source_id))
     .do_update()
     .set(Update {
       name: &data.name,
@@ -152,6 +133,7 @@ pub struct Row {
   pub realm: Option<String>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
+  pub api_client_id: i32,
 }
 
 impl From<Row> for Player {

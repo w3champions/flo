@@ -15,7 +15,7 @@ use crate::game::{
 };
 use crate::map::Map;
 use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
-use crate::player::{PlayerRef, PlayerRefColumns, PlayerSource};
+use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::{game, game_used_slot, node, player};
 use diesel::pg::expression::dsl::{all, any};
 
@@ -251,11 +251,11 @@ pub fn create_as_bot(
   player_ids.sort();
   player_ids.dedup();
 
-  let mut players: BTreeMap<_, _> = crate::player::db::get_refs_by_ids(conn, &player_ids)?
-    .into_iter()
-    .map(|p| (p.id, p))
-    .collect();
-  let expected_realm_id = Some(api_client_id.to_string());
+  let mut players: BTreeMap<_, _> =
+    crate::player::db::get_client_refs_by_ids(conn, api_client_id, &player_ids)?
+      .into_iter()
+      .map(|p| (p.id, p))
+      .collect();
   let mut slots = vec![];
   let mut color_set = BTreeSet::new();
 
@@ -270,11 +270,9 @@ pub fn create_as_bot(
       return Err(Error::PlayerTeamInvalid);
     }
 
-    let player = slot.player_id.and_then(|id| players.remove(&id));
-    if let Some(player) = player.as_ref() {
-      if player.source != PlayerSource::Api || player.realm != expected_realm_id {
-        return Err(Error::PlayerNotFound);
-      }
+    let player = slot.player_id.clone().and_then(|id| players.remove(&id));
+    if slot.player_id.is_some() && player.is_none() {
+      return Err(Error::PlayerNotFound);
     }
     slots.push(UsedSlot {
       slot_index: i as i32,

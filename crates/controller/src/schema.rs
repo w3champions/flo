@@ -81,6 +81,7 @@ table! {
         realm -> Nullable<Text>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        api_client_id -> Int4,
     }
 }
 
@@ -88,6 +89,7 @@ joinable!(game -> node (node_id));
 joinable!(game -> player (created_by));
 joinable!(game_used_slot -> game (game_id));
 joinable!(game_used_slot -> player (player_id));
+joinable!(player -> api_client (api_client_id));
 
 allow_tables_to_appear_in_same_query!(
     api_client,
