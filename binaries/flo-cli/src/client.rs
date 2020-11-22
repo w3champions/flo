@@ -19,6 +19,7 @@ impl Command {
         tracing::debug!("token generated: {}", token);
         let client = flo_client::start(flo_client::StartConfig {
           token: Some(token),
+          controller_host: "127.0.0.1".to_string().into(),
           ..Default::default()
         })
         .await

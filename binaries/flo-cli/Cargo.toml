@@ -15,7 +15,6 @@ flo-w3storage = { path = "../../crates/w3storage" }
 flo-w3map = { path = "../../crates/w3map" }
 flo-client = { path = "../../crates/client", features = ["worker"] }
 tonic = "0.3.1"
-
 dotenv = "0.15.0"
 clap = "2.33.1"
 structopt = "0.3.15"

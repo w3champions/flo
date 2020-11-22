@@ -12,6 +12,7 @@ pub struct Register {
   pub status: GameStatus,
   pub host_player: i32,
   pub players: Vec<i32>,
+  pub node_id: Option<i32>,
 }
 
 impl Message for Register {
@@ -33,6 +34,7 @@ impl GameRegistry {
       status,
       host_player,
       players,
+      node_id,
     }: Register,
   ) {
     for player in &players {
@@ -48,7 +50,7 @@ impl GameRegistry {
         status,
         host_player,
         players,
-        selected_node_id: None,
+        selected_node_id: node_id,
         start_state: None,
         player_tokens: Default::default(),
         player_client_status_map: Default::default(),

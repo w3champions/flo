@@ -3,6 +3,7 @@ use structopt::StructOpt;
 mod client;
 mod game;
 mod grpc;
+mod server;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -12,6 +13,10 @@ enum Opt {
     player_id: i32,
     #[structopt(subcommand)]
     cmd: client::Command,
+  },
+  Server {
+    #[structopt(subcommand)]
+    cmd: server::Command,
   },
 }
 
@@ -25,6 +30,9 @@ async fn main() -> Result<()> {
   match opt {
     Opt::Client { player_id, cmd } => {
       cmd.run(player_id).await?;
+    }
+    Opt::Server { cmd } => {
+      cmd.run().await?;
     }
   }
 

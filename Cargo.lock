@@ -1115,6 +1115,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "flo-client",
+ "flo-constants",
  "once_cell",
  "serde_json",
  "structopt",

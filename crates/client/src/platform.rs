@@ -9,11 +9,10 @@ use flo_w3map::MapChecksum;
 use flo_w3storage::W3Storage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Platform {
-  installation_path: Option<PathBuf>,
+  start_config: StartConfig,
   config: ClientConfig,
   info: Result<ClientPlatformInfo, PlatformStateError>,
   storage: Option<W3Storage>,
@@ -21,10 +20,10 @@ pub struct Platform {
 }
 
 impl Platform {
-  async fn new(installation_path: Option<PathBuf>) -> Result<Self> {
-    let (config, info) = load(installation_path.clone()).await;
+  async fn new(start_config: &StartConfig) -> Result<Self> {
+    let (config, info) = load(start_config).await;
     Ok(Platform {
-      installation_path,
+      start_config: start_config.clone(),
       config,
       info,
       storage: None,
@@ -40,7 +39,7 @@ impl Service<StartConfig> for Platform {
   type Error = Error;
 
   async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
-    Platform::new(registry.data().installation_path.clone()).await
+    Platform::new(registry.data()).await
   }
 }
 
@@ -60,7 +59,7 @@ impl Message for Reload {
 #[async_trait]
 impl Handler<Reload> for Platform {
   async fn handle(&mut self, _: &mut Context<Self>, _: Reload) -> <Reload as Message>::Result {
-    let (config, info) = load(self.installation_path.clone()).await;
+    let (config, info) = load(&self.start_config).await;
     self.config = config;
     self.info = info;
     self.maps.take();
@@ -238,14 +237,19 @@ impl Platform {
 }
 
 async fn load(
-  installation_path: Option<PathBuf>,
+  start_config: &StartConfig,
 ) -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
   tokio::task::block_in_place(move || {
     #[cfg(feature = "worker")]
     let config = ClientConfig {
-      installation_path,
+      installation_path: start_config.installation_path.clone(),
+      controller_host: start_config
+        .controller_host
+        .clone()
+        .unwrap_or_else(|| flo_constants::CONTROLLER_HOST.to_string()),
       ..Default::default()
     };
+
     #[cfg(not(feature = "worker"))]
     let config = ClientConfig::load()
       .map_err(|err| tracing::error!("load config: {}", err))

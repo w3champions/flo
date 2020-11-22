@@ -14,10 +14,11 @@ use flo_state::Registry;
 use std::path::PathBuf;
 pub use version::FLO_VERSION;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct StartConfig {
   pub token: Option<String>,
   pub installation_path: Option<PathBuf>,
+  pub controller_host: Option<String>,
 }
 
 pub struct FloClient {

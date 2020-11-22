@@ -80,6 +80,10 @@ pub enum Error {
   TooManyPlayers,
   #[error("Game has no player")]
   GameHasNoPlayer,
+  #[error("Player colors are conflicting")]
+  PlayerColorConflict,
+  #[error("Invalid player team value")]
+  PlayerTeamInvalid,
   #[error("Operation timeout")]
   Timeout(#[from] tokio::time::Elapsed),
   #[error("net: {0}")]

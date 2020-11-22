@@ -18,6 +18,9 @@ struct Opt {
 
   #[structopt(long, parse(from_os_str))]
   installation_path: Option<PathBuf>,
+
+  #[structopt(long)]
+  controller_host: Option<String>,
 }
 
 fn main() {
@@ -38,6 +41,8 @@ fn main() {
     let client = rt.block_on(flo_client::start(StartConfig {
       token: opt.token,
       installation_path: opt.installation_path,
+      controller_host: opt.controller_host.clone(),
+      ..Default::default()
     }))?;
     let port = client.port();
     rt.spawn(client.serve());
@@ -51,7 +56,8 @@ fn main() {
       let msg = serde_json::to_string(&serde_json::json!({
         "version": flo_client::FLO_VERSION.to_string(),
         "port": port
-      })).unwrap();
+      }))
+      .unwrap();
       let mut stdout = std::io::stdout();
       stdout.write(msg.as_bytes()).unwrap();
       stdout.flush().unwrap();
@@ -60,7 +66,8 @@ fn main() {
     Err(err) => {
       let msg = serde_json::to_string(&serde_json::json!({
         "error": err.to_string()
-      })).unwrap();
+      }))
+      .unwrap();
       std::io::stderr().write(msg.as_bytes()).unwrap();
     }
   }

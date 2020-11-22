@@ -34,6 +34,7 @@ impl Handler<CreateGame> for GameRegistry {
       status: GameStatus::Preparing,
       host_player: game.created_by.id,
       players: game.get_player_ids(),
+      node_id: None,
     });
 
     let frames = {
@@ -86,6 +87,7 @@ impl Handler<CreateGameAsBot> for GameRegistry {
       status: GameStatus::Preparing,
       host_player: game.created_by.id,
       players: player_ids.clone(),
+      node_id: game.node.as_ref().map(|v| v.id),
     });
 
     let frames = {

@@ -45,7 +45,7 @@ impl ControllerClient {
       self.platform.clone(),
       self.nodes.clone(),
       self.conn_id,
-      &self.config.controller_domain,
+      &self.config.controller_host,
       token,
     );
     self.conn.replace(stream.start());

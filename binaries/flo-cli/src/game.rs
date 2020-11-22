@@ -1,26 +1,47 @@
 use crate::grpc::get_grpc_client;
-use flo_grpc::controller::CreateGameRequest;
+use crate::Result;
+use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
 const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
-pub async fn create_game(host_player_id: i32) -> i32 {
+pub async fn create_game(players: Vec<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
+
+  let nodes = client.list_nodes(()).await?.into_inner().nodes;
+  let node_id = nodes.first().unwrap().id;
+
+  tracing::info!(node_id);
+
   let res = client
-    .create_game(CreateGameRequest {
-      player_id: host_player_id,
+    .create_game_as_bot(CreateGameAsBotRequest {
       name: "TEST".to_string(),
-      map: Some(get_map()),
+      map: Some(get_map()?),
+      node_id,
+      slots: players
+        .into_iter()
+        .enumerate()
+        .map(|(idx, id)| CreateGameSlot {
+          player_id: Some(id),
+          settings: SlotSettings {
+            team: idx as i32,
+            color: idx as i32,
+            status: 2,
+            handicap: 100,
+            ..Default::default()
+          }
+          .into(),
+        })
+        .collect(),
       ..Default::default()
     })
-    .await
-    .unwrap();
-  res.into_inner().game.unwrap().id
+    .await?;
+  Ok(res.into_inner().game.unwrap().id)
 }
 
-fn get_map() -> Map {
-  let storage = flo_w3storage::W3Storage::from_env().unwrap();
-  let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP).unwrap();
+fn get_map() -> Result<Map> {
+  let storage = flo_w3storage::W3Storage::from_env()?;
+  let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;
   let map = Map {
     sha1: checksum.sha1.to_vec(),
     checksum: u32::from_le_bytes([0xED, 0xB9, 0xC9, 0x08]),
@@ -50,5 +71,5 @@ fn get_map() -> Map {
       })
       .collect(),
   };
-  map
+  Ok(map)
 }

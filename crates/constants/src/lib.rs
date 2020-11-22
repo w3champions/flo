@@ -2,7 +2,7 @@ use crate::version::Version;
 
 pub mod version;
 
-pub const CONTROLLER_DOMAIN: &str = "service.w3flo.com";
+pub const CONTROLLER_HOST: &str = "service.w3flo.com";
 pub const CONTROLLER_GRPC_PORT: u16 = 3549;
 pub const CONTROLLER_SOCKET_PORT: u16 = 3550;
 pub const CLIENT_WS_PORT: u16 = 3551;

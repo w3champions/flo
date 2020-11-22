@@ -193,6 +193,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     meta: meta_value,
     random_seed: rand::random(),
     locked: false,
+    node_id: None,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -225,7 +226,7 @@ pub fn create_as_bot(
   api_player_id: i32,
   params: CreateGameAsBotParams,
 ) -> Result<Game> {
-  use std::collections::BTreeMap;
+  use std::collections::{BTreeMap, BTreeSet};
   let max_players = params.map.players.len();
 
   if max_players == 0 {
@@ -256,7 +257,19 @@ pub fn create_as_bot(
     .collect();
   let expected_realm_id = Some(api_client_id.to_string());
   let mut slots = vec![];
+  let mut color_set = BTreeSet::new();
+
   for (i, slot) in params.slots.into_iter().enumerate() {
+    if color_set.contains(&slot.settings.color) {
+      return Err(Error::PlayerColorConflict);
+    }
+
+    color_set.insert(slot.settings.color);
+
+    if slot.settings.team < 0 || slot.settings.team > 24 {
+      return Err(Error::PlayerTeamInvalid);
+    }
+
     let player = slot.player_id.and_then(|id| players.remove(&id));
     if let Some(player) = player.as_ref() {
       if player.source != PlayerSource::Api || player.realm != expected_realm_id {
@@ -293,6 +306,7 @@ pub fn create_as_bot(
     meta: meta_value,
     random_seed: rand::random(),
     locked: true,
+    node_id: Some(params.node_id),
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -304,6 +318,7 @@ pub fn create_as_bot(
     upsert_used_slots(conn, row.id, slots.as_used())?;
     Ok(row)
   })?;
+
   Ok(row.into_game(meta, slots.into_inner())?)
 }
 
@@ -997,6 +1012,7 @@ pub struct GameInsert<'a> {
   pub meta: Value,
   pub random_seed: i32,
   pub locked: bool,
+  pub node_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]

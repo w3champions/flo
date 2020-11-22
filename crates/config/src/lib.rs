@@ -11,7 +11,7 @@ pub struct ClientConfig {
   pub local_port: u16,
   pub user_data_path: Option<PathBuf>,
   pub installation_path: Option<PathBuf>,
-  pub controller_domain: String,
+  pub controller_host: String,
 }
 
 impl Default for ClientConfig {
@@ -20,7 +20,7 @@ impl Default for ClientConfig {
       local_port: flo_constants::CLIENT_WS_PORT,
       user_data_path: None,
       installation_path: None,
-      controller_domain: flo_constants::CONTROLLER_DOMAIN.to_string(),
+      controller_host: flo_constants::CONTROLLER_HOST.to_string(),
     }
   }
 }
@@ -40,7 +40,7 @@ impl ClientConfig {
       pub local_port: Option<u16>,
       pub user_data_path: Option<PathBuf>,
       pub installation_path: Option<PathBuf>,
-      pub controller_domain: Option<String>,
+      pub controller_host: Option<String>,
     }
 
     let config: TomlConfig = toml::from_str(&fs::read_to_string("flo.toml")?)?;
@@ -48,7 +48,9 @@ impl ClientConfig {
       local_port: config.local_port.unwrap_or(flo_constants::CLIENT_WS_PORT),
       user_data_path: None,
       installation_path: None,
-      controller_domain: config.controller_domain.unwrap_or_else(|| flo_constants::CONTROLLER_DOMAIN.to_string())
+      controller_host: config
+        .controller_host
+        .unwrap_or_else(|| flo_constants::CONTROLLER_HOST.to_string()),
     };
 
     config.apply_env();
@@ -80,7 +82,7 @@ impl ClientConfig {
     }
 
     if let Some(domain) = env::var("FLO_LOBBY_DOMAIN").ok() {
-      self.controller_domain = domain;
+      self.controller_host = domain;
     }
   }
 }

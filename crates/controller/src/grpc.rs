@@ -79,7 +79,10 @@ impl FloController for FloControllerService {
   ) -> Result<Response<UpdateAndGetPlayerReply>, Status> {
     use crate::player::db;
     use std::convert::TryFrom;
-    let upsert: db::UpsertPlayer = TryFrom::try_from(request.into_inner())?;
+    let api_client_id = request.get_api_client_id();
+    let mut req = request.into_inner();
+    req.realm = Some(api_client_id.to_string());
+    let upsert: db::UpsertPlayer = TryFrom::try_from(req)?;
     let player = self
       .state
       .db
