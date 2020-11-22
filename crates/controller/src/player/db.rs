@@ -1,14 +1,14 @@
+use crate::db::DbConn;
+use crate::error::*;
+use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
+use crate::schema::player;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use s2_grpc_utils::S2ProtoEnum;
 use s2_grpc_utils::S2ProtoUnpack;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::convert::TryFrom;
-
-use crate::db::DbConn;
-use crate::error::*;
-use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
-use crate::schema::player;
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
   player::table
@@ -42,16 +42,6 @@ pub fn get_ref_with_game_info(conn: &DbConn, id: i32) -> Result<PlayerRef> {
     .map_err(Into::into)
 }
 
-pub fn get_by_source_id(conn: &DbConn, source_id: &str) -> Result<Option<Player>> {
-  use player::dsl;
-  player::table
-    .filter(dsl::source_id.eq(source_id))
-    .first::<Row>(conn)
-    .optional()
-    .map(|p| p.map(Into::into))
-    .map_err(Into::into)
-}
-
 pub fn get_refs_by_ids(conn: &DbConn, ids: &[i32]) -> Result<Vec<PlayerRef>> {
   use player::dsl;
   player::table
@@ -59,6 +49,27 @@ pub fn get_refs_by_ids(conn: &DbConn, ids: &[i32]) -> Result<Vec<PlayerRef>> {
     .select((dsl::id, dsl::name, dsl::source, dsl::realm))
     .load(conn)
     .map_err(Into::into)
+}
+
+pub fn get_player_map_by_api_source_ids(
+  conn: &DbConn,
+  api_client_id: i32,
+  ids: Vec<String>,
+) -> Result<HashMap<String, PlayerRef>> {
+  use player::dsl;
+  let pairs = player::table
+    .filter(
+      dsl::source
+        .eq(PlayerSource::Api)
+        .and(dsl::realm.eq(api_client_id.to_string())),
+    )
+    .filter(dsl::source_id.eq_any(ids))
+    .select((
+      dsl::source_id,
+      (dsl::id, dsl::name, dsl::source, dsl::realm),
+    ))
+    .load::<(String, PlayerRef)>(conn)?;
+  Ok(pairs.into_iter().collect())
 }
 
 #[derive(Debug, Insertable)]
@@ -93,6 +104,10 @@ impl TryFrom<flo_grpc::controller::UpdateAndGetPlayerRequest> for UpsertPlayer {
 
 pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Player> {
   use player::dsl;
+
+  if data.source_id.is_empty() {
+    return Err(Error::PlayerSourceIdInvalid);
+  }
 
   diesel::insert_into(player::table)
     .values(data)

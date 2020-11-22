@@ -198,6 +198,13 @@ impl From<NodeGameStatus> for GameStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
+#[s2_grpc(message_type(flo_grpc::controller::CreateGameSlot))]
+pub struct CreateGameSlot {
+  pub player_id: Option<i32>,
+  pub settings: SlotSettings,
+}
+
+#[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type(flo_grpc::game::Slot, flo_net::proto::flo_connect::Slot))]
 pub struct Slot {
   pub player: Option<PlayerRef>,

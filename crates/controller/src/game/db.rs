@@ -10,12 +10,12 @@ use crate::error::*;
 use crate::game::slots::{UsedSlot, UsedSlotInfo};
 use crate::game::state::GameStatusUpdate;
 use crate::game::{
-  Computer, Game, GameEntry, GameStatus, Race, Slot, SlotClientStatus, SlotSettings, SlotStatus,
-  Slots,
+  Computer, CreateGameSlot, Game, GameEntry, GameStatus, Race, Slot, SlotClientStatus,
+  SlotSettings, SlotStatus, Slots,
 };
 use crate::map::Map;
 use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
-use crate::player::{PlayerRef, PlayerRefColumns};
+use crate::player::{PlayerRef, PlayerRefColumns, PlayerSource};
 use crate::schema::{game, game_used_slot, node, player};
 use diesel::pg::expression::dsl::{all, any};
 
@@ -192,6 +192,107 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     created_by: Some(params.player_id),
     meta: meta_value,
     random_seed: rand::random(),
+    locked: false,
+  };
+
+  let row = conn.transaction(|| -> Result<_> {
+    let id: i32 = diesel::insert_into(game::table)
+      .values(&insert)
+      .returning(game::dsl::id)
+      .get_result(conn)?;
+    let row = get(conn, id)?;
+    upsert_used_slots(conn, row.id, slots.as_used())?;
+    Ok(row)
+  })?;
+  Ok(row.into_game(meta, slots.into_inner())?)
+}
+
+#[derive(Debug, Deserialize, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::controller::CreateGameAsBotRequest")]
+pub struct CreateGameAsBotParams {
+  pub name: String,
+  pub map: Map,
+  pub is_private: bool,
+  pub is_live: bool,
+  pub node_id: i32,
+  pub slots: Vec<CreateGameSlot>,
+}
+
+/// Creates a full game and lock it
+pub fn create_as_bot(
+  conn: &DbConn,
+  api_client_id: i32,
+  api_player_id: i32,
+  params: CreateGameAsBotParams,
+) -> Result<Game> {
+  use std::collections::BTreeMap;
+  let max_players = params.map.players.len();
+
+  if max_players == 0 {
+    return Err(Error::MapHasNoPlayer);
+  }
+
+  if params.slots.len() > max_players {
+    return Err(Error::TooManyPlayers);
+  }
+
+  let mut player_ids: Vec<i32> = params
+    .slots
+    .iter()
+    .filter_map(|s| s.player_id.clone())
+    .collect();
+
+  if player_ids.is_empty() {
+    return Err(Error::GameHasNoPlayer);
+  }
+
+  player_ids.push(api_player_id);
+  player_ids.sort();
+  player_ids.dedup();
+
+  let mut players: BTreeMap<_, _> = crate::player::db::get_refs_by_ids(conn, &player_ids)?
+    .into_iter()
+    .map(|p| (p.id, p))
+    .collect();
+  let expected_realm_id = Some(api_client_id.to_string());
+  let mut slots = vec![];
+  for (i, slot) in params.slots.into_iter().enumerate() {
+    let player = slot.player_id.and_then(|id| players.remove(&id));
+    if let Some(player) = player.as_ref() {
+      if player.source != PlayerSource::Api || player.realm != expected_realm_id {
+        return Err(Error::PlayerNotFound);
+      }
+    }
+    slots.push(UsedSlot {
+      slot_index: i as i32,
+      settings: slot.settings,
+      client_status: SlotClientStatus::Pending,
+      player,
+    });
+  }
+
+  let slots = Slots::from_used(max_players, slots);
+
+  let meta = Meta {
+    map: params.map,
+    created_by: players
+      .remove(&api_player_id)
+      .ok_or_else(|| Error::PlayerNotFound)?
+      .into(),
+  };
+
+  let meta_value = serde_json::to_value(&meta)?;
+
+  let insert = GameInsert {
+    name: &params.name,
+    map_name: &meta.map.name,
+    is_private: params.is_private,
+    is_live: params.is_live,
+    max_players: max_players as i32,
+    created_by: Some(api_player_id),
+    meta: meta_value,
+    random_seed: rand::random(),
+    locked: true,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -208,12 +309,11 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
 
 /// Adds a player into a game
 pub fn add_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<Vec<Slot>> {
-  let status: GameStatus = game::table
-    .find(game_id)
-    .select(game::status)
-    .first(conn)
-    .optional()?
-    .ok_or_else(|| Error::GameNotFound)?;
+  let InspectId { status, locked } = inspect_id(conn, game_id)?;
+
+  if locked {
+    return Err(Error::GameSlotUpdateDenied);
+  }
 
   if status != GameStatus::Preparing {
     return Err(Error::GameStarted);
@@ -246,6 +346,16 @@ pub struct LeaveGame {
 }
 
 pub fn remove_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<LeaveGame> {
+  let InspectId { status, locked } = inspect_id(conn, game_id)?;
+
+  if locked {
+    return Err(Error::GameSlotUpdateDenied);
+  }
+
+  if status != GameStatus::Preparing {
+    return Err(Error::GameStarted);
+  }
+
   let GetSlots {
     mut slots,
     host_player_id,
@@ -278,6 +388,23 @@ pub fn remove_player(conn: &DbConn, game_id: i32, player_id: i32) -> Result<Leav
       slots: slots.into_inner(),
     })
   }
+}
+
+#[derive(Queryable)]
+struct InspectId {
+  status: GameStatus,
+  locked: bool,
+}
+
+fn inspect_id(conn: &DbConn, game_id: i32) -> Result<InspectId> {
+  Ok(
+    game::table
+      .find(game_id)
+      .select((game::status, game::locked))
+      .first(conn)
+      .optional()?
+      .ok_or_else(|| Error::GameNotFound)?,
+  )
 }
 
 pub fn leave_node(conn: &DbConn, game_id: i32, player_id: i32) -> Result<()> {
@@ -350,6 +477,16 @@ pub fn update_slot_settings(
   slot_index: i32,
   settings: SlotSettings,
 ) -> Result<UpdateSlotSettings> {
+  let InspectId { status, locked } = inspect_id(conn, game_id)?;
+
+  if locked {
+    return Err(Error::GameSlotUpdateDenied);
+  }
+
+  if status != GameStatus::Preparing {
+    return Err(Error::GameStarted);
+  }
+
   let mut slots = get_slots(conn, game_id)?.slots;
   let mut updated_indexes = vec![];
   if let Some(slots) = slots.update_slot_at(slot_index, &settings) {
@@ -642,6 +779,16 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
 pub fn select_node(conn: &DbConn, id: i32, player_id: i32, node_id: Option<i32>) -> Result<()> {
   use game::dsl;
 
+  let InspectId { status, locked } = inspect_id(conn, id)?;
+
+  if locked {
+    return Err(Error::GameSlotUpdateDenied);
+  }
+
+  if status != GameStatus::Preparing {
+    return Err(Error::GameStarted);
+  }
+
   let n: usize = diesel::update(game::table.find(id))
     .filter(
       dsl::status
@@ -849,6 +996,7 @@ pub struct GameInsert<'a> {
   pub created_by: Option<i32>,
   pub meta: Value,
   pub random_seed: i32,
+  pub locked: bool,
 }
 
 #[derive(Debug, Insertable)]

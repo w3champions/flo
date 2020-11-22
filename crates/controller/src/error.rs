@@ -70,10 +70,16 @@ pub enum Error {
   PlayerChannelSendTimeout,
   #[error("Player channel closed")]
   PlayerChannelClosed,
+  #[error("Player source id is invalid")]
+  PlayerSourceIdInvalid,
   #[error("Invalid player source state")]
   InvalidPlayerSourceState,
   #[error("Actor not found")]
   ActorNotFound,
+  #[error("Too many players")]
+  TooManyPlayers,
+  #[error("Game has no player")]
+  GameHasNoPlayer,
   #[error("Operation timeout")]
   Timeout(#[from] tokio::time::Elapsed),
   #[error("net: {0}")]

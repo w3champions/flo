@@ -1,22 +1,21 @@
+use crate::config::{ApiRequestExt, GetInterceptor};
+use crate::error::{Error, Result};
+use crate::game::db::{CreateGameAsBotParams, CreateGameParams};
+use crate::game::messages::{CreateGame, PlayerJoin, PlayerLeave};
+use crate::game::state::cancel::CancelGame;
+use crate::game::state::create::CreateGameAsBot;
+use crate::game::state::node::SelectNode;
+use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer};
+use crate::game::state::start::{StartGameCheckAsBot, StartGameCheckAsBotResult};
+use crate::node::messages::ListNode;
+use crate::player::state::ping::GetPlayersPingSnapshot;
+use crate::state::{ActorMapExt, ControllerStateRef};
+use flo_grpc::controller::flo_controller_server::*;
+use flo_grpc::controller::*;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-
-use flo_grpc::controller::flo_controller_server::*;
-use flo_grpc::controller::*;
-
-use crate::config::GetInterceptor;
-use crate::error::{Error, Result};
-use crate::game::db::CreateGameParams;
-use crate::game::messages::{CreateGame, PlayerJoin, PlayerLeave};
-use crate::game::state::cancel::CancelGame;
-use crate::game::state::node::SelectNode;
-
-use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer};
-use crate::node::messages::ListNode;
-
-use crate::state::{ActorMapExt, ControllerStateRef};
 
 pub async fn serve(state: ControllerStateRef) -> Result<()> {
   let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, flo_constants::CONTROLLER_GRPC_PORT);
@@ -103,21 +102,18 @@ impl FloController for FloControllerService {
 
   async fn list_games(
     &self,
-    _request: Request<ListGamesRequest>,
+    request: Request<ListGamesRequest>,
   ) -> Result<Response<ListGamesReply>, Status> {
-    // let params =
-    //   crate::game::db::QueryGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
-    // let mut r = self
-    //   .state
-    //   .db
-    //   .exec(move |conn| crate::game::db::query(conn, &params))
-    //   .await
-    //   .map_err(|e| Status::internal(e.to_string()))?;
-    //
-    // self.state.state.fetch_num_players(&mut r.games);
-    //
-    // Ok(Response::new(r.pack().map_err(Error::from)?))
-    return Err(Status::unimplemented("Unimplemented"));
+    let params =
+      crate::game::db::QueryGameParams::unpack(request.into_inner()).map_err(Status::internal)?;
+    let r = self
+      .state
+      .db
+      .exec(move |conn| crate::game::db::query(conn, &params))
+      .await
+      .map_err(|e| Status::internal(e.to_string()))?;
+
+    Ok(Response::new(r.pack().map_err(Error::from)?))
   }
 
   async fn create_game(
@@ -339,5 +335,125 @@ impl FloController for FloControllerService {
       .await
       .map_err(Error::from)?;
     Ok(Response::new(SearchMapChecksumReply { checksum }))
+  }
+
+  async fn get_players_by_source_ids(
+    &self,
+    request: Request<GetPlayersBySourceIdsRequest>,
+  ) -> Result<Response<GetPlayersBySourceIdsReply>, Status> {
+    let api_client_id = request.get_api_client_id();
+    let source_ids = request.into_inner().source_ids;
+    let map = self
+      .state
+      .db
+      .exec(move |conn| {
+        crate::player::db::get_player_map_by_api_source_ids(conn, api_client_id, source_ids)
+      })
+      .await
+      .map_err(Error::from)?;
+    Ok(Response::new(GetPlayersBySourceIdsReply {
+      player_map: map.pack().map_err(Error::from)?,
+    }))
+  }
+
+  async fn get_player_ping_maps(
+    &self,
+    request: Request<GetPlayerPingMapsRequest>,
+  ) -> Result<Response<GetPlayerPingMapsReply>, Status> {
+    use flo_grpc::player::PlayerPingMap;
+    use std::collections::HashMap;
+
+    let ids = request.into_inner().ids;
+    let snapshot = self
+      .state
+      .players
+      .send(GetPlayersPingSnapshot { players: ids })
+      .await
+      .map_err(Error::from)?;
+
+    Ok(Response::new(GetPlayerPingMapsReply {
+      ping_maps: snapshot
+        .map
+        .into_iter()
+        .map(|(player_id, map)| -> Result<_> {
+          Ok(PlayerPingMap {
+            player_id,
+            ping_map: map
+              .into_iter()
+              .collect::<HashMap<_, _>>()
+              .pack()
+              .map_err(Error::from)?,
+          })
+        })
+        .collect::<Result<Vec<_>>>()?,
+    }))
+  }
+
+  async fn create_game_as_bot(
+    &self,
+    request: Request<CreateGameAsBotRequest>,
+  ) -> Result<Response<CreateGameAsBotReply>, Status> {
+    let game = self
+      .state
+      .games
+      .send(CreateGameAsBot {
+        api_client_id: request.get_api_client_id(),
+        api_player_id: request.get_api_player_id(),
+        params: CreateGameAsBotParams::unpack(request.into_inner()).map_err(Error::from)?,
+      })
+      .await
+      .map_err(Error::from)??;
+
+    Ok(Response::new(CreateGameAsBotReply {
+      game: game.pack().map_err(Status::internal)?,
+    }))
+  }
+
+  async fn start_game_as_bot(
+    &self,
+    request: Request<StartGameAsBotRequest>,
+  ) -> Result<Response<StartGameAsBotReply>, Status> {
+    use flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest;
+    use std::collections::HashMap;
+    use tokio::sync::oneshot;
+
+    fn convert_map(
+      map: HashMap<i32, PacketGameStartPlayerClientInfoRequest>,
+    ) -> HashMap<i32, StartGamePlayerAck> {
+      map
+        .into_iter()
+        .map(|(id, ack)| {
+          (
+            id,
+            StartGamePlayerAck {
+              war3_version: ack.war3_version,
+              map_sha1: ack.map_sha1,
+            },
+          )
+        })
+        .collect()
+    }
+
+    let (tx, rx) = oneshot::channel();
+    self
+      .state
+      .games
+      .send_to(request.into_inner().game_id, StartGameCheckAsBot { tx })
+      .await?;
+    match rx.await {
+      Ok(res) => match res {
+        StartGameCheckAsBotResult::Started(map) => Ok(Response::new(StartGameAsBotReply {
+          succeed: true,
+          player_ack_map: map.map(convert_map).unwrap_or_default(),
+          ..Default::default()
+        })),
+        StartGameCheckAsBotResult::Rejected(pkt) => Ok(Response::new(StartGameAsBotReply {
+          succeed: false,
+          error_message: pkt.message,
+          player_ack_map: convert_map(pkt.player_client_info_map),
+        })),
+      },
+      Err(_) => Err(Status::cancelled("System is shutting down")),
+    }
   }
 }

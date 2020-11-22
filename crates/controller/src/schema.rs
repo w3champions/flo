@@ -25,6 +25,7 @@ table! {
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         random_seed -> Int4,
+        locked -> Bool,
     }
 }
 
@@ -88,4 +89,11 @@ joinable!(game -> player (created_by));
 joinable!(game_used_slot -> game (game_id));
 joinable!(game_used_slot -> player (player_id));
 
-allow_tables_to_appear_in_same_query!(api_client, game, game_used_slot, map_checksum, node, player,);
+allow_tables_to_appear_in_same_query!(
+    api_client,
+    game,
+    game_used_slot,
+    map_checksum,
+    node,
+    player,
+);

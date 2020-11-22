@@ -1028,6 +1028,7 @@ dependencies = [
 name = "flo-types"
 version = "0.1.0"
 dependencies = [
+ "flo-grpc",
  "flo-net",
  "s2-grpc-utils",
  "serde",

@@ -2,7 +2,6 @@ use crate::error::*;
 use crate::game::state::GameActor;
 use crate::game::{GameStatus, SlotClientStatus};
 use crate::node::messages::NodeCreateGame;
-
 use crate::player::state::sender::PlayerFrames;
 use crate::state::ActorMapExt;
 use flo_net::packet::FloPacket;
@@ -10,6 +9,7 @@ use flo_net::proto;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
 use std::collections::HashMap;
 use std::time::Duration;
+use tokio::sync::oneshot;
 
 use tokio::time::delay_for;
 
@@ -45,7 +45,7 @@ impl Handler<StartGameCheck> for GameActor {
       return Err(Error::GameStarted);
     }
 
-    self.start_state = StartGameState::new(game_id, ctx.addr(), players)
+    self.start_state = StartGameState::new(game_id, ctx.addr(), players, None)
       .start()
       .into();
 
@@ -67,7 +67,7 @@ impl GameActor {
   async fn start_game_proceed(
     &mut self,
     StartGameCheckProceed { map }: StartGameCheckProceed,
-  ) -> Result<()> {
+  ) -> Result<Result<(), proto::flo_connect::PacketGameStartReject>> {
     let game_id = self.game_id;
 
     tracing::debug!(game_id, "start game check proceed.");
@@ -89,19 +89,19 @@ impl GameActor {
     }
 
     if !pass {
-      self.start_state.take();
-      let frame = proto::flo_connect::PacketGameStartReject {
+      let pkt = proto::flo_connect::PacketGameStartReject {
         game_id,
         message: "Unable to start the game because the game and map version check failed."
           .to_string(),
-        player_client_info_map: map,
-      }
-      .encode_as_frame()?;
+        player_client_info_map: map.clone(),
+      };
+      let frame = pkt.encode_as_frame()?;
       self
         .player_packet_sender
         .broadcast(self.players.clone(), frame)
         .await?;
-      return Ok(());
+
+      return Ok(Err(pkt));
     }
 
     let game = self
@@ -161,11 +161,7 @@ impl GameActor {
           }
         };
 
-        self
-          .player_packet_sender
-          .send(self.host_player, pkt.encode_as_frame()?)
-          .await?;
-        return Ok(());
+        return Ok(Err(pkt));
       }
     };
 
@@ -213,7 +209,7 @@ impl GameActor {
       .await?;
     self.status = GameStatus::Created;
 
-    Ok(())
+    Ok(Ok(()))
   }
 }
 
@@ -233,19 +229,29 @@ impl Handler<StartGameCheckTimeout> for GameActor {
     StartGameCheckTimeout { map }: StartGameCheckTimeout,
   ) -> Result<()> {
     let game_id = self.game_id;
+    let start_state = if let Some(v) = self.start_state.take() {
+      v
+    } else {
+      return Ok(());
+    };
+    let start_state = start_state.shutdown().await?;
 
-    self.start_state.take();
-
-    let frame = proto::flo_connect::PacketGameStartReject {
+    let pkt = proto::flo_connect::PacketGameStartReject {
       game_id,
       message: "Some of the players didn't response in time.".to_string(),
       player_client_info_map: map,
+    };
+    let frame = pkt.encode_as_frame()?;
+
+    if start_state.by_api() {
+      start_state.reply_api(StartGameCheckAsBotResult::Rejected(pkt));
     }
-    .encode_as_frame()?;
+
     self
       .player_packet_sender
       .broadcast(self.players.clone(), frame)
       .await?;
+
     Ok(())
   }
 }
@@ -260,6 +266,7 @@ pub struct StartGameState {
   game_id: i32,
   player_ack_map: Option<HashMap<i32, ClientInfoAck>>,
   game_addr: Addr<GameActor>,
+  api_tx: Option<oneshot::Sender<StartGameCheckAsBotResult>>,
 }
 
 #[async_trait]
@@ -276,7 +283,12 @@ impl Actor for StartGameState {
 }
 
 impl StartGameState {
-  pub fn new(game_id: i32, game_addr: Addr<GameActor>, player_ids: Vec<i32>) -> Self {
+  pub fn new(
+    game_id: i32,
+    game_addr: Addr<GameActor>,
+    player_ids: Vec<i32>,
+    api_tx: Option<oneshot::Sender<StartGameCheckAsBotResult>>,
+  ) -> Self {
     StartGameState {
       game_id,
       player_ack_map: Some(
@@ -286,6 +298,7 @@ impl StartGameState {
           .collect(),
       ),
       game_addr,
+      api_tx,
     }
   }
 
@@ -358,6 +371,14 @@ impl StartGameState {
         .collect()
     })
   }
+
+  fn by_api(&self) -> bool {
+    self.api_tx.is_some()
+  }
+
+  fn reply_api(self, reply: StartGameCheckAsBotResult) {
+    self.api_tx.map(move |tx| tx.send(reply).ok());
+  }
 }
 
 struct StartGamePlayerAckInner {
@@ -410,17 +431,43 @@ impl Handler<StartGamePlayerAck> for GameActor {
       .await??;
 
     if let Some(proceed) = res {
-      self.start_state.take();
-      if let Err(err) = self.start_game_proceed(proceed).await {
-        let pkt = proto::flo_connect::PacketGameStartReject {
-          game_id: self.game_id,
-          message: format!("Internal error: {}", err),
-          ..Default::default()
-        };
-        self
-          .player_packet_sender
-          .send(self.host_player, pkt.encode_as_frame()?)
-          .await?;
+      let start_state = self
+        .start_state
+        .take()
+        .ok_or_else(|| Error::GameNotStarting)?;
+      let start_state = start_state.shutdown().await?;
+
+      match self.start_game_proceed(proceed).await {
+        Ok(Ok(_)) => {
+          if start_state.by_api() {
+            let map = start_state.get_map();
+            start_state.reply_api(StartGameCheckAsBotResult::Started(map));
+          }
+        }
+        Ok(Err(pkt)) => {
+          if start_state.by_api() {
+            start_state.reply_api(StartGameCheckAsBotResult::Rejected(pkt));
+          } else {
+            self
+              .player_packet_sender
+              .send(self.host_player, pkt.encode_as_frame()?)
+              .await?;
+          }
+        }
+        Err(err) => {
+          let pkt = proto::flo_connect::PacketGameStartReject {
+            game_id: self.game_id,
+            message: format!("Internal error: {}", err),
+            ..Default::default()
+          };
+          self
+            .player_packet_sender
+            .send(self.host_player, pkt.encode_as_frame()?)
+            .await?;
+          if start_state.by_api() {
+            start_state.reply_api(StartGameCheckAsBotResult::Rejected(pkt));
+          }
+        }
       }
     }
 
@@ -444,6 +491,51 @@ impl Handler<AckTimeout> for StartGameState {
       tracing::debug!(game_id = self.game_id, "ack timeout");
       self.game_addr.send(StartGameCheckTimeout { map }).await??;
     }
+    Ok(())
+  }
+}
+
+pub enum StartGameCheckAsBotResult {
+  Started(Option<HashMap<i32, proto::flo_connect::PacketGameStartPlayerClientInfoRequest>>),
+  Rejected(proto::flo_connect::PacketGameStartReject),
+}
+
+pub struct StartGameCheckAsBot {
+  pub tx: oneshot::Sender<StartGameCheckAsBotResult>,
+}
+
+impl Message for StartGameCheckAsBot {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<StartGameCheckAsBot> for GameActor {
+  async fn handle(
+    &mut self,
+    ctx: &mut Context<Self>,
+    StartGameCheckAsBot { tx }: StartGameCheckAsBot,
+  ) -> <StartGameCheckAsBot as Message>::Result {
+    let game_id = self.game_id;
+
+    if self.selected_node_id.is_none() {
+      return Err(Error::GameNodeNotSelected);
+    }
+
+    let players = self.players.clone();
+    if self.start_state.is_some() {
+      return Err(Error::GameStarted);
+    }
+
+    self.start_state = StartGameState::new(game_id, ctx.addr(), players, Some(tx))
+      .start()
+      .into();
+
+    let frame = proto::flo_connect::PacketGameStarting { game_id }.encode_as_frame()?;
+    self
+      .player_packet_sender
+      .broadcast(self.players.clone(), frame)
+      .await?;
+
     Ok(())
   }
 }
