@@ -38,6 +38,8 @@ impl FloStream {
   pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
     let socket = TcpStream::connect(addr).await?;
 
+    socket.set_keepalive(Some(Duration::from_secs(30)))?;
+
     let transport = Framed::new(socket, FloFrameCodec::new());
     Ok(FloStream {
       transport,
