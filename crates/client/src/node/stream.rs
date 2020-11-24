@@ -31,7 +31,7 @@ impl NodeStream {
     w3gs_sender: Sender<W3GSPacket>,
   ) -> Result<Self> {
     let scope = SpawnScope::new();
-    let mut stream = FloStream::connect(addr).await?;
+    let mut stream = FloStream::connect_no_delay(addr).await?;
 
     stream
       .send(proto::PacketClientConnect {

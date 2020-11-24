@@ -22,11 +22,21 @@ pub struct FloStream {
 }
 
 impl FloStream {
-  pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+  pub async fn connect_no_delay<A: ToSocketAddrs>(addr: A) -> Result<Self> {
     let socket = TcpStream::connect(addr).await?;
 
     socket.set_nodelay(true).ok();
     socket.set_keepalive(None).ok();
+
+    let transport = Framed::new(socket, FloFrameCodec::new());
+    Ok(FloStream {
+      transport,
+      timeout: DEFAULT_TIMEOUT,
+    })
+  }
+
+  pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+    let socket = TcpStream::connect(addr).await?;
 
     let transport = Framed::new(socket, FloFrameCodec::new());
     Ok(FloStream {

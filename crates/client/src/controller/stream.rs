@@ -97,7 +97,7 @@ impl ControllerStream {
     let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
     tracing::debug!("connect addr: {}", addr);
 
-    let mut stream = FloStream::connect(addr).await?;
+    let mut stream = FloStream::connect_no_delay(addr).await?;
 
     tracing::debug!("connected");
 

@@ -329,7 +329,6 @@ impl Handler<ReplaceSession> for ControllerClient {
     _: &mut Context<Self>,
     ReplaceSession(sess): ReplaceSession,
   ) -> <ReplaceSession as Message>::Result {
-    #[cfg(not(feature = "worker"))]
     if let Some(replaced) = self.ws_conn.replace(sess) {
       replaced
         .sender()
@@ -338,11 +337,6 @@ impl Handler<ReplaceSession> for ControllerClient {
           message: "Another browser window took up the connection.".to_string(),
         }))
         .await;
-    }
-
-    #[cfg(feature = "worker")]
-    if self.ws_conn.is_none() {
-      self.ws_conn.replace(sess);
     }
   }
 }
