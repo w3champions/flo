@@ -9,3 +9,4 @@ flo.toml
 .idea/tasks.xml
 /build/release
 /logs
+/flo-logs

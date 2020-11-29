@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct LocalGameInfo {
+  pub name: String,
   pub game_id: i32,
   pub random_seed: i32,
   pub node_id: Option<i32>,
@@ -19,6 +20,7 @@ pub struct LocalGameInfo {
 impl LocalGameInfo {
   pub fn from_game_info(player_id: i32, game: &GameInfo) -> Result<Self> {
     Ok(Self {
+      name: game.name.clone(),
       game_id: game.id,
       random_seed: game.random_seed,
       node_id: game.node.as_ref().map(|node| node.id),
