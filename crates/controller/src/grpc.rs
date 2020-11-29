@@ -473,4 +473,11 @@ impl FloController for FloControllerService {
       Err(_) => Err(Status::cancelled("System is shutting down")),
     }
   }
+
+  async fn start_game_countdown_as_bot(
+    &self,
+    request: Request<StartGameCountdownAsBotRequest>,
+  ) -> Result<Response<()>, Status> {
+    unimplemented!()
+  }
 }

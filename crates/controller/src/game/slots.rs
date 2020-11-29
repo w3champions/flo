@@ -135,7 +135,9 @@ impl Slots {
           if slot.settings.color < 24 {
             color_set[slot.settings.color as usize] = true;
           }
-          occupied_player_slots = occupied_player_slots + 1;
+          if slot.settings.team != 24 {
+            occupied_player_slots = occupied_player_slots + 1;
+          }
         }
         SlotStatus::Open => {
           if let None = open_slot_idx {
