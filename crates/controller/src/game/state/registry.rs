@@ -153,7 +153,7 @@ impl Message for ResolveGamePlayerPingBroadcastTargets {
 impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
   async fn handle(
     &mut self,
-    _: &mut Context<Self>,g
+    _: &mut Context<Self>,
     ResolveGamePlayerPingBroadcastTargets {
       player_id,
       node_ids,
