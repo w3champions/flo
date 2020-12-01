@@ -8,6 +8,7 @@ use crate::state::ActorMapExt;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use flo_net::packet::*;
+use flo_net::proto::flo_common::*;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
 use flo_state::reply::FutureReply;
@@ -16,7 +17,7 @@ use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 
 use crate::game::state::registry::Remove;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::time::delay_for;
 use tracing_futures::Instrument;
@@ -78,6 +79,7 @@ impl From<flo_net::error::Error> for NodeConnectError {
 impl NodeConnActor {
   fn schedule_reconnect(&mut self, ctx: &mut Context<Self>) {
     self.request_actor.take();
+
     let delay = self
       .reconnect_backoff
       .next_backoff()
@@ -126,10 +128,41 @@ impl NodeConnActor {
     Ok(stream)
   }
 
-  async fn worker(addr: Addr<Self>, mut rx: mpsc::Receiver<Frame>, mut stream: FloStream) {
+  async fn stream_worker(addr: Addr<Self>, mut rx: mpsc::Receiver<Frame>, mut stream: FloStream) {
+    const IDLE_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
+    const PING_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+    let start_instant = Instant::now();
+    let mut keepalive_timer = delay_for(IDLE_TIMEOUT_DURATION);
+    enum KeepAliveStatus {
+      Idle,
+      Pinged,
+    }
+    let mut keepalive_status = KeepAliveStatus::Idle;
     loop {
       tokio::select! {
+        _ = &mut keepalive_timer => {
+          match keepalive_status {
+            KeepAliveStatus::Idle => {
+              let ms = (Instant::now() - start_instant).as_millis() as u32;
+              if let Err(err) = stream.send(PacketPing { ms }).await {
+                tracing::error!("send: {}", err);
+                addr.send(Disconnected).await.ok();
+                break;
+              }
+              keepalive_status = KeepAliveStatus::Pinged;
+              keepalive_timer.reset((Instant::now() + PING_TIMEOUT_DURATION).into());
+            },
+            KeepAliveStatus::Pinged => {
+              tracing::error!("ping timeout");
+              addr.send(Disconnected).await.ok();
+              break;
+            },
+          }
+        }
         Some(frame) = rx.recv() => {
+          keepalive_timer.reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
+          keepalive_status = KeepAliveStatus::Idle;
+
           if let Err(err) = stream.send_frame(frame).await {
             tracing::error!("send: {}", err);
             addr.send(Disconnected).await.ok();
@@ -139,6 +172,13 @@ impl NodeConnActor {
         res = stream.recv_frame() => {
           match res {
             Ok(frame) => {
+              keepalive_timer.reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
+              keepalive_status = KeepAliveStatus::Idle;
+
+              if frame.type_id == PacketTypeId::Pong {
+                continue;
+              }
+
               let handle_res = match addr.send(IncomingFrame(frame)).await {
                 Ok(res) => res,
                 Err(_) => {
@@ -202,7 +242,8 @@ impl Handler<Connect> for NodeConnActor {
     };
     let (tx, rx) = mpsc::channel(3);
     ctx.spawn(
-      Self::worker(ctx.addr(), rx, stream).instrument(tracing::debug_span!("worker", node_id)),
+      Self::stream_worker(ctx.addr(), rx, stream)
+        .instrument(tracing::debug_span!("stream_worker", node_id)),
     );
     self.request_actor = NodeRequestActor::new(tx).start().into();
     self.reconnect_backoff.reset();

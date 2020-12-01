@@ -70,22 +70,32 @@ impl Message for Remove {
 
 #[async_trait]
 impl Handler<Remove> for GameRegistry {
-  async fn handle(&mut self, _: &mut Context<Self>, Remove { game_id: id }: Remove) {
+  async fn handle(&mut self, ctx: &mut Context<Self>, Remove { game_id: id }: Remove) {
     if let Some(container) = self.map.remove(&id) {
-      match container.shutdown().await {
-        Ok(state) => {
-          tracing::debug!(game_id = id, "game shutdown completed");
-          let players = state.players;
-          for id in players {
-            self.remove_game_player(id, id);
+      let addr = ctx.addr();
+      ctx.spawn(async move {
+        match tokio::time::timeout(std::time::Duration::from_secs(3), container.shutdown()).await {
+          Ok(Ok(state)) => {
+            let players = state.players;
+            for player_id in players {
+              addr
+                .notify(RemoveGamePlayer {
+                  game_id: id,
+                  player_id,
+                })
+                .await
+                .ok();
+            }
+            tracing::debug!(game_id = id, "game shutdown completed");
+          }
+          Ok(Err(err)) => {
+            tracing::warn!(game_id = id, "Remove: fetch state: {}", err);
+          }
+          Err(_) => {
+            tracing::warn!(game_id = id, "Remove: shutdown game actor timeout");
           }
         }
-        Err(err) => {
-          tracing::warn!(game_id = id, "Remove: fetch state: {}", err);
-        }
-      }
-    } else {
-      tracing::warn!(game_id = id, "Remove: game actor not found");
+      })
     }
   }
 }
@@ -143,7 +153,7 @@ impl Message for ResolveGamePlayerPingBroadcastTargets {
 impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
   async fn handle(
     &mut self,
-    _: &mut Context<Self>,
+    _: &mut Context<Self>,g
     ResolveGamePlayerPingBroadcastTargets {
       player_id,
       node_ids,
@@ -161,6 +171,7 @@ impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
         self.map.get(game_id).map(|v| {
           v.send(GetGamePlayersIfNodeSelected {
             node_ids: node_ids.clone(),
+            include_player: player_id,
           })
           .map_err(Error::from)
         })
@@ -193,9 +204,7 @@ impl GameRegistry {
 
   fn remove_game_player(&mut self, game_id: i32, player_id: i32) {
     match self.player_game_map.entry(player_id) {
-      Entry::Vacant(_entry) => {
-        tracing::warn!(game_id, player_id, "RemoveGamePlayer: record missing");
-      }
+      Entry::Vacant(_entry) => {}
       Entry::Occupied(mut entry) => {
         entry.get_mut().retain(|v| *v != game_id);
         if entry.get().is_empty() {

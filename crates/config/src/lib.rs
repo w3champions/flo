@@ -81,7 +81,7 @@ impl ClientConfig {
       self.installation_path = Some(path);
     }
 
-    if let Some(domain) = env::var("FLO_LOBBY_DOMAIN").ok() {
+    if let Some(domain) = env::var("FLO_CONTROLLER_HOST").ok() {
       self.controller_host = domain;
     }
   }

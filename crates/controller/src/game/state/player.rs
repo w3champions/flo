@@ -11,17 +11,14 @@ impl Message for GetGamePlayers {
 
 #[async_trait]
 impl Handler<GetGamePlayers> for GameActor {
-  async fn handle(
-    &mut self,
-    _: &mut Context<Self>,
-    _: GetGamePlayers,
-  ) -> Result<Vec<i32>> {
+  async fn handle(&mut self, _: &mut Context<Self>, _: GetGamePlayers) -> Result<Vec<i32>> {
     Ok(self.players.clone())
   }
 }
 
 pub struct GetGamePlayersIfNodeSelected {
   pub node_ids: Vec<i32>,
+  pub include_player: i32,
 }
 
 impl Message for GetGamePlayersIfNodeSelected {
@@ -33,13 +30,17 @@ impl Handler<GetGamePlayersIfNodeSelected> for GameActor {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    GetGamePlayersIfNodeSelected { node_ids }: GetGamePlayersIfNodeSelected,
+    GetGamePlayersIfNodeSelected {
+      node_ids,
+      include_player,
+    }: GetGamePlayersIfNodeSelected,
   ) -> Option<Vec<i32>> {
     if self
       .selected_node_id
       .as_ref()
       .map(|node_id| node_ids.contains(node_id))
       .unwrap_or(false)
+      && self.players.contains(&include_player)
     {
       Some(self.players.clone())
     } else {

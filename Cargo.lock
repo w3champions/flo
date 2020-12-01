@@ -804,7 +804,7 @@ version = "0.1.0"
 
 [[package]]
 name = "flo-controller"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arc-swap",
  "backoff",
@@ -938,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "bytes 0.5.6",
  "dashmap",
