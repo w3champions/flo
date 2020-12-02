@@ -31,7 +31,7 @@ pub struct ApiClient {
 
 pub struct ConfigStorage {
   db: ExecutorRef,
-  api_client_map: ArcSwap<BTreeMap<Vec<u8>, ApiClient>>,
+  api_client_map: Arc<ArcSwap<BTreeMap<Vec<u8>, ApiClient>>>,
 }
 
 impl Actor for ConfigStorage {}
@@ -46,7 +46,7 @@ impl Service<Data> for ConfigStorage {
 
     let storage = ConfigStorage {
       db,
-      api_client_map: ArcSwap::new(Arc::new(map)),
+      api_client_map: Arc::new(ArcSwap::new(Arc::new(map))),
     };
 
     Ok(storage)
