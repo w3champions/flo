@@ -43,4 +43,4 @@ casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
-flo-state = { path = "../flo-state" }
+#flo-state = { path = "../flo-state" }

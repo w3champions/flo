@@ -11,7 +11,7 @@ flo-net = { path = "../net" }
 flo-constants = { path = "../constants" }
 flo-log = { path = "../log" }
 flo-task = { path = "../task" }
-flo-state = "0.6.0"
+flo-state = "0.6.1"
 flo-types = { path = "../types" }
 
 thiserror = "1.0.20"
