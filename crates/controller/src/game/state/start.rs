@@ -218,20 +218,32 @@ pub struct StartGameCheckTimeout {
 }
 
 impl Message for StartGameCheckTimeout {
-  type Result = Result<()>;
+  type Result = ();
 }
 
 #[async_trait]
 impl Handler<StartGameCheckTimeout> for GameActor {
-  async fn handle(
+  async fn handle(&mut self, _: &mut Context<Self>, msg: StartGameCheckTimeout) {
+    if let Err(err) = self.send_game_start_reject_timeout(msg).await {
+      tracing::error!(
+        game_id = self.game_id,
+        "send_game_start_reject_timeout: {}",
+        err
+      );
+    }
+  }
+}
+
+impl GameActor {
+  async fn send_game_start_reject_timeout(
     &mut self,
-    _: &mut Context<Self>,
     StartGameCheckTimeout { map }: StartGameCheckTimeout,
   ) -> Result<()> {
     let game_id = self.game_id;
     let start_state = if let Some(v) = self.start_state.take() {
       v
     } else {
+      tracing::debug!(game_id, "start state gone");
       return Ok(());
     };
     let start_state = start_state.shutdown().await?;
@@ -489,7 +501,7 @@ impl Handler<AckTimeout> for StartGameState {
   ) -> <AckTimeout as Message>::Result {
     if let Some(map) = self.get_map() {
       tracing::debug!(game_id = self.game_id, "ack timeout");
-      self.game_addr.send(StartGameCheckTimeout { map }).await??;
+      self.game_addr.notify(StartGameCheckTimeout { map }).await?;
     }
     Ok(())
   }

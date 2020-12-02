@@ -5,7 +5,7 @@ use crate::game::messages::{CreateGame, PlayerJoin, PlayerLeave};
 use crate::game::state::cancel::CancelGame;
 use crate::game::state::create::CreateGameAsBot;
 use crate::game::state::node::SelectNode;
-use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer};
+use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer, UpdateGameNodeCache};
 use crate::game::state::start::{StartGameCheckAsBot, StartGameCheckAsBotResult};
 use crate::node::messages::ListNode;
 use crate::player::state::ping::GetPlayersPingSnapshot;
@@ -295,8 +295,21 @@ impl FloController for FloControllerService {
     self
       .state
       .games
-      .send_to(game_id, SelectNode { player_id, node_id })
+      .send_to(
+        game_id,
+        SelectNode {
+          player_id,
+          node_id: node_id.clone(),
+        },
+      )
       .await?;
+
+    self
+      .state
+      .games
+      .notify(UpdateGameNodeCache { game_id, node_id })
+      .await
+      .map_err(Error::from)?;
 
     Ok(Response::new(()))
   }

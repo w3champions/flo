@@ -30,7 +30,9 @@ pub struct GameRegistry {
   player_packet_sender: PlayerPacketSender,
   nodes: Addr<NodeRegistry>,
   map: BTreeMap<i32, Container<GameActor>>,
-  player_game_map: BTreeMap<i32, Vec<i32>>,
+  player_games_map: BTreeMap<i32, Vec<i32>>,
+  game_players_map: BTreeMap<i32, Vec<i32>>,
+  game_node_map: BTreeMap<i32, i32>,
 }
 
 impl GameRegistry {
@@ -41,21 +43,28 @@ impl GameRegistry {
   ) -> Result<GameRegistry> {
     let games = db.exec(|conn| get_all_active_game_state(conn)).await?;
     let mut map = BTreeMap::new();
-    let mut player_game_map = BTreeMap::new();
+    let mut player_games_map = BTreeMap::new();
+    let mut game_players_map = BTreeMap::new();
+    let mut game_node_map = BTreeMap::new();
 
     for game in games {
       let mut players = Vec::with_capacity(game.players.len());
       let mut player_tokens = HashMap::new();
 
+      game_players_map.insert(game.id, game.players.iter().map(|t| t.0).collect());
       for (id, token) in game.players {
         players.push(id);
         if let Some(token) = token.and_then(|v| PlayerToken::from_vec(id, v)) {
           player_tokens.insert(id, token.bytes);
         }
-        player_game_map
+        player_games_map
           .entry(id)
           .or_insert_with(|| vec![])
           .push(game.id);
+      }
+
+      if let Some(node_id) = game.node_id.clone() {
+        game_node_map.insert(game.id, node_id);
       }
 
       map.insert(
@@ -81,7 +90,9 @@ impl GameRegistry {
       player_packet_sender: player_packet_sender.clone(),
       nodes: nodes.clone(),
       map,
-      player_game_map,
+      player_games_map,
+      game_players_map,
+      game_node_map,
     };
 
     Ok(state)

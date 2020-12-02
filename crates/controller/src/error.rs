@@ -84,8 +84,8 @@ pub enum Error {
   PlayerColorConflict,
   #[error("Invalid player team value")]
   PlayerTeamInvalid,
-  #[error("Operation timeout")]
-  Timeout(#[from] tokio::time::Elapsed),
+  #[error("Operation timeout: {0}")]
+  Timeout(anyhow::Error),
   #[error("net: {0}")]
   Net(#[from] flo_net::error::Error),
   #[error("db error: {0}")]
@@ -154,6 +154,7 @@ impl From<flo_state::error::Error> for Error {
   fn from(err: flo_state::error::Error) -> Self {
     match err {
       flo_state::error::Error::WorkerGone => Self::TaskCancelled,
+      flo_state::error::Error::SendTimeout => Self::Timeout(err.into()),
     }
   }
 }

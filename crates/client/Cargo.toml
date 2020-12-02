@@ -22,7 +22,7 @@ flo-w3map = { path = "../w3map" }
 flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-task = { path = "../task" }
-flo-state = "0.5"
+flo-state = "0.6.0"
 
 s2-grpc-utils = "0.2"
 tokio = { version = "0.2.22", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "rt-threaded"] }

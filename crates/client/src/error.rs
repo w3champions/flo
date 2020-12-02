@@ -30,6 +30,8 @@ pub enum Error {
   ConnectionRequestRejected(crate::types::RejectReason),
   #[error("Local game info not yet received")]
   LocalGameInfoNotFound,
+  #[error("Timeout: {0:?}")]
+  Timeout(anyhow::Error),
   #[error("Task cancelled: {0:?}")]
   TaskCancelled(anyhow::Error),
   #[error("Lan: {0}")]
@@ -63,6 +65,7 @@ impl From<flo_state::error::Error> for Error {
   fn from(err: flo_state::error::Error) -> Self {
     match err {
       flo_state::error::Error::WorkerGone => Self::TaskCancelled(err.into()),
+      flo_state::error::Error::SendTimeout => Self::Timeout(err.into()),
     }
   }
 }

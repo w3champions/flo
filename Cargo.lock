@@ -250,19 +250,15 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "bytes"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
-dependencies = [
- "byteorder",
- "iovec",
-]
-
-[[package]]
-name = "bytes"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
+
+[[package]]
+name = "bytes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
 
 [[package]]
 name = "bzip2"
@@ -808,8 +804,9 @@ version = "0.1.0"
 
 [[package]]
 name = "flo-controller"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
+ "anyhow",
  "arc-swap",
  "backoff",
  "bs-diesel-utils",
@@ -870,7 +867,7 @@ name = "flo-grpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bytes 0.4.12",
+ "bytes 0.6.0",
  "prost",
  "prost-types",
  "tokio",
@@ -1003,11 +1000,10 @@ dependencies = [
 
 [[package]]
 name = "flo-state"
-version = "0.5.0"
-source = "git+https://github.com/wc3tools/flo-state.git?branch=main#ab4cf13c4f902875f65534e859fbe7c0e879cb6a"
+version = "0.6.1"
 dependencies = [
  "async-trait",
- "flo-task 0.1.0 (git+https://github.com/wc3tools/flo-task.git)",
+ "flo-task 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.8",
  "thiserror",
  "tokio",
@@ -1016,7 +1012,6 @@ dependencies = [
 [[package]]
 name = "flo-task"
 version = "0.1.0"
-source = "git+https://github.com/wc3tools/flo-task.git#ad5809dfd14e997b4c8be1e0dca0f47577b2b41f"
 dependencies = [
  "tokio",
 ]
@@ -1024,6 +1019,8 @@ dependencies = [
 [[package]]
 name = "flo-task"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a1af878931927af976680ff2eb008cbd7c22dcb0573415c8e281e34e653ce25"
 dependencies = [
  "tokio",
 ]

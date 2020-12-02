@@ -1,9 +1,7 @@
 use crate::error::*;
-use crate::game::state::player::GetGamePlayersIfNodeSelected;
 use crate::game::state::{GameActor, GameRegistry};
 use crate::game::GameStatus;
 use flo_state::{async_trait, Container, Context, Handler, Message};
-use futures::TryFutureExt;
 use std::collections::btree_map::Entry;
 
 #[derive(Debug)]
@@ -72,6 +70,9 @@ impl Message for Remove {
 impl Handler<Remove> for GameRegistry {
   async fn handle(&mut self, ctx: &mut Context<Self>, Remove { game_id: id }: Remove) {
     if let Some(container) = self.map.remove(&id) {
+      self.game_players_map.remove(&id);
+      self.game_node_map.remove(&id);
+
       let addr = ctx.addr();
       ctx.spawn(async move {
         match tokio::time::timeout(std::time::Duration::from_secs(3), container.shutdown()).await {
@@ -140,6 +141,30 @@ impl Handler<RemoveGamePlayer> for GameRegistry {
   }
 }
 
+pub struct UpdateGameNodeCache {
+  pub game_id: i32,
+  pub node_id: Option<i32>,
+}
+
+impl Message for UpdateGameNodeCache {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<UpdateGameNodeCache> for GameRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateGameNodeCache { game_id, node_id }: UpdateGameNodeCache,
+  ) {
+    if let Some(node_id) = node_id {
+      self.game_node_map.insert(game_id, node_id);
+    } else {
+      self.game_node_map.remove(&game_id);
+    }
+  }
+}
+
 pub struct ResolveGamePlayerPingBroadcastTargets {
   pub player_id: i32,
   pub node_ids: Vec<i32>,
@@ -159,36 +184,27 @@ impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
       node_ids,
     }: ResolveGamePlayerPingBroadcastTargets,
   ) -> Result<Vec<i32>> {
-    use futures::stream::FuturesUnordered;
-    use futures::StreamExt;
-    let games = match self.player_game_map.get(&player_id) {
+    let games = match self.player_games_map.get(&player_id) {
       Some(v) => v,
       None => return Ok(vec![]),
     };
-    let task: FuturesUnordered<_> = games
-      .iter()
+
+    let mut player_ids: Vec<i32> = games
+      .into_iter()
       .filter_map(|game_id| {
-        self.map.get(game_id).map(|v| {
-          v.send(GetGamePlayersIfNodeSelected {
-            node_ids: node_ids.clone(),
-            include_player: player_id,
-          })
-          .map_err(Error::from)
-        })
+        let node_id = self.game_node_map.get(game_id)?;
+        if node_ids.contains(node_id) {
+          self.game_players_map.get(game_id).cloned()
+        } else {
+          None
+        }
       })
-      .collect();
-    let mut player_ids: Vec<i32> = task
-      .collect::<Vec<_>>()
-      .await
-      .into_iter()
-      .collect::<Result<Vec<_>>>()?
-      .into_iter()
-      .filter_map(std::convert::identity)
       .flatten()
-      .collect();
+      .collect::<Vec<_>>();
     player_ids.sort();
     player_ids.dedup();
     player_ids.retain(|v| *v != player_id);
+
     Ok(player_ids)
   }
 }
@@ -196,17 +212,32 @@ impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
 impl GameRegistry {
   fn add_game_player(&mut self, game_id: i32, player_id: i32) {
     self
-      .player_game_map
+      .player_games_map
       .entry(player_id)
       .or_insert_with(|| vec![])
       .push(game_id);
+    self
+      .game_players_map
+      .entry(game_id)
+      .or_insert_with(|| vec![])
+      .push(player_id);
   }
 
   fn remove_game_player(&mut self, game_id: i32, player_id: i32) {
-    match self.player_game_map.entry(player_id) {
+    match self.player_games_map.entry(player_id) {
       Entry::Vacant(_entry) => {}
       Entry::Occupied(mut entry) => {
         entry.get_mut().retain(|v| *v != game_id);
+        if entry.get().is_empty() {
+          entry.remove();
+        }
+      }
+    }
+
+    match self.game_players_map.entry(game_id) {
+      Entry::Vacant(_entry) => {}
+      Entry::Occupied(mut entry) => {
+        entry.get_mut().retain(|v| *v != player_id);
         if entry.get().is_empty() {
           entry.remove();
         }

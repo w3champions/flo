@@ -23,6 +23,7 @@ mod sender;
 use crate::game::messages::{ResolveGamePlayerPingBroadcastTargets, UpdateSlot};
 use crate::game::state::node::SelectNode;
 use crate::game::state::player::GetGamePlayers;
+use crate::game::state::registry::UpdateGameNodeCache;
 use crate::game::state::start::{StartGameCheck, StartGamePlayerAck};
 use crate::game::SlotSettings;
 use crate::node::messages::ListNode;
@@ -385,10 +386,17 @@ async fn handle_game_select_node_request(
     .send_to(
       packet.game_id,
       SelectNode {
-        node_id: packet.node_id,
+        node_id: packet.node_id.clone(),
         player_id,
       },
     )
+    .await?;
+  state
+    .games
+    .notify(UpdateGameNodeCache {
+      game_id: packet.game_id,
+      node_id: packet.node_id,
+    })
     .await?;
   Ok(())
 }

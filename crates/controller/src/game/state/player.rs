@@ -15,36 +15,3 @@ impl Handler<GetGamePlayers> for GameActor {
     Ok(self.players.clone())
   }
 }
-
-pub struct GetGamePlayersIfNodeSelected {
-  pub node_ids: Vec<i32>,
-  pub include_player: i32,
-}
-
-impl Message for GetGamePlayersIfNodeSelected {
-  type Result = Option<Vec<i32>>;
-}
-
-#[async_trait]
-impl Handler<GetGamePlayersIfNodeSelected> for GameActor {
-  async fn handle(
-    &mut self,
-    _: &mut Context<Self>,
-    GetGamePlayersIfNodeSelected {
-      node_ids,
-      include_player,
-    }: GetGamePlayersIfNodeSelected,
-  ) -> Option<Vec<i32>> {
-    if self
-      .selected_node_id
-      .as_ref()
-      .map(|node_id| node_ids.contains(node_id))
-      .unwrap_or(false)
-      && self.players.contains(&include_player)
-    {
-      Some(self.players.clone())
-    } else {
-      None
-    }
-  }
-}

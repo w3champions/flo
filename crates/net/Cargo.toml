@@ -8,7 +8,7 @@ edition = "2018"
 flo-util = { path = "../util" }
 flo-constants = { path = "../constants" }
 flo-w3gs = { path = "../w3gs" }
-flo-state = "0.5"
+flo-state = "0.6.0"
 
 bytes = "0.5.6"
 thiserror = "1"

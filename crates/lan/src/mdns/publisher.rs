@@ -105,7 +105,7 @@ impl MdnsPublisher {
               let stream = stream;
               broadcast_cancel(&sender, &name).ok();
               // hack: wait 2 second to flush the mdns udp stream
-              tokio::time::timeout(Duration::from_secs(2), stream.collect::<Vec<_>>()).await.ok();
+              tokio::time::timeout(Duration::from_secs(5), stream.collect::<Vec<_>>()).await.ok();
             });
             break;
           },
