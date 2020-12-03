@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "async-tungstenite",
