@@ -34,6 +34,7 @@ pub struct LobbyHandler<'a> {
   stream: &'a mut W3GSStream,
   node_stream: &'a mut NodeStreamHandle,
   status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
+  starting: bool,
 }
 
 impl<'a> LobbyHandler<'a> {
@@ -48,6 +49,7 @@ impl<'a> LobbyHandler<'a> {
       stream,
       node_stream,
       status_rx,
+      starting: false,
     }
   }
 
@@ -113,6 +115,10 @@ impl<'a> LobbyHandler<'a> {
   }
 
   async fn send_start(&mut self) -> Result<()> {
+    if self.starting {
+      return Ok(());
+    }
+    self.starting = true;
     self.stream.send(Packet::simple(CountDownStart)?).await?;
     delay_for(Duration::from_secs(6)).await;
     self.stream.send(Packet::simple(CountDownEnd)?).await?;
