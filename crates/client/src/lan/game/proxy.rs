@@ -66,9 +66,10 @@ impl LanProxy {
     tokio::spawn({
       let state = state.clone();
       let scope = scope.handle();
+      let node = node.clone();
       async move {
         let res = state
-          .serve(listener, event_rx, w3gs_tx, w3gs_rx, scope)
+          .serve(listener, event_rx, w3gs_tx, w3gs_rx, scope, node)
           .await;
 
         if let Err(res) = res {
@@ -118,6 +119,7 @@ impl State {
     mut w3gs_tx: Sender<Packet>,
     mut w3gs_rx: Receiver<Packet>,
     mut scope: SpawnScopeHandle,
+    node: Arc<NodeInfo>,
   ) -> Result<()> {
     let mut node_stream = self.stream.clone();
     let mut status_rx = self.game_status_rx.clone();
@@ -212,6 +214,7 @@ impl State {
     // Game Loop
     let mut game_handler = GameHandler::new(
       &self.info,
+      &node,
       &mut stream,
       &mut node_stream,
       &mut event_rx,

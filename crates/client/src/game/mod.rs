@@ -23,7 +23,7 @@ impl LocalGameInfo {
       name: game.name.clone(),
       game_id: game.id,
       random_seed: game.random_seed,
-      node_id: game.node.as_ref().map(|node| node.id),
+      node_id: game.node.as_ref().map(|v| v.id).clone(),
       player_id,
       map_path: game.map.path.clone(),
       map_sha1: {

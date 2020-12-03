@@ -115,6 +115,8 @@ impl Handler<UpdateNodes> for NodeRegistry {
         NodeInfo {
           id,
           name: name.to_string(),
+          location: node.location.to_string(),
+          country_id: node.country_id.to_string(),
           socket_addr: SocketAddr::from((ip, port)),
         },
       );
@@ -228,6 +230,8 @@ pub struct PingUpdate {
 pub struct NodeInfo {
   pub id: i32,
   pub name: String,
+  pub location: String,
+  pub country_id: String,
   socket_addr: SocketAddr,
 }
 

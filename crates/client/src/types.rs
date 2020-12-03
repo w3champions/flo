@@ -83,7 +83,7 @@ pub enum GameStatus {
   Terminated = 5,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::Node")]
 pub struct Node {
   pub id: i32,

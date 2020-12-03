@@ -1001,6 +1001,8 @@ dependencies = [
 [[package]]
 name = "flo-state"
 version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9a7febdad33b617c14ede6cf326ac29715be4452c1f7aba85199bf8ce5e3c3c"
 dependencies = [
  "async-trait",
  "flo-task 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -11,6 +11,7 @@ use crate::error::*;
 use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
+use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
@@ -24,6 +25,7 @@ pub enum GameResult {
 #[derive(Debug)]
 pub struct GameHandler<'a> {
   info: &'a LanGameInfo,
+  node: &'a NodeInfo,
   w3gs_stream: &'a mut W3GSStream,
   node_stream: &'a mut NodeStreamHandle,
   event_rx: &'a mut Receiver<PlayerEvent>,
@@ -37,6 +39,7 @@ pub struct GameHandler<'a> {
 impl<'a> GameHandler<'a> {
   pub fn new(
     info: &'a LanGameInfo,
+    node: &'a NodeInfo,
     stream: &'a mut W3GSStream,
     node_stream: &'a mut NodeStreamHandle,
     event_rx: &'a mut Receiver<PlayerEvent>,
@@ -46,6 +49,7 @@ impl<'a> GameHandler<'a> {
   ) -> Self {
     GameHandler {
       info,
+      node,
       w3gs_stream: stream,
       node_stream,
       event_rx,
@@ -173,32 +177,55 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
-      "tick" => self.send_chat_to_self(
+      "flo" => {
+        let mut messages = vec![
+          format!(
+            "Game: {} (#{})",
+            self.info.game.name, self.info.game.game_id
+          ),
+          format!(
+            "Server: {}, {}, {} (#{})",
+            self.node.name, self.node.location, self.node.country_id, self.node.id
+          ),
+          "Players:".to_string(),
+        ];
+
+        for slot in &self.info.game.slots {
+          if let Some(ref player) = slot.player.as_ref() {
+            messages.push(format!(
+              "  {}: Team {}, {:?}",
+              player.name, slot.settings.team, slot.settings.race
+            ));
+          }
+        }
+
+        self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
+      }
+      "tick" => self.send_chats_to_self(
         self.info.slot_info.slot_player_id,
-        format!(
+        vec![format!(
           "tick_recv = {}, tick_ack = {}",
           self.tick_recv, self.tick_ack
-        ),
+        )],
       ),
-      "drop" => {
-        self.w3gs_rx.close();
-      }
-      _ => self.send_chat_to_self(
+      _ => self.send_chats_to_self(
         self.info.slot_info.slot_player_id,
-        format!("Unknown command"),
+        vec![format!("Unknown command")],
       ),
     }
   }
 
-  fn send_chat_to_self(&self, player_id: u8, message: String) {
+  fn send_chats_to_self(&self, player_id: u8, messages: Vec<String>) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
-      match Packet::simple(ChatFromHost::private_to_self(player_id, message)) {
-        Ok(pkt) => {
-          tx.send(pkt).await.ok();
-        }
-        Err(err) => {
-          tracing::error!("encode chat packet: {}", err);
+      for message in messages {
+        match Packet::simple(ChatFromHost::private_to_self(player_id, message)) {
+          Ok(pkt) => {
+            tx.send(pkt).await.ok();
+          }
+          Err(err) => {
+            tracing::error!("encode chat packet: {}", err);
+          }
         }
       }
     });
