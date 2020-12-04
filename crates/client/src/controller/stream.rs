@@ -289,6 +289,7 @@ impl ControllerStream {
             let p = p.clone();
             move |info| -> Result<_> {
               if let Some(slot) = info.slots.get_mut(p.slot_index as usize) {
+                slot.player = p.player.map(PlayerInfo::unpack).transpose()?;
                 slot.settings = SlotSettings::unpack(p.slot_settings.clone())?;
                 Ok(())
               } else {
