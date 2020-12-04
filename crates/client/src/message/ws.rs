@@ -113,6 +113,15 @@ impl WsMessageStream {
   }
 }
 
+#[cfg(feature = "worker")]
+fn check_origin(
+  _req: &Request<()>,
+  res: Response<()>,
+) -> Result<Response<()>, Response<Option<String>>> {
+  Ok(res)
+}
+
+#[cfg(not(feature = "worker"))]
 fn check_origin(
   req: &Request<()>,
   res: Response<()>,
