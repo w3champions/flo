@@ -12,7 +12,7 @@ use flo_net::proto::flo_connect::{
 
 use crate::error::{Error, Result};
 use crate::ping::PingUpdate;
-use crate::platform::PlatformStateError;
+use crate::platform::{PlatformStateError, StartTestGame};
 pub use crate::types::{
   DisconnectReason, MapDetail, MapForceOwned, MapPlayerOwned, PlayerSession, PlayerSessionUpdate,
   RejectReason,
@@ -31,6 +31,8 @@ pub enum IncomingMessage {
   GamePlayerPingMapSnapshotRequest(PacketGamePlayerPingMapSnapshotRequest),
   ListNodesRequest,
   GameStartRequest(PacketGameStartRequest),
+  StartTestGame(StartTestGame),
+  KillTestGame,
 }
 
 #[derive(Debug, Serialize)]

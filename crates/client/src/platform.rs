@@ -5,8 +5,10 @@ use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
 use flo_platform::ClientPlatformInfo;
 use flo_state::{async_trait, Actor, Context, Handler, Message, RegistryRef, Service};
-use flo_w3map::MapChecksum;
+use flo_w3map::{MapChecksum, W3Map};
 use flo_w3storage::W3Storage;
+use futures::future::{abortable, AbortHandle};
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -17,6 +19,7 @@ pub struct Platform {
   info: Result<ClientPlatformInfo, PlatformStateError>,
   storage: Option<W3Storage>,
   maps: Option<Value>,
+  test_game_abort_handle: Option<AbortHandle>,
 }
 
 impl Platform {
@@ -28,6 +31,7 @@ impl Platform {
       info,
       storage: None,
       maps: None,
+      test_game_abort_handle: None,
     })
   }
 }
@@ -212,6 +216,50 @@ impl Handler<GetMapDetail> for Platform {
   }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct StartTestGame {
+  pub name: String,
+}
+
+impl Message for StartTestGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<StartTestGame> for Platform {
+  async fn handle(
+    &mut self,
+    ctx: &mut Context<Self>,
+    StartTestGame { name }: StartTestGame,
+  ) -> <StartTestGame as Message>::Result {
+    let next = self.start_test_game(ctx, name).await?;
+    if let Some(handle) = self.test_game_abort_handle.replace(next) {
+      handle.abort()
+    }
+    Ok(())
+  }
+}
+
+pub struct KillTestGame;
+
+impl Message for KillTestGame {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<KillTestGame> for Platform {
+  async fn handle(
+    &mut self,
+    _ctx: &mut Context<Self>,
+    _: KillTestGame,
+  ) -> <KillTestGame as Message>::Result {
+    self
+      .test_game_abort_handle
+      .take()
+      .map(|handle| handle.abort());
+  }
+}
+
 impl Platform {
   pub async fn with_storage<F, R>(&mut self, f: F) -> Result<R>
   where
@@ -233,6 +281,35 @@ impl Platform {
         Err(Error::War3NotLocated)
       }
     })
+  }
+
+  async fn start_test_game(
+    &mut self,
+    ctx: &mut Context<Self>,
+    name: String,
+  ) -> Result<AbortHandle> {
+    tracing::debug!("starting test game: {}", name);
+
+    const MAP_PATH: &str = r#"maps\(2)bootybay.w3m"#;
+    let (map, checksum) = self
+      .with_storage(|storage| {
+        W3Map::open_storage_with_checksum(storage, MAP_PATH).map_err(Error::from)
+      })
+      .await?;
+    let (f, handle) = abortable(async move {
+      let (width, height) = map.dimension();
+      let res =
+        crate::lan::diag::run_test_lobby(&name, MAP_PATH, width as u16, height as u16, checksum)
+          .await;
+      match res {
+        Ok(res) => tracing::debug!("test game ended: {:?}", res),
+        Err(err) => {
+          tracing::error!("start test game: {}", err);
+        }
+      }
+    });
+    ctx.spawn(f.map(|_| ()));
+    Ok(handle)
   }
 }
 

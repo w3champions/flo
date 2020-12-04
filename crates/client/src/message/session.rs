@@ -6,7 +6,8 @@ use crate::controller::{ControllerClient, SendFrame};
 use crate::error::{Error, Result};
 use crate::message::MessageStream;
 use crate::platform::{
-  GetClientPlatformInfo, GetMapDetail, GetMapList, Platform, PlatformStateError, Reload,
+  GetClientPlatformInfo, GetMapDetail, GetMapList, KillTestGame, Platform, PlatformStateError,
+  Reload,
 };
 use flo_net::packet::FloPacket;
 use flo_net::proto::flo_connect::{
@@ -160,6 +161,12 @@ impl Worker {
       }
       IncomingMessage::GameStartRequest(req) => {
         self.send_frame::<PacketGameStartRequest>(req).await?;
+      }
+      IncomingMessage::StartTestGame(msg) => {
+        self.platform.send(msg).await??;
+      }
+      IncomingMessage::KillTestGame => {
+        self.platform.notify(KillTestGame).await?;
       }
     }
     Ok(())

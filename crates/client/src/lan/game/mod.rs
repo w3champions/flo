@@ -27,6 +27,8 @@ use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
 use proxy::LanProxy;
 
+pub use self::lobby::{LobbyAction, LobbyHandler};
+
 pub struct LanGame {
   _scope: SpawnScope,
   state: Arc<State>,

@@ -1,3 +1,4 @@
+pub mod diag;
 pub mod game;
 
 use lazy_static::lazy_static;

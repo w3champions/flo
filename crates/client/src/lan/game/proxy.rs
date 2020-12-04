@@ -287,7 +287,7 @@ impl State {
     node_stream: &mut NodeStreamHandle,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
   ) -> Result<LobbyAction> {
-    let mut lobby_handler = LobbyHandler::new(&self.info, stream, node_stream, status_rx);
+    let mut lobby_handler = LobbyHandler::new(&self.info, stream, Some(node_stream), status_rx);
     let action = lobby_handler.run().await?;
     Ok(action)
   }

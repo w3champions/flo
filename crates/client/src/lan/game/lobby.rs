@@ -32,7 +32,7 @@ pub enum LobbyAction {
 pub struct LobbyHandler<'a> {
   info: &'a LanGameInfo,
   stream: &'a mut W3GSStream,
-  node_stream: &'a mut NodeStreamHandle,
+  node_stream: Option<&'a mut NodeStreamHandle>,
   status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
   starting: bool,
 }
@@ -41,7 +41,7 @@ impl<'a> LobbyHandler<'a> {
   pub fn new(
     info: &'a LanGameInfo,
     stream: &'a mut W3GSStream,
-    node_stream: &'a mut NodeStreamHandle,
+    node_stream: Option<&'a mut NodeStreamHandle>,
     status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
   ) -> Self {
     LobbyHandler {
@@ -67,7 +67,9 @@ impl<'a> LobbyHandler<'a> {
           let pkt = next?;
           if let Some(pkt) = pkt {
             if pkt.type_id() == LeaveReq::PACKET_TYPE_ID {
-              self.node_stream.report_slot_status(SlotClientStatus::Connected).await.ok();
+              if let Some(node_stream) = self.node_stream.as_mut() {
+                node_stream.report_slot_status(SlotClientStatus::Connected).await.ok();
+              }
               self.stream.send(Packet::simple(LeaveAck)?).await?;
               self.stream.flush().await?;
               return Ok(LobbyAction::Leave)
@@ -78,7 +80,9 @@ impl<'a> LobbyHandler<'a> {
               // report to node that all players have joined
               if !reported {
                 tracing::debug!("all join packets received");
-                self.node_stream.report_slot_status(SlotClientStatus::Joined).await.ok();
+                if let Some(node_stream) = self.node_stream.as_mut() {
+                  node_stream.report_slot_status(SlotClientStatus::Joined).await.ok();
+                }
                 reported = true;
               }
               if join_state.should_start() {
