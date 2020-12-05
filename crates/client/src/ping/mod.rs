@@ -7,9 +7,11 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
+use tokio::time::delay_for;
 
 mod collect;
 
@@ -31,7 +33,7 @@ impl PingActor {
     }
   }
 
-  async fn worker(addr: Addr<Self>, mut rx: mpsc::Receiver<SendPing>) -> Result<(), PingError> {
+  async fn worker(addr: Addr<Self>, rx: &mut mpsc::Receiver<SendPing>) -> Result<(), PingError> {
     let mut socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
     let mut buf = [0_u8; 4];
     loop {
@@ -58,11 +60,27 @@ impl PingActor {
 #[async_trait]
 impl Actor for PingActor {
   async fn started(&mut self, ctx: &mut Context<Self>) {
-    let rx = self.rx.take().unwrap();
+    let mut rx = self.rx.take().unwrap();
     let addr = ctx.addr();
     ctx.spawn(async move {
-      if let Err(err) = Self::worker(addr, rx).await {
-        tracing::error!("worker: {}", err)
+      loop {
+        if let Err(err) = Self::worker(addr.clone(), &mut rx).await {
+          tracing::error!("ping worker error: {}", err)
+        } else {
+          tracing::error!("ping worker gone");
+        }
+
+        // wait 15s and recreate the worker
+        let mut delay = delay_for(Duration::from_secs(15));
+        loop {
+          tokio::select! {
+            _ = &mut delay => {
+              break;
+            }
+            // consume all ping requests
+            _ = rx.recv() => {}
+          }
+        }
       }
     })
   }
