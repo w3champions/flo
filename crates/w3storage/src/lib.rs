@@ -239,5 +239,8 @@ fn test_storage() {
 fn test_fs_map() {
   let p = ClientPlatformInfo::from_env().unwrap();
   let s = W3Storage::new(&p).unwrap();
-  assert!(s.resolve_file("maps\\W3Champions\\v5\\w3c_1v1_terenasstand_lv_anon.w3x").unwrap().is_some());
+  assert!(s
+    .resolve_file("maps\\W3Champions\\v5\\w3c_1v1_terenasstand_lv_anon.w3x")
+    .unwrap()
+    .is_some());
 }

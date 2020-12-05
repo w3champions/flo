@@ -5,9 +5,9 @@ use std::path::PathBuf;
 mod windows_bindings;
 
 pub mod error;
+pub mod net;
 mod path;
 mod war3;
-pub mod net;
 
 use error::*;
 
@@ -102,7 +102,6 @@ impl ClientPlatformInfo {
       executable_path,
     })
   }
-
 
   pub fn from_env() -> Result<Self> {
     dotenv::dotenv().ok();

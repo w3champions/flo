@@ -1,11 +1,9 @@
 use crate::error::*;
-use crate::game::state::{GameActor};
-
+use crate::game::state::GameActor;
 
 use flo_net::packet::FloPacket;
 use flo_net::proto;
 use flo_state::{async_trait, Context, Handler, Message};
-
 
 pub struct SelectNode {
   pub node_id: Option<i32>,

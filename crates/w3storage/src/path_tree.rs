@@ -72,7 +72,12 @@ impl<'a> Node<'a> {
 
   pub fn to_paths(&self, prefix: &str) -> Vec<String> {
     if self.children.is_empty() {
-      vec![format!("{}{}{}", prefix, MAIN_SEPARATOR, self.name.as_ref())]
+      vec![format!(
+        "{}{}{}",
+        prefix,
+        MAIN_SEPARATOR,
+        self.name.as_ref()
+      )]
     } else {
       let name = self.name.as_ref();
       let prefix = if prefix.is_empty() {
@@ -111,7 +116,9 @@ fn test_path_tree() {
   use flo_platform::ClientPlatformInfo;
   let p = ClientPlatformInfo::from_env().unwrap();
   let s = W3Storage::new(&p).unwrap();
-  let mut paths = s.list_storage_files(&format!("maps{}*", MAIN_SEPARATOR)).unwrap();
+  let mut paths = s
+    .list_storage_files(&format!("maps{}*", MAIN_SEPARATOR))
+    .unwrap();
   paths.sort();
   paths.dedup();
 
