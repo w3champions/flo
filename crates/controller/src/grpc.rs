@@ -489,8 +489,8 @@ impl FloController for FloControllerService {
 
   async fn start_game_countdown_as_bot(
     &self,
-    request: Request<StartGameCountdownAsBotRequest>,
+    _request: Request<StartGameCountdownAsBotRequest>,
   ) -> Result<Response<()>, Status> {
-    unimplemented!()
+    Err(Status::unimplemented("not implemented"))
   }
 }

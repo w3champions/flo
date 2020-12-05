@@ -1,8 +1,8 @@
 use super::{PlayerRegistry, PlayerState};
 use crate::error::*;
-use flo_net::packet::{Frame};
+use flo_net::packet::Frame;
 use flo_state::{async_trait, Addr, Context, Handler, Message};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 struct Send {

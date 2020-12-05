@@ -58,9 +58,9 @@ pub use self::windows::*;
 
 #[cfg(target_os = "macos")]
 mod macos {
-  use std::path::Path;
-  use serde::Deserialize;
   use crate::error::Result;
+  use serde::Deserialize;
+  use std::path::Path;
 
   pub fn get_war3_version(path: &Path) -> Result<String> {
     #[derive(Deserialize)]
@@ -77,7 +77,9 @@ mod macos {
   #[test]
   fn get_mac_war3_version() {
     use crate::path::detect_installation_path;
-    let path = detect_installation_path().unwrap().join("_retail_/x86_64/Warcraft III.app");
+    let path = detect_installation_path()
+      .unwrap()
+      .join("_retail_/x86_64/Warcraft III.app");
     dbg!(&path);
     let v = get_war3_version(&path).unwrap();
     dbg!(v);

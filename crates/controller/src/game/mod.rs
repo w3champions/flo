@@ -5,6 +5,7 @@ pub mod token;
 mod types;
 
 pub mod messages {
+  pub use super::state::cancel::CancelGame;
   pub use super::state::create::CreateGame;
   pub use super::state::join::PlayerJoin;
   pub use super::state::leave::PlayerLeave;
@@ -15,7 +16,6 @@ pub mod messages {
   };
   pub use super::state::slot::UpdateSlot;
   pub use super::state::start::{StartGameCheck, StartGamePlayerAck};
-  pub use super::state::cancel::CancelGame;
 }
 
 pub use slots::Slots;

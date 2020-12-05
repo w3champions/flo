@@ -1,7 +1,6 @@
 use super::IpInfo;
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use std::net::IpAddr;
-
 
 pub fn get_ip_info() -> Result<IpInfo> {
   let mut info = IpInfo {

@@ -11,7 +11,6 @@ pub fn init(debug: bool) {
       LevelFilter::WARN.into()
     });
 
-
   tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
