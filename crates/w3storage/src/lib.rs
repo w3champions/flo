@@ -81,9 +81,13 @@ impl W3Storage {
 
   pub fn resolve_file(&self, path: &str) -> Result<Option<File>> {
     let lower = path.to_lowercase();
+    #[cfg(not(windows))]
+    let lower = lower.replace('\\', "/");
     let overrides = self.find_overrides(&lower);
     if !overrides.is_empty() {
       for base in overrides {
+        #[cfg(not(windows))]
+        let path = path.replace('\\', "/");
         let resolved_path = base.join(path);
         match std::fs::metadata(&resolved_path) {
           Ok(m) => {
@@ -229,4 +233,11 @@ fn test_storage() {
     std::fs::read(crate_dir.join("src/lib.rs")).unwrap()
   );
   assert!(s.resolve_file("scripts/common.j").unwrap().is_some());
+}
+
+#[test]
+fn test_fs_map() {
+  let p = ClientPlatformInfo::from_env().unwrap();
+  let s = W3Storage::new(&p).unwrap();
+  assert!(s.resolve_file("maps\\W3Champions\\v5\\w3c_1v1_terenasstand_lv_anon.w3x").unwrap().is_some());
 }

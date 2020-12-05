@@ -994,6 +994,7 @@ dependencies = [
  "plist",
  "serde",
  "thiserror",
+ "tracing",
  "widestring",
  "winapi 0.3.9",
 ]

@@ -80,14 +80,23 @@ impl ClientPlatformInfo {
       .ok_or_else(|| Error::NoInstallationFolder)?;
 
     let executable_path = installation_path.join("_retail_/x86_64/Warcraft III.app");
+
+    tracing::debug!("executable_path: {:?}", executable_path);
+
     let version = crate::war3::get_war3_version(&executable_path)?;
 
+    tracing::debug!("version: {:?}", version);
+
+    let user_data_path = config
+      .user_data_path
+      .clone()
+      .or_else(|| path::detect_user_data_path())
+      .ok_or_else(|| Error::NoUserDataPath)?;
+
+    tracing::debug!("user_data_path: {:?}", user_data_path);
+
     Ok(ClientPlatformInfo {
-      user_data_path: config
-        .user_data_path
-        .clone()
-        .or_else(|| path::detect_user_data_path())
-        .ok_or_else(|| Error::NoUserDataPath)?,
+      user_data_path,
       installation_path,
       version,
       executable_path,

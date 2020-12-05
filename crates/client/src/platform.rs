@@ -328,9 +328,12 @@ async fn load(
     };
 
     #[cfg(not(feature = "worker"))]
-    let config = ClientConfig::load()
-      .map_err(|err| tracing::error!("load config: {}", err))
-      .unwrap_or_default();
+    let config = {
+      let _ = start_config;
+      ClientConfig::load()
+        .map_err(|err| tracing::error!("load config: {}", err))
+        .unwrap_or_default()
+    };
     let info = ClientPlatformInfo::with_config(&config).map_err(|e| match e {
       PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
       PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
