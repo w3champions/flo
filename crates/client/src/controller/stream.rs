@@ -185,8 +185,7 @@ impl ControllerStream {
               match Self::handle_frame(id, player_id, frame, &mut stream, &owner, &parent).await {
                 Ok(_) => {},
                 Err(e) => {
-                  tracing::error!("exiting: dispatch: {}", e);
-                  break;
+                  tracing::error!("handle frame: {}", e);
                 }
               }
             },
