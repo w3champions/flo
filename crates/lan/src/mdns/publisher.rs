@@ -1,5 +1,4 @@
 use parking_lot::RwLock;
-use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::stream::StreamExt;
@@ -13,7 +12,7 @@ use trust_dns_client::proto::rr::rdata::{NULL, SRV};
 use trust_dns_client::proto::xfer::{BufStreamHandle, SerialMessage};
 use trust_dns_client::rr::{Name, RData, Record, RecordType};
 
-use tracing::{debug, error, instrument, span, warn, Level};
+use tracing::{debug, error, span, warn, Level};
 use tracing_futures::Instrument;
 
 use crate::constants;
@@ -33,7 +32,6 @@ pub struct MdnsPublisher {
 }
 
 impl MdnsPublisher {
-  #[instrument(skip(game_info))]
   pub async fn start(game_info: GameInfo) -> Result<Self> {
     let name = game_info.name.to_string_lossy();
     let label = if name.bytes().len() > 31 {
@@ -77,11 +75,7 @@ impl MdnsPublisher {
 
     tracing::debug!("mdns hostname = {:?}", hostname);
 
-    let (connect, sender) = MdnsStream::new_ipv4(
-      MdnsQueryType::OneShotJoin,
-      Some(255),
-      Some(Ipv4Addr::UNSPECIFIED),
-    );
+    let (connect, sender) = MdnsStream::new_ipv4(MdnsQueryType::OneShotJoin, Some(255), None);
 
     let mut stream = connect.await.map_err(Error::MdnsStreamBroken)?;
 
@@ -99,16 +93,6 @@ impl MdnsPublisher {
       tokio::pin!(drop_rx);
       loop {
         tokio::select! {
-          _ = &mut drop_rx => {
-            debug!("signal received");
-            tokio::spawn(async move {
-              let stream = stream;
-              broadcast_cancel(&sender, &name).ok();
-              // hack: wait 2 second to flush the mdns udp stream
-              tokio::time::timeout(Duration::from_secs(5), stream.collect::<Vec<_>>()).await.ok();
-            });
-            break;
-          },
           update = update_rx.recv() => {
             if let Some(ack) = update {
               if let Err(e) = broadcast(
@@ -154,6 +138,12 @@ impl MdnsPublisher {
       }
 
       debug!("shutting down");
+      broadcast_cancel(&sender, &name).ok();
+      // hack: wait 2 second to flush the mdns udp stream
+      tokio::time::timeout(Duration::from_secs(2), stream.collect::<Vec<_>>())
+        .await
+        .ok();
+      debug!("exiting");
     }
     .instrument(span!(Level::DEBUG, "mdns_task"));
 
@@ -189,15 +179,6 @@ impl MdnsPublisher {
     tokio::select! {
       _ = delay_for(Duration::from_secs(1)) => Err(Error::MdnsUpdateGameInfo("timeout")),
       r = ack_rx => r.map_err(|_| Error::MdnsUpdateGameInfo("worker dead: recv")),
-    }
-  }
-}
-
-impl std::ops::Drop for MdnsPublisher {
-  fn drop(&mut self) {
-    if let Some(tx) = self.drop_tx.take() {
-      debug!("dropping");
-      tx.send(()).ok();
     }
   }
 }
