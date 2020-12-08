@@ -343,6 +343,7 @@ fn test_open_map() {
     "test_roc.w3m",
     "test_tft.w3x",
     "(4)adrenaline.w3m",
+    "中文\\(2)ConcealedHill.w3x",
   ] {
     let map = W3Map::open(flo_util::sample_path!("map", name)).unwrap();
     // let _data = map.render_preview_png();
