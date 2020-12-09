@@ -135,7 +135,7 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
   Ok(QueryGame { games, has_more })
 }
 
-pub fn delete(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()> {
+pub fn cancel(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()> {
   use game::dsl;
 
   let mut q = game::table.find(game_id).into_boxed();
@@ -147,10 +147,12 @@ pub fn delete(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
-  if status != GameStatus::Preparing {
-    return Err(Error::GameNotDeletable);
+  if status != GameStatus::Preparing && status != GameStatus::Created {
+    return Err(Error::GameNotCancellable);
   }
-  diesel::delete(game::table.find(game_id)).execute(conn)?;
+  diesel::update(game::table.find(game_id))
+    .set(game::status.eq(GameStatus::Ended))
+    .execute(conn)?;
   Ok(())
 }
 
@@ -787,6 +789,16 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
     });
   }
   Ok(games)
+}
+
+pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
+  let t = Utc::now() - chrono::Duration::minutes(30);
+  game::table
+    .select(game::id)
+    .filter(game::status.eq_any(&[GameStatus::Preparing, GameStatus::Created]))
+    .filter(game::updated_at.lt(t))
+    .load(conn)
+    .map_err(Into::into)
 }
 
 pub fn select_node(conn: &DbConn, id: i32, player_id: i32, node_id: Option<i32>) -> Result<()> {

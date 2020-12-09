@@ -9,7 +9,7 @@ use crate::player::session::get_session_update_packet;
 use flo_state::{async_trait, Context, Handler, Message};
 
 pub struct CancelGame {
-  pub player_id: i32,
+  pub player_id: Option<i32>,
 }
 
 impl Message for CancelGame {
@@ -27,7 +27,7 @@ impl Handler<CancelGame> for GameActor {
 
     self
       .db
-      .exec(move |conn| crate::game::db::delete(conn, game_id, Some(player_id)))
+      .exec(move |conn| crate::game::db::cancel(conn, game_id, player_id))
       .await
       .map_err(Error::from)?;
 

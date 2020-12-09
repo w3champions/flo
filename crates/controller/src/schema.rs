@@ -91,4 +91,11 @@ joinable!(game_used_slot -> game (game_id));
 joinable!(game_used_slot -> player (player_id));
 joinable!(player -> api_client (api_client_id));
 
-allow_tables_to_appear_in_same_query!(api_client, game, game_used_slot, map_checksum, node, player,);
+allow_tables_to_appear_in_same_query!(
+    api_client,
+    game,
+    game_used_slot,
+    map_checksum,
+    node,
+    player,
+);

@@ -12,11 +12,13 @@ pub mod status;
 pub use status::{GameSlotClientStatusUpdate, GameStatusUpdate};
 
 use crate::error::*;
-use crate::game::db::get_all_active_game_state;
+use crate::game::db::{get_all_active_game_state, get_expired_games};
 use crate::game::{GameStatus, SlotClientStatus};
 use crate::node::{NodeRegistry, PlayerToken};
 use crate::player::state::sender::PlayerPacketSender;
 
+use crate::game::state::cancel::CancelGame;
+use crate::game::state::registry::Remove;
 use crate::player::state::PlayerRegistry;
 use crate::state::{Data, GetActorEntry};
 use bs_diesel_utils::ExecutorRef;
@@ -24,6 +26,10 @@ use flo_state::*;
 use start::StartGameState;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::time::Duration;
+use tokio::time::delay_for;
+
+const GAME_INACTIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600 * 30);
 
 pub struct GameRegistry {
   db: ExecutorRef,
@@ -97,9 +103,42 @@ impl GameRegistry {
 
     Ok(state)
   }
+
+  async fn remove_expired_games(&mut self, ctx: &mut Context<Self>) -> Result<()> {
+    let ids = self.db.exec(|conn| get_expired_games(conn)).await?;
+
+    let mut cancelled = vec![];
+    for id in ids {
+      if let Some(c) = self.map.get_mut(&id) {
+        if let Err(err) = c.send(CancelGame { player_id: None }).await {
+          tracing::error!(game_id = id, "cancel expired game: {}", err);
+        } else {
+          cancelled.push(id)
+        }
+      }
+    }
+
+    if !cancelled.is_empty() {
+      let addr = ctx.addr();
+      ctx.spawn(async move {
+        for game_id in cancelled {
+          if let Err(err) = addr.send(Remove { game_id }).await {
+            tracing::error!(game_id, "remove cancelled game: {}", err);
+          }
+        }
+      })
+    }
+
+    Ok(())
+  }
 }
 
-impl Actor for GameRegistry {}
+#[async_trait]
+impl Actor for GameRegistry {
+  async fn started(&mut self, ctx: &mut Context<Self>) {
+    self.handle(ctx, RemoveExpiredGames).await;
+  }
+}
 
 #[async_trait]
 impl Service<Data> for GameRegistry {
@@ -120,6 +159,30 @@ impl Handler<GetActorEntry<GameActor>> for GameRegistry {
     message: GetActorEntry<GameActor>,
   ) -> <GetActorEntry<GameActor, i32> as Message>::Result {
     self.map.get(message.key()).map(|v| v.addr())
+  }
+}
+
+struct RemoveExpiredGames;
+
+impl Message for RemoveExpiredGames {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<RemoveExpiredGames> for GameRegistry {
+  async fn handle(
+    &mut self,
+    ctx: &mut Context<Self>,
+    _: RemoveExpiredGames,
+  ) -> <RemoveExpiredGames as Message>::Result {
+    if let Err(err) = self.remove_expired_games(ctx).await {
+      tracing::error!("remove expired games: {}", err);
+    }
+    let addr = ctx.addr();
+    ctx.spawn(async move {
+      delay_for(GAME_INACTIVE_CHECK_INTERVAL).await;
+      addr.notify(RemoveExpiredGames).await.ok();
+    });
   }
 }
 

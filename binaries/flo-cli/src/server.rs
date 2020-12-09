@@ -11,6 +11,7 @@ pub enum Command {
   UpsertPlayer { id: String, name: Option<String> },
   RunGame { player: Vec<i32> },
   StartGame { id: i32 },
+  CancelGame { id: i32 },
 }
 
 impl Command {
@@ -46,6 +47,11 @@ impl Command {
           .await?
           .into_inner();
         tracing::info!("start game: {:?}", res);
+      }
+      Command::CancelGame { id } => {
+        client
+          .cancel_game_as_bot(CancelGameAsBotRequest { game_id: id })
+          .await?;
       }
     }
 

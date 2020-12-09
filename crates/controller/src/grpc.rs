@@ -322,7 +322,12 @@ impl FloController for FloControllerService {
     self
       .state
       .games
-      .send_to(game_id, CancelGame { player_id })
+      .send_to(
+        game_id,
+        CancelGame {
+          player_id: Some(player_id),
+        },
+      )
       .await?;
 
     tracing::debug!(game_id, "shutting down: reason: CancelGame");
@@ -487,10 +492,18 @@ impl FloController for FloControllerService {
     }
   }
 
-  async fn start_game_countdown_as_bot(
+  async fn cancel_game_as_bot(
     &self,
-    _request: Request<StartGameCountdownAsBotRequest>,
+    request: Request<CancelGameAsBotRequest>,
   ) -> Result<Response<()>, Status> {
-    Err(Status::unimplemented("not implemented"))
+    let player_id = request.get_api_player_id();
+    self
+      .cancel_game(Request::new(CancelGameRequest {
+        game_id: request.into_inner().game_id,
+        player_id,
+      }))
+      .await?;
+
+    Ok(Response::new(()))
   }
 }
