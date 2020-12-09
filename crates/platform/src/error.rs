@@ -28,6 +28,10 @@ pub enum Error {
   #[cfg(target_os = "macos")]
   #[error("plist: {0}")]
   PList(#[from] plist::Error),
+
+  #[cfg(target_os = "linux")]
+  #[error("get if addrs: {0}")]
+  GetIfAddrs(std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
