@@ -2659,7 +2659,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "stormlib"
 version = "0.1.1"
-source = "git+https://github.com/wc3tools/stormlib-rs.git#2d5a239ab480fbd4aca55e15b47d757bbba68ca2"
+source = "git+https://github.com/wc3tools/stormlib-rs.git#72ab8dc9ffb0515c36b45a61992fa9a24f56a36f"
 dependencies = [
  "bitflags",
  "libc",
@@ -2671,7 +2671,7 @@ dependencies = [
 [[package]]
 name = "stormlib-sys"
 version = "0.1.1"
-source = "git+https://github.com/wc3tools/stormlib-rs.git#2d5a239ab480fbd4aca55e15b47d757bbba68ca2"
+source = "git+https://github.com/wc3tools/stormlib-rs.git#72ab8dc9ffb0515c36b45a61992fa9a24f56a36f"
 dependencies = [
  "bitflags",
  "cmake",
