@@ -103,6 +103,11 @@ impl ClientPlatformInfo {
     })
   }
 
+  #[cfg(target_os = "linux")]
+  pub fn with_config(_config: &ClientConfig) -> Result<Self> {
+    unimplemented!();
+  }
+
   pub fn from_env() -> Result<Self> {
     dotenv::dotenv().ok();
     let config = ClientConfig::from_env()?;

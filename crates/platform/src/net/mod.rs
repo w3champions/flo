@@ -10,6 +10,11 @@ mod macos;
 #[cfg(target_os = "macos")]
 pub use self::macos::*;
 
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+pub use self::linux::*;
+
 #[derive(Debug)]
 pub struct IpInfo {
   pub ips_v4: Vec<Ipv4Addr>,
