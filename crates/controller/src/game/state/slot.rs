@@ -67,7 +67,7 @@ impl Handler<UpdateSlot> for GameActor {
       .filter_map(|s| s.player.as_ref().map(|p| p.id))
       .collect();
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(players, frames_slot_update)
       .await?;
 

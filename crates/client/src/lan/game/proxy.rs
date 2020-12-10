@@ -57,6 +57,7 @@ impl LanProxy {
 
     tracing::debug!("listening on port {}", port);
 
+    let game_id = info.game.game_id;
     let state = Arc::new(State {
       info,
       stream: node_stream.handle(),
@@ -76,7 +77,10 @@ impl LanProxy {
           tracing::error!("lan: {}", res);
         }
 
-        client.notify(LanEvent::LanGameDisconnected).await.ok();
+        client
+          .notify(LanEvent::LanGameDisconnected { game_id })
+          .await
+          .ok();
         tracing::debug!("exiting");
       }
       .instrument(tracing::debug_span!("worker"))

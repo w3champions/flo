@@ -71,13 +71,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
         return Ok(());
       }
 
-      let receiver = {
-        let (sender, r) = PlayerSender::new(player_id);
-        state.players.send(Connect { sender }).await?;
-        r
-      };
-
-      if let Err(err) = handle_stream(state.clone(), player_id, stream, receiver).await {
+      if let Err(err) = handle_stream(state.clone(), player_id, stream).await {
         tracing::debug!("stream error: {}", err);
       }
 
@@ -97,9 +91,10 @@ async fn handle_stream(
   state: ControllerStateRef,
   player_id: i32,
   mut stream: FloStream,
-  mut receiver: PlayerReceiver,
 ) -> Result<()> {
-  send_initial_state(state.clone(), &mut stream, player_id).await?;
+  let (sender, mut receiver) = PlayerSender::new(player_id);
+
+  send_initial_state(state.clone(), &mut stream, sender).await?;
 
   let stop_watch = StopWatch::new();
   let ping_timeout_notify = Arc::new(Notify::new());
@@ -196,8 +191,10 @@ async fn handle_stream(
 async fn send_initial_state(
   state: ControllerStateRef,
   stream: &mut FloStream,
-  player_id: i32,
+  sender: PlayerSender,
 ) -> Result<()> {
+  let player_id = sender.player_id();
+
   let (player, active_slots) = state
     .db
     .exec(move |conn| -> Result<_> {
@@ -209,6 +206,14 @@ async fn send_initial_state(
     .await?;
 
   let game_id = active_slots.last().map(|s| s.game_id);
+
+  state
+    .players
+    .notify(Connect {
+      game_id: game_id.clone(),
+      sender,
+    })
+    .await?;
 
   let mut frames = vec![connect::PacketClientConnectAccept {
     lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),

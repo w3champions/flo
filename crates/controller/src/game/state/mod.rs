@@ -15,7 +15,7 @@ use crate::error::*;
 use crate::game::db::{get_all_active_game_state, get_expired_games};
 use crate::game::{GameStatus, SlotClientStatus};
 use crate::node::{NodeRegistry, PlayerToken};
-use crate::player::state::sender::PlayerPacketSender;
+use crate::player::state::sender::PlayerRegistryHandle;
 
 use crate::game::state::cancel::CancelGame;
 use crate::game::state::registry::Remove;
@@ -33,7 +33,7 @@ const GAME_INACTIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600 * 30);
 
 pub struct GameRegistry {
   db: ExecutorRef,
-  player_packet_sender: PlayerPacketSender,
+  players: PlayerRegistryHandle,
   nodes: Addr<NodeRegistry>,
   map: BTreeMap<i32, Container<GameActor>>,
   player_games_map: BTreeMap<i32, Vec<i32>>,
@@ -44,7 +44,7 @@ pub struct GameRegistry {
 impl GameRegistry {
   pub async fn init(
     db: ExecutorRef,
-    player_packet_sender: PlayerPacketSender,
+    player_packet_sender: PlayerRegistryHandle,
     nodes: Addr<NodeRegistry>,
   ) -> Result<GameRegistry> {
     let games = db.exec(|conn| get_all_active_game_state(conn)).await?;
@@ -78,7 +78,7 @@ impl GameRegistry {
         Container::new(GameActor {
           game_id: game.id,
           db: db.clone(),
-          player_packet_sender: player_packet_sender.clone(),
+          player_reg: player_packet_sender.clone(),
           nodes: nodes.clone(),
           status: game.status,
           host_player: game.created_by,
@@ -93,7 +93,7 @@ impl GameRegistry {
 
     let state = GameRegistry {
       db: db.clone(),
-      player_packet_sender: player_packet_sender.clone(),
+      players: player_packet_sender.clone(),
       nodes: nodes.clone(),
       map,
       player_games_map,
@@ -189,7 +189,7 @@ impl Handler<RemoveExpiredGames> for GameRegistry {
 pub struct GameActor {
   pub game_id: i32,
   pub db: ExecutorRef,
-  pub player_packet_sender: PlayerPacketSender,
+  pub player_reg: PlayerRegistryHandle,
   pub nodes: Addr<NodeRegistry>,
   pub status: GameStatus,
   pub host_player: i32,

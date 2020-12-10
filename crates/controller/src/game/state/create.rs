@@ -3,10 +3,7 @@ use crate::game::db::{CreateGameAsBotParams, CreateGameParams};
 use crate::game::state::registry::Register;
 use crate::game::state::GameRegistry;
 use crate::game::{Game, GameStatus};
-use crate::player::session::get_session_update_packet;
-use flo_net::packet::FloPacket;
 use flo_state::{async_trait, Context, Handler, Message};
-use s2_grpc_utils::S2ProtoPack;
 
 pub struct CreateGame {
   pub params: CreateGameParams,
@@ -37,18 +34,10 @@ impl Handler<CreateGame> for GameRegistry {
       node_id: None,
     });
 
-    let frames = {
-      use flo_net::proto::flo_connect::*;
-      vec![
-        get_session_update_packet(Some(game.id)).encode_as_frame()?,
-        PacketGameInfo {
-          game: Some(game.clone().pack()?),
-        }
-        .encode_as_frame()?,
-      ]
-    };
-
-    self.player_packet_sender.send(player_id, frames).await?;
+    self
+      .players
+      .player_replace_game(player_id, game.clone())
+      .await?;
 
     Ok(game)
   }
@@ -90,20 +79,9 @@ impl Handler<CreateGameAsBot> for GameRegistry {
       node_id: game.node.as_ref().map(|v| v.id),
     });
 
-    let frames = {
-      use flo_net::proto::flo_connect::*;
-      vec![
-        get_session_update_packet(Some(game.id)).encode_as_frame()?,
-        PacketGameInfo {
-          game: Some(game.clone().pack()?),
-        }
-        .encode_as_frame()?,
-      ]
-    };
-
     self
-      .player_packet_sender
-      .broadcast(player_ids, frames)
+      .players
+      .players_replace_game(player_ids, game.clone())
       .await?;
 
     Ok(game)

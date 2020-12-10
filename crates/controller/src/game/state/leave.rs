@@ -2,7 +2,6 @@ use crate::error::*;
 use crate::game::state::GameActor;
 use crate::game::{GameStatus, SlotClientStatus};
 use crate::node::{messages as node_messages, PlayerLeaveResponse};
-use crate::player::session::get_session_update_packet;
 use crate::player::state::sender::PlayerFrames;
 use crate::state::ActorMapExt;
 use diesel::prelude::*;
@@ -58,11 +57,8 @@ impl Handler<PlayerLeave> for GameActor {
     };
 
     self
-      .player_packet_sender
-      .send(
-        player_id,
-        get_session_update_packet(None).encode_as_frame()?,
-      )
+      .player_reg
+      .player_leave_game(player_id, self.game_id)
       .await?;
 
     Ok(result)
@@ -174,7 +170,7 @@ async fn leave_game_abort(
   }
   .encode_as_frame()?;
   state
-    .player_packet_sender
+    .player_reg
     .broadcast(active_player_ids.clone(), frame)
     .await?;
 
@@ -200,25 +196,17 @@ async fn broadcast(
   recipient_players: &[i32],
 ) -> Result<()> {
   if ended {
-    let frame_update_session = proto::flo_connect::PacketPlayerSessionUpdate {
-      status: proto::flo_connect::PlayerStatus::Idle.into(),
-      game_id: None,
-    }
-    .encode_as_frame()?;
-
     state
-      .player_packet_sender
-      .broadcast(left_players.to_vec(), frame_update_session)
+      .player_reg
+      .players_leave_game(left_players.to_vec(), game_id)
       .await?;
   } else {
     let mut frame_map = BTreeMap::<i32, PlayerFrames>::new();
 
-    let frame_self_session_update = proto::flo_connect::PacketPlayerSessionUpdate {
-      status: proto::flo_connect::PlayerStatus::Idle.into(),
-      game_id: None,
-    }
-    .encode_as_frame()?;
-    frame_map.insert(player_id, frame_self_session_update.into());
+    state
+      .player_reg
+      .player_leave_game(player_id, game_id)
+      .await?;
 
     let frame_player_leave = proto::flo_connect::PacketGamePlayerLeave {
       game_id,
@@ -231,7 +219,7 @@ async fn broadcast(
       frame_map.insert(*id, frame_player_leave.clone().into());
     }
 
-    state.player_packet_sender.broadcast_map(frame_map).await?;
+    state.player_reg.broadcast_map(frame_map).await?;
   }
   Ok(())
 }

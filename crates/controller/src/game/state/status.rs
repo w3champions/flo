@@ -1,7 +1,6 @@
 use crate::error::*;
 use crate::game::state::GameActor;
 use crate::game::{db, GameStatus, NodeGameStatus, SlotClientStatus};
-use crate::player::session::get_session_update_packet;
 use crate::player::state::sender::PlayerFrames;
 use flo_net::packet::FloPacket;
 use flo_net::proto;
@@ -53,7 +52,7 @@ impl Handler<GameSlotClientStatusUpdate> for GameActor {
     pkt.set_status(status.into_proto_enum());
 
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(self.players.clone(), pkt.encode_as_frame()?)
       .await?;
 
@@ -103,29 +102,21 @@ impl Handler<GameStatusUpdate> for GameActor {
     let frame_iter = self
       .players
       .iter()
-      .map(|player_id| {
-        // update player session if the player is still in game
-        if ended {
-          get_session_update_packet(None)
-            .encode_as_frame()
-            .map(|frame_session_update| {
-              (
-                *player_id,
-                PlayerFrames::from(vec![frame_game_status.clone(), frame_session_update]),
-              )
-            })
-            .map_err(Error::from)
-        } else {
-          Ok((*player_id, PlayerFrames::from(frame_game_status.clone())))
-        }
-      })
-      .collect::<Result<Vec<_>>>()?;
+      .map(|player_id| (*player_id, PlayerFrames::from(frame_game_status.clone())))
+      .collect::<Vec<_>>();
 
     self
       .player_client_status_map
       .extend(message.updated_player_game_client_status_map);
 
-    self.player_packet_sender.broadcast_map(frame_iter).await?;
+    self.player_reg.broadcast_map(frame_iter).await?;
+
+    if ended {
+      self
+        .player_reg
+        .players_leave_game(self.players.clone(), self.game_id)
+        .await?;
+    }
 
     Ok(self.status)
   }

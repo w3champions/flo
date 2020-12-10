@@ -129,7 +129,7 @@ impl Handler<UpdateLanGameStatus> for Lan {
     };
 
     if game.game_id() != game_id {
-      tracing::error!("game id mismatch");
+      tracing::error!("UpdateLanGameStatus: game id mismatch");
       return Ok(());
     }
 
@@ -170,7 +170,7 @@ impl Handler<UpdateLanGamePlayerStatus> for Lan {
     };
 
     if game.game_id() != game_id {
-      tracing::warn!("game id mismatch");
+      tracing::warn!("UpdateLanGamePlayerStatus: game id mismatch");
       return Ok(());
     }
 
@@ -180,7 +180,9 @@ impl Handler<UpdateLanGamePlayerStatus> for Lan {
   }
 }
 
-pub struct StopLanGame;
+pub struct StopLanGame {
+  pub game_id: i32,
+}
 
 impl Message for StopLanGame {
   type Result = ();
@@ -191,8 +193,27 @@ impl Handler<StopLanGame> for Lan {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    _: StopLanGame,
+    StopLanGame { game_id }: StopLanGame,
   ) -> <StopLanGame as Message>::Result {
+    if self.active_game.as_ref().map(|g| g.game_id()) == Some(game_id) {
+      self.active_game.take();
+    }
+  }
+}
+
+pub struct KillLanGame;
+
+impl Message for KillLanGame {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<KillLanGame> for Lan {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: KillLanGame,
+  ) -> <KillLanGame as Message>::Result {
     self.active_game.take();
   }
 }
@@ -214,8 +235,13 @@ pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
 
 #[derive(Debug)]
 pub enum LanEvent {
-  LanGameDisconnected,
-  NodeStreamEvent(NodeStreamEvent),
+  LanGameDisconnected {
+    game_id: i32,
+  },
+  NodeStreamEvent {
+    game_id: i32,
+    inner: NodeStreamEvent,
+  },
 }
 
 impl Message for LanEvent {

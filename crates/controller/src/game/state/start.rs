@@ -51,7 +51,7 @@ impl Handler<StartGameCheck> for GameActor {
 
     let frame = proto::flo_connect::PacketGameStarting { game_id }.encode_as_frame()?;
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(self.players.clone(), frame)
       .await?;
 
@@ -97,7 +97,7 @@ impl GameActor {
       };
       let frame = pkt.encode_as_frame()?;
       self
-        .player_packet_sender
+        .player_reg
         .broadcast(self.players.clone(), frame)
         .await?;
 
@@ -201,7 +201,7 @@ impl GameActor {
       .iter()
       .map(|(player_id, token)| (*player_id, token.bytes))
       .collect();
-    self.player_packet_sender.broadcast_map(packet_iter).await?;
+    self.player_reg.broadcast_map(packet_iter).await?;
 
     self
       .db
@@ -260,7 +260,7 @@ impl GameActor {
     }
 
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(self.players.clone(), frame)
       .await?;
 
@@ -461,7 +461,7 @@ impl Handler<StartGamePlayerAck> for GameActor {
             start_state.reply_api(StartGameCheckAsBotResult::Rejected(pkt));
           } else {
             self
-              .player_packet_sender
+              .player_reg
               .send(self.host_player, pkt.encode_as_frame()?)
               .await?;
           }
@@ -473,7 +473,7 @@ impl Handler<StartGamePlayerAck> for GameActor {
             ..Default::default()
           };
           self
-            .player_packet_sender
+            .player_reg
             .send(self.host_player, pkt.encode_as_frame()?)
             .await?;
           if start_state.by_api() {
@@ -544,7 +544,7 @@ impl Handler<StartGameCheckAsBot> for GameActor {
 
     let frame = proto::flo_connect::PacketGameStarting { game_id }.encode_as_frame()?;
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(self.players.clone(), frame)
       .await?;
 

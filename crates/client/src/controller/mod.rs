@@ -7,7 +7,8 @@ use crate::controller::stream::{ControllerEvent, ControllerEventData, PlayerSess
 pub use crate::controller::stream::{ControllerStream, SendFrame};
 use crate::error::*;
 use crate::lan::{
-  Lan, LanEvent, ReplaceLanGame, StopLanGame, UpdateLanGamePlayerStatus, UpdateLanGameStatus,
+  KillLanGame, Lan, LanEvent, ReplaceLanGame, StopLanGame, UpdateLanGamePlayerStatus,
+  UpdateLanGameStatus,
 };
 use crate::message::message::{self, OutgoingMessage};
 use crate::message::ConnectController;
@@ -202,12 +203,22 @@ impl Handler<ControllerEvent> for ControllerClient {
           }
           ControllerEventData::PlayerSessionUpdate(event) => match event {
             PlayerSessionUpdateEvent::Full(session) => {
+              tracing::info!(
+                player_id = session.player.id,
+                "player session replaced: game_id = {:?}",
+                session.game_id
+              );
               self.current_session.replace(session);
             }
             PlayerSessionUpdateEvent::Partial(update) => {
               if let Some(current) = self.current_session.as_mut() {
                 current.game_id = update.game_id;
                 current.status = update.status;
+                tracing::info!(
+                  player_id = current.player.id,
+                  "player session updated: game_id = {:?}",
+                  current.game_id
+                );
               } else {
                 tracing::error!(
                   "PlayerSessionUpdateEvent emitted by there is no active player session."
@@ -220,7 +231,7 @@ impl Handler<ControllerEvent> for ControllerClient {
               tracing::debug!(game_id = game_info.game_id, "game info update");
             }
             None => {
-              self.lan.notify(StopLanGame).await.ok();
+              self.lan.notify(KillLanGame).await.ok();
             }
           },
           ControllerEventData::GameReceived(event) => {
@@ -349,10 +360,10 @@ impl Handler<LanEvent> for ControllerClient {
     message: LanEvent,
   ) -> <LanEvent as Message>::Result {
     match message {
-      LanEvent::LanGameDisconnected => {
-        self.lan.notify(StopLanGame).await.ok();
+      LanEvent::LanGameDisconnected { game_id } => {
+        self.lan.notify(StopLanGame { game_id }).await.ok();
       }
-      LanEvent::NodeStreamEvent(event) => match event {
+      LanEvent::NodeStreamEvent { game_id, inner } => match inner {
         NodeStreamEvent::SlotClientStatusUpdate(update) => {
           self
             .ws_send(OutgoingMessage::GameSlotClientStatusUpdate(update.clone()))
@@ -426,7 +437,7 @@ impl Handler<LanEvent> for ControllerClient {
           }
         }
         NodeStreamEvent::Disconnected => {
-          self.lan.notify(StopLanGame).await.ok();
+          self.lan.notify(StopLanGame { game_id }).await.ok();
         }
       },
     }

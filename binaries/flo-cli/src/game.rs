@@ -13,9 +13,12 @@ pub async fn create_game(players: Vec<i32>) -> Result<i32> {
 
   tracing::info!(node_id);
 
+  let game_name = format!("GAME-{:x}", rand::random::<u32>());
+  tracing::info!("game name = {}", game_name);
+
   let res = client
     .create_game_as_bot(CreateGameAsBotRequest {
-      name: "TEST".to_string(),
+      name: game_name,
       map: Some(get_map()?),
       node_id,
       slots: players

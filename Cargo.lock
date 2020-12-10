@@ -730,6 +730,7 @@ dependencies = [
  "flo-net",
  "flo-w3map",
  "flo-w3storage",
+ "rand",
  "structopt",
  "tokio",
  "tonic",

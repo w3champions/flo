@@ -5,7 +5,6 @@ use crate::player::state::sender::PlayerFrames;
 
 use flo_net::packet::FloPacket;
 
-use crate::player::session::get_session_update_packet;
 use flo_state::{async_trait, Context, Handler, Message};
 
 pub struct CancelGame {
@@ -31,6 +30,11 @@ impl Handler<CancelGame> for GameActor {
       .await
       .map_err(Error::from)?;
 
+    self
+      .player_reg
+      .players_leave_game(self.players.clone(), game_id)
+      .await?;
+
     let packet_iter = self
       .players
       .iter()
@@ -44,17 +48,12 @@ impl Handler<CancelGame> for GameActor {
         }
         .encode_as_frame()?;
 
-        let frame_session_update = get_session_update_packet(None).encode_as_frame()?;
-
-        Ok((
-          player_id,
-          PlayerFrames::from(vec![frame_left, frame_session_update]),
-        ))
+        Ok((player_id, PlayerFrames::from(frame_left)))
       })
       .collect::<Result<Vec<_>>>()?
       .into_iter();
 
-    self.player_packet_sender.broadcast_map(packet_iter).await?;
+    self.player_reg.broadcast_map(packet_iter).await?;
 
     Ok(())
   }

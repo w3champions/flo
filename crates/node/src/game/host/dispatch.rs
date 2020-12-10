@@ -65,12 +65,15 @@ impl Dispatcher {
     let (start_tx, start_rx) = oneshot::channel();
     let (action_tx, action_rx) = channel(10);
 
-    tokio::spawn(Self::tick(
-      state.player_map.clone(),
-      start_rx,
-      action_rx,
-      scope.handle(),
-    ));
+    tokio::spawn(
+      Self::tick(
+        state.player_map.clone(),
+        start_rx,
+        action_rx,
+        scope.handle(),
+      )
+      .instrument(tracing::debug_span!("tick_worker", game_id)),
+    );
 
     tokio::spawn(
       Self::serve(state, rx, action_tx, out_tx, scope.handle())

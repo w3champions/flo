@@ -36,7 +36,7 @@ impl Handler<SelectNode> for GameActor {
 
     let frame = proto::flo_connect::PacketGameSelectNode { game_id, node_id }.encode_as_frame()?;
     self
-      .player_packet_sender
+      .player_reg
       .broadcast(self.players.clone(), frame)
       .await?;
 

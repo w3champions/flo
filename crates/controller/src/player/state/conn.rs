@@ -4,6 +4,7 @@ use crate::player::state::PlayerState;
 use flo_state::{async_trait, Context, Handler, Message};
 
 pub struct Connect {
+  pub game_id: Option<i32>,
   pub sender: PlayerSender,
 }
 
@@ -15,9 +16,10 @@ impl Message for Connect {
 impl Handler<Connect> for PlayerRegistry {
   async fn handle(&mut self, _: &mut Context<Self>, message: Connect) {
     let player_id = message.sender.player_id();
-    let removed = self
-      .registry
-      .insert(player_id, PlayerState::new(player_id, message.sender));
+    let removed = self.registry.insert(
+      player_id,
+      PlayerState::new(player_id, message.game_id, message.sender),
+    );
     if let Some(state) = removed {
       state.shutdown().await;
     }

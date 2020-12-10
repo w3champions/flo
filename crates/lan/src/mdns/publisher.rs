@@ -33,9 +33,9 @@ pub struct MdnsPublisher {
 
 impl MdnsPublisher {
   pub async fn start(game_info: GameInfo) -> Result<Self> {
-    let name = game_info.name.to_string_lossy();
-    let label = if name.bytes().len() > 31 {
-      let name = name
+    let game_name = game_info.name.to_string_lossy();
+    let label = if game_name.bytes().len() > 31 {
+      let name = game_name
         .char_indices()
         .filter_map(|(i, c)| {
           if i < 31 || (i == 31 && c.len_utf8() == 1) {
@@ -47,7 +47,7 @@ impl MdnsPublisher {
         .collect::<String>();
       std::borrow::Cow::Owned(name)
     } else {
-      name
+      game_name
     };
     let name = Name::from_labels(
       Some(label.as_bytes())
@@ -80,6 +80,7 @@ impl MdnsPublisher {
     let mut stream = connect.await.map_err(Error::MdnsStreamBroken)?;
 
     let task_game_info = game_info.clone();
+    let name_string = name.to_string();
     let task = async move {
       debug!("started");
 
@@ -145,7 +146,11 @@ impl MdnsPublisher {
         .ok();
       debug!("exiting");
     }
-    .instrument(span!(Level::DEBUG, "mdns_task"));
+    .instrument(span!(
+      Level::DEBUG,
+      "mdns_task",
+      name = &name_string as &str
+    ));
 
     tokio::spawn(task);
 
@@ -314,6 +319,8 @@ fn broadcast(
 
 fn broadcast_cancel(sender: &BufStreamHandle, name: &Name) -> Result<()> {
   let mut msg = Message::new();
+
+  tracing::debug!("cancel name: {:?}", name);
 
   msg
     .set_message_type(MessageType::Response)

@@ -1,7 +1,11 @@
 use super::{PlayerRegistry, PlayerState};
 use crate::error::*;
-use flo_net::packet::Frame;
+use crate::game::Game;
+use crate::player::session::get_session_update_packet;
+use flo_net::packet::{FloPacket, Frame};
 use flo_state::{async_trait, Addr, Context, Handler, Message};
+use s2_grpc_utils::S2ProtoPack;
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
@@ -55,6 +59,144 @@ impl Handler<BroadcastMap> for PlayerRegistry {
     for (player_id, frames) in map {
       send_to_player(&mut self.registry, player_id, frames);
     }
+  }
+}
+
+pub struct PlayerReplaceGame {
+  pub player_id: i32,
+  pub game: Game,
+}
+
+impl Message for PlayerReplaceGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<PlayerReplaceGame> for PlayerRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    PlayerReplaceGame { player_id, game }: PlayerReplaceGame,
+  ) -> Result<()> {
+    use flo_net::proto::flo_connect::*;
+
+    if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
+      let frames = vec![
+        get_session_update_packet(Some(game.id)).encode_as_frame()?,
+        PacketGameInfo {
+          game: Some(game.pack()?),
+        }
+        .encode_as_frame()?,
+      ];
+      if !entry.get_mut().try_send_frames(frames.into()) {
+        entry.remove();
+      }
+    }
+
+    Ok(())
+  }
+}
+
+pub struct PlayersReplaceGame {
+  pub player_ids: Vec<i32>,
+  pub game: Game,
+}
+
+impl Message for PlayersReplaceGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<PlayersReplaceGame> for PlayerRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    PlayersReplaceGame { player_ids, game }: PlayersReplaceGame,
+  ) -> Result<()> {
+    use flo_net::proto::flo_connect::*;
+
+    let frames = vec![
+      get_session_update_packet(Some(game.id)).encode_as_frame()?,
+      PacketGameInfo {
+        game: Some(game.pack()?),
+      }
+      .encode_as_frame()?,
+    ];
+
+    for player_id in player_ids {
+      if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
+        if !entry.get_mut().try_send_frames(frames.clone().into()) {
+          entry.remove();
+        }
+      }
+    }
+
+    Ok(())
+  }
+}
+
+pub struct PlayerLeaveGame {
+  pub player_id: i32,
+  pub game_id: i32,
+}
+
+impl Message for PlayerLeaveGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<PlayerLeaveGame> for PlayerRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    PlayerLeaveGame { player_id, game_id }: PlayerLeaveGame,
+  ) -> Result<()> {
+    if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
+      if entry.get().game_id == Some(game_id) {
+        if !entry
+          .get_mut()
+          .sender
+          .try_send(get_session_update_packet(None).encode_as_frame()?)
+        {
+          entry.remove();
+        } else {
+          entry.get_mut().game_id = Some(game_id);
+        }
+      } else {
+        tracing::debug!(player_id, game_id, "leave game message ignored");
+      }
+    }
+
+    Ok(())
+  }
+}
+
+pub struct PlayersLeaveGame {
+  pub player_ids: Vec<i32>,
+  pub game_id: i32,
+}
+
+impl Message for PlayersLeaveGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<PlayersLeaveGame> for PlayerRegistry {
+  async fn handle(
+    &mut self,
+    ctx: &mut Context<Self>,
+    PlayersLeaveGame {
+      player_ids,
+      game_id,
+    }: PlayersLeaveGame,
+  ) -> Result<()> {
+    for player_id in player_ids {
+      self
+        .handle(ctx, PlayerLeaveGame { player_id, game_id })
+        .await?;
+    }
+
+    Ok(())
   }
 }
 
@@ -119,15 +261,8 @@ impl Iterator for PlayerFramesIntoIterator {
 fn send_to_player(map: &mut BTreeMap<i32, PlayerState>, player_id: i32, frames: PlayerFrames) {
   let remove = {
     let entry = map.get_mut(&player_id);
-    let mut broken = false;
     if let Some(entry) = entry {
-      for frame in frames {
-        if !entry.sender.try_send(frame) {
-          broken = true;
-          break;
-        }
-      }
-      broken
+      !entry.try_send_frames(frames)
     } else {
       false
     }
@@ -139,8 +274,8 @@ fn send_to_player(map: &mut BTreeMap<i32, PlayerState>, player_id: i32, frames: 
 }
 
 #[derive(Clone)]
-pub struct PlayerPacketSender(Addr<PlayerRegistry>);
-impl PlayerPacketSender {
+pub struct PlayerRegistryHandle(Addr<PlayerRegistry>);
+impl PlayerRegistryHandle {
   pub async fn send<T>(&self, player_id: i32, frames: T) -> Result<()>
   where
     T: Into<PlayerFrames>,
@@ -181,9 +316,41 @@ impl PlayerPacketSender {
       .await?;
     Ok(())
   }
+
+  pub async fn player_replace_game(&self, player_id: i32, game: Game) -> Result<()> {
+    self.0.send(PlayerReplaceGame { player_id, game }).await??;
+    Ok(())
+  }
+
+  pub async fn players_replace_game(&self, player_ids: Vec<i32>, game: Game) -> Result<()> {
+    self
+      .0
+      .send(PlayersReplaceGame { player_ids, game })
+      .await??;
+    Ok(())
+  }
+
+  pub async fn players_leave_game(&self, player_ids: Vec<i32>, game_id: i32) -> Result<()> {
+    self
+      .0
+      .send(PlayersLeaveGame {
+        player_ids,
+        game_id,
+      })
+      .await??;
+    Ok(())
+  }
+
+  pub async fn player_leave_game(&self, player_id: i32, game_id: i32) -> Result<()> {
+    self
+      .0
+      .send(PlayerLeaveGame { player_id, game_id })
+      .await??;
+    Ok(())
+  }
 }
 
-impl From<Addr<PlayerRegistry>> for PlayerPacketSender {
+impl From<Addr<PlayerRegistry>> for PlayerRegistryHandle {
   fn from(value: Addr<PlayerRegistry>) -> Self {
     Self(value)
   }

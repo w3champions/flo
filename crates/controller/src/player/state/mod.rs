@@ -8,6 +8,7 @@ use crate::state::Data;
 use flo_state::{async_trait, Actor, RegistryRef, Service};
 use flo_types::ping::PingStats;
 
+use crate::player::state::sender::PlayerFrames;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
@@ -38,17 +39,29 @@ impl Service<Data> for PlayerRegistry {
 pub struct PlayerState {
   pub player_id: i32,
   pub ping_map: BTreeMap<i32, PingStats>,
+  pub game_id: Option<i32>,
   pub sender: PlayerSender,
 }
 
 impl PlayerState {
-  fn new(player_id: i32, sender: PlayerSender) -> PlayerState {
+  fn new(player_id: i32, game_id: Option<i32>, sender: PlayerSender) -> PlayerState {
     Self {
       player_id,
+      game_id,
       ping_map: Default::default(),
       sender,
     }
   }
+
+  fn try_send_frames(&mut self, frames: PlayerFrames) -> bool {
+    for frame in frames {
+      if !self.sender.try_send(frame) {
+        return false;
+      }
+    }
+    true
+  }
+
   async fn shutdown(mut self) {
     self.sender.disconnect_multi().await;
   }

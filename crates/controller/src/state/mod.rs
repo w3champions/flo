@@ -12,7 +12,7 @@ use crate::node::NodeRegistry;
 use crate::player::state::PlayerRegistry;
 
 use crate::config::ConfigStorage;
-use crate::player::state::sender::PlayerPacketSender;
+use crate::player::state::sender::PlayerRegistryHandle;
 pub use actor_map::{ActorMapExt, GetActorEntry};
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct ControllerState {
   pub nodes: Addr<NodeRegistry>,
   pub games: Addr<GameRegistry>,
   pub players: Addr<PlayerRegistry>,
-  pub player_packet_sender: PlayerPacketSender,
+  pub player_packet_sender: PlayerRegistryHandle,
   pub config: Addr<ConfigStorage>,
 }
 
@@ -54,7 +54,7 @@ impl ControllerState {
       nodes,
       games,
       players: players.clone(),
-      player_packet_sender: PlayerPacketSender::from(players),
+      player_packet_sender: PlayerRegistryHandle::from(players),
       config,
     })
   }

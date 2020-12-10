@@ -43,7 +43,7 @@ impl GameRegistry {
       Container::new(GameActor {
         game_id: id,
         db: self.db.clone(),
-        player_packet_sender: self.player_packet_sender.clone(),
+        player_reg: self.players.clone(),
         nodes: self.nodes.clone(),
         status,
         host_player,

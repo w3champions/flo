@@ -113,9 +113,10 @@ impl NodeStream {
     let client = state.client.clone();
 
     if client
-      .notify(LanEvent::NodeStreamEvent(
-        NodeStreamEvent::GameInitialStatus(initial_status),
-      ))
+      .notify(LanEvent::NodeStreamEvent {
+        game_id: state.game_id,
+        inner: NodeStreamEvent::GameInitialStatus(initial_status),
+      })
       .await
       .is_err()
     {
@@ -142,7 +143,7 @@ impl NodeStream {
                   }
                 }
                 _ => {
-                  if let Err(err) = Self::handle_node_frame(&client, frame).await {
+                  if let Err(err) = Self::handle_node_frame(state.game_id, &client, frame).await {
                     tracing::debug!("handle node frame: {}", err);
                     break;
                   }
@@ -151,12 +152,18 @@ impl NodeStream {
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::debug!("stream closed");
-              client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
+              client.notify(LanEvent::NodeStreamEvent {
+                game_id: state.game_id,
+                inner: NodeStreamEvent::Disconnected
+              }).await.ok();
               break;
             },
             Err(err) => {
               tracing::error!("stream recv: {}", err);
-              client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
+              client.notify(LanEvent::NodeStreamEvent {
+                game_id: state.game_id,
+                inner: NodeStreamEvent::Disconnected
+              }).await.ok();
               break;
             }
           }
@@ -167,7 +174,10 @@ impl NodeStream {
             Some(frame) => {
               if let Err(err) = stream.send_frame(frame).await {
                 tracing::error!("stream send: {}", err);
-                client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await.ok();
+                client.notify(LanEvent::NodeStreamEvent {
+                  game_id: state.game_id,
+                  inner: NodeStreamEvent::Disconnected
+                }).await.ok();
                 break;
               }
             },
@@ -188,28 +198,41 @@ impl NodeStream {
     tracing::debug!("exiting...");
   }
 
-  async fn handle_node_frame(client: &Addr<ControllerClient>, frame: Frame) -> Result<()> {
+  async fn handle_node_frame(
+    game_id: i32,
+    client: &Addr<ControllerClient>,
+    frame: Frame,
+  ) -> Result<()> {
     flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientUpdateSlotClientStatus => {
           tracing::debug!(game_id = p.game_id, player_id = p.player_id, "update slot client status: {:?}", p.status());
           flo_log::result_ok!(
             "send NodeStreamEvent::SlotClientStatusUpdate",
-            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::SlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?))).await
+            client.notify(LanEvent::NodeStreamEvent {
+              game_id,
+              inner: NodeStreamEvent::SlotClientStatusUpdate(S2ProtoUnpack::unpack(p)?)
+            }).await
           );
         }
         p: proto::PacketClientUpdateSlotClientStatusReject => {
           tracing::error!(game_id = p.game_id, player_id = p.player_id, "update slot client status rejected: {:?}", p.reason());
           flo_log::result_ok!(
             "send NodeStreamEvent::Disconnected",
-            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::Disconnected)).await
+            client.notify(LanEvent::NodeStreamEvent {
+              game_id,
+              inner: NodeStreamEvent::Disconnected
+            }).await
           );
         }
         p: flo_net::proto::flo_node::PacketNodeGameStatusUpdate => {
           tracing::debug!(game_id = p.game_id, "update game status: {:?}", p);
           flo_log::result_ok!(
             "send NodeStreamEvent::GameStatusUpdate",
-            client.notify(LanEvent::NodeStreamEvent(NodeStreamEvent::GameStatusUpdate(p.into()))).await
+            client.notify(LanEvent::NodeStreamEvent {
+              game_id,
+              inner: NodeStreamEvent::GameStatusUpdate(p.into())
+            }).await
           );
         }
       }

@@ -38,24 +38,8 @@ impl Handler<PlayerJoin> for GameActor {
 
     // send game info to joined player
     self
-      .player_packet_sender
-      .send(
-        player_id,
-        vec![
-          proto::flo_connect::PacketPlayerSessionUpdate {
-            status: proto::flo_connect::PlayerStatus::InGame.into(),
-            game_id: Some(game_id),
-          }
-          .encode_as_frame()?,
-          {
-            let next_game = game.clone().pack()?;
-            proto::flo_connect::PacketGameInfo {
-              game: Some(next_game),
-            }
-          }
-          .encode_as_frame()?,
-        ],
-      )
+      .player_reg
+      .player_replace_game(player_id, game.clone())
       .await?;
 
     {
@@ -81,7 +65,7 @@ impl Handler<PlayerJoin> for GameActor {
         }
       }
       .encode_as_frame()?;
-      self.player_packet_sender.broadcast(players, frame).await?;
+      self.player_reg.broadcast(players, frame).await?;
     }
 
     Ok(game)

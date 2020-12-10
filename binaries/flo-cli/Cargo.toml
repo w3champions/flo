@@ -21,3 +21,4 @@ structopt = "0.3.15"
 tracing = "0.1"
 tracing-futures = "0.2.4"
 tokio = { version = "0.2", features = ["macros"] }
+rand = "0.7.3"
