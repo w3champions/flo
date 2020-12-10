@@ -28,7 +28,7 @@ fn main() {
   unsafe {
     winapi::um::processthreadsapi::SetPriorityClass(
       winapi::um::processthreadsapi::GetCurrentProcess(),
-      winapi::um::winbase::HIGH_PRIORITY_CLASS,
+      winapi::um::winbase::ABOVE_NORMAL_PRIORITY_CLASS,
     );
   }
 
