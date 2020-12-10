@@ -79,6 +79,7 @@ impl Handler<PlayerReplaceGame> for PlayerRegistry {
     PlayerReplaceGame { player_id, game }: PlayerReplaceGame,
   ) -> Result<()> {
     use flo_net::proto::flo_connect::*;
+    let game_id = game.id;
 
     if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
       let frames = vec![
@@ -88,6 +89,7 @@ impl Handler<PlayerReplaceGame> for PlayerRegistry {
         }
         .encode_as_frame()?,
       ];
+      entry.get_mut().game_id = Some(game_id);
       if !entry.get_mut().try_send_frames(frames.into()) {
         entry.remove();
       }
@@ -114,6 +116,7 @@ impl Handler<PlayersReplaceGame> for PlayerRegistry {
     PlayersReplaceGame { player_ids, game }: PlayersReplaceGame,
   ) -> Result<()> {
     use flo_net::proto::flo_connect::*;
+    let game_id = game.id;
 
     let frames = vec![
       get_session_update_packet(Some(game.id)).encode_as_frame()?,
@@ -125,6 +128,7 @@ impl Handler<PlayersReplaceGame> for PlayerRegistry {
 
     for player_id in player_ids {
       if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
+        entry.get_mut().game_id = Some(game_id);
         if !entry.get_mut().try_send_frames(frames.clone().into()) {
           entry.remove();
         }
@@ -160,7 +164,7 @@ impl Handler<PlayerLeaveGame> for PlayerRegistry {
         {
           entry.remove();
         } else {
-          entry.get_mut().game_id = Some(game_id);
+          entry.get_mut().game_id = None;
         }
       } else {
         tracing::debug!(player_id, game_id, "leave game message ignored");
