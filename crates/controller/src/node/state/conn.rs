@@ -22,9 +22,11 @@ use tokio::sync::mpsc;
 use tokio::time::delay_for;
 use tracing_futures::Instrument;
 
+const MAX_BACKOFF: Duration = Duration::from_secs(60);
+
 pub struct NodeConnActor {
   config: NodeConnConfig,
-  reconnect_backoff: ExponentialBackoff,
+  reconnect_backoff: Option<ExponentialBackoff>,
   status: NodeConnStatus,
   request_actor: Option<Container<NodeRequestActor>>,
   game_reg_addr: Addr<GameRegistry>,
@@ -35,7 +37,7 @@ impl NodeConnActor {
     Self {
       config,
       status: NodeConnStatus::Connecting,
-      reconnect_backoff: Self::default_backoff(),
+      reconnect_backoff: None,
       request_actor: None,
       game_reg_addr,
     }
@@ -45,7 +47,7 @@ impl NodeConnActor {
     ExponentialBackoff {
       initial_interval: Duration::from_secs(5),
       current_interval: Duration::from_secs(5),
-      max_interval: Duration::from_secs(60),
+      max_interval: MAX_BACKOFF,
       multiplier: 1.5,
       ..Default::default()
     }
@@ -82,8 +84,9 @@ impl NodeConnActor {
 
     let delay = self
       .reconnect_backoff
+      .get_or_insert_with(|| Self::default_backoff())
       .next_backoff()
-      .unwrap_or(self.reconnect_backoff.max_interval);
+      .unwrap_or(MAX_BACKOFF);
     tracing::error!(node_id = self.config.id, "reconnect: backoff: {:?}", delay);
     let addr = ctx.addr();
     ctx.spawn(async move {
@@ -246,7 +249,7 @@ impl Handler<Connect> for NodeConnActor {
         .instrument(tracing::debug_span!("stream_worker", node_id)),
     );
     self.request_actor = NodeRequestActor::new(tx).start().into();
-    self.reconnect_backoff.reset();
+    self.reconnect_backoff.take();
   }
 }
 
