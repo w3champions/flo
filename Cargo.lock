@@ -1532,6 +1532,7 @@ dependencies = [
  "embed-resource",
  "flo-client",
  "flo-constants",
+ "futures 0.3.8",
  "iced",
  "iced_native",
  "image",
