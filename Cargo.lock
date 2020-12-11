@@ -1529,10 +1529,12 @@ name = "flo-worker-ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "embed-resource",
  "flo-client",
  "flo-constants",
  "iced",
  "iced_native",
+ "image",
  "once_cell",
  "serde",
  "serde_json",

@@ -4,10 +4,14 @@ mod element;
 mod style;
 mod update;
 
+use image::ImageFormat;
+
 use iced::{
   button, Application, Command, Element, Container, Column, Length, Settings, Button, Text,
   HorizontalAlignment, Row, text_input
 };
+
+static WINDOW_ICON: &[u8] = include_bytes!("../../resources/flo.ico");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
@@ -211,6 +215,13 @@ pub fn run(opts: Opt) {
   settings.window.resizable = false;
   settings.window.decorations = true;
   settings.flags = opts;
+
+  let image = image::load_from_memory_with_format(WINDOW_ICON, ImageFormat::Ico)
+    .expect("loading icon")
+    .to_rgba();
+  let (width, height) = image.dimensions();
+  let icon = iced::window::Icon::from_rgba(image.into_raw(), width, height);
+  settings.window.icon = Some(icon.unwrap());
 
   Flo::run(settings).expect("Running Flo Gui");
 }

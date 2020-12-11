@@ -20,6 +20,10 @@ anyhow = "1.0.35"
 # for UI
 iced = "0.2"
 iced_native = "0.3.0"
+image = "0.23"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["processthreadsapi"] }
+
+[build-dependencies]
+embed-resource = "1.4"
