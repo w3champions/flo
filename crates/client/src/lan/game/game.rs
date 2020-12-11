@@ -8,7 +8,6 @@ use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::leave::LeaveAck;
 
 use crate::error::*;
-use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
@@ -28,7 +27,6 @@ pub struct GameHandler<'a> {
   node: &'a NodeInfo,
   w3gs_stream: &'a mut W3GSStream,
   node_stream: &'a mut NodeStreamHandle,
-  event_rx: &'a mut Receiver<PlayerEvent>,
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_tx: &'a mut Sender<Packet>,
   w3gs_rx: &'a mut Receiver<Packet>,
@@ -42,7 +40,6 @@ impl<'a> GameHandler<'a> {
     node: &'a NodeInfo,
     stream: &'a mut W3GSStream,
     node_stream: &'a mut NodeStreamHandle,
-    event_rx: &'a mut Receiver<PlayerEvent>,
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
@@ -52,7 +49,6 @@ impl<'a> GameHandler<'a> {
       node,
       w3gs_stream: stream,
       node_stream,
-      event_rx,
       status_rx,
       w3gs_tx,
       w3gs_rx,
@@ -87,17 +83,6 @@ impl<'a> GameHandler<'a> {
           } else {
             tracing::error!("stream closed");
             return Ok(GameResult::Disconnected)
-          }
-        }
-        next = self.event_rx.recv() => {
-          match next {
-            Some(PlayerEvent::PlayerStatusChange {
-              player_id,
-              status
-            }) => {
-              tracing::debug!(game_id = self.info.game.game_id, player_id, "slot client status change: {:?}", status);
-            },
-            None => {}
           }
         }
         next = self.status_rx.recv() => {

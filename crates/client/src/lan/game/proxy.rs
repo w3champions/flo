@@ -221,7 +221,6 @@ impl State {
       &node,
       &mut stream,
       &mut node_stream,
-      &mut event_rx,
       &mut status_rx,
       &mut w3gs_tx,
       &mut w3gs_rx,
