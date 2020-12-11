@@ -5,7 +5,6 @@ use flo_client::StartConfig;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 
-use once_cell::sync::OnceCell;
 use once_cell::sync::Lazy;
 
 static RT: Lazy<Mutex<Runtime>> = Lazy::new(|| { Mutex::new(Runtime::new().unwrap()) });

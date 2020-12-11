@@ -216,6 +216,7 @@ pub fn run(opts: Opt) {
   settings.window.decorations = true;
   settings.flags = opts;
 
+  #[allow(deprecated)]
   let image = image::load_from_memory_with_format(WINDOW_ICON, ImageFormat::Ico)
     .expect("loading icon")
     .to_rgba();
