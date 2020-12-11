@@ -1,38 +1,12 @@
+mod core;
 mod flo;
 mod log;
 mod gui;
 
 use structopt::StructOpt;
-use std::path::PathBuf;
+use tracing::instrument;
 
-use tracing::{ instrument };
-
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "flo-worker", about = "Flo worker process.")]
-pub struct Opt {
-  #[structopt(long)]
-  debug: bool,
-
-  #[structopt(long)]
-  token: Option<String>,
-
-  #[structopt(long, parse(from_os_str))]
-  installation_path: Option<PathBuf>,
-
-  #[structopt(long)]
-  controller_host: Option<String>,
-}
-
-impl Default for Opt {
-  fn default() -> Self {
-    Self {
-      debug: false,
-      token: None,
-      installation_path: None,
-      controller_host: None
-    }
-  }
-}
+use crate::core::*;
 
 #[instrument]
 pub fn main() {
@@ -40,13 +14,33 @@ pub fn main() {
   unsafe {
     winapi::um::processthreadsapi::SetPriorityClass(
       winapi::um::processthreadsapi::GetCurrentProcess(),
-      winapi::um::winbase::HIGH_PRIORITY_CLASS,
+      winapi::um::winbase::ABOVE_NORMAL_PRIORITY_CLASS,
     );
   }
 
-  //TODO: load options from conf file first
+  let mut opt = Default::default();
 
-  let opt = Opt::from_args();
+  if let Ok(json_file) = std::fs::File::open(JSON_CONF_FNAME) {
+    if let Ok(json_conf) = serde_json::from_reader::<_, Opt>(json_file) {
+      opt = json_conf;
+    }
+  }
+
+  //TODO: recode that part, not fully sure how
+  let opt_from_args = Opt::from_args();
+  if opt_from_args.debug {
+    opt.debug = true;
+  }
+  if let Some(token) = opt_from_args.token {
+    opt.token = Some(token);
+  }
+  if let Some(installation_path) = opt_from_args.installation_path {
+    opt.installation_path = Some(installation_path);
+  }
+  if let Some(controller_host) = opt_from_args.controller_host {
+    opt.token = Some(controller_host);
+  }
+
   log::init(opt.debug);
 
   tracing::warn!("Running GUI");

@@ -6,16 +6,30 @@ mod update;
 
 use iced::{
   button, Application, Command, Element, Container, Column, Length, Settings, Button, Text,
-  HorizontalAlignment, Row
+  HorizontalAlignment, Row, text_input
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Mode {
+  Main,
+  Running,
+  Settings
+}
 
 pub struct Flo {
   config: Opt,
   run_btn_state: button::State,
   exit_btn_state: button::State,
   settings_btn_state: button::State,
-  error: Option<anyhow::Error>,
-  flo_running: bool
+  directory_button_state: button::State,
+  confirm_settings_button_state: button::State,
+  token_input_state: text_input::State,
+  error: Option<String>,
+  flo_running: bool,
+  version: String,
+  mode: Mode,
+  return_page: Mode,
+  port: Option<String>
 }
 
 impl Default for Flo {
@@ -25,37 +39,40 @@ impl Default for Flo {
       run_btn_state: Default::default(),
       exit_btn_state: Default::default(),
       settings_btn_state: Default::default(),
+      directory_button_state: Default::default(),
+      confirm_settings_button_state: Default::default(),
+      token_input_state: Default::default(),
       error: None,
-      flo_running: false
+      flo_running: false,
+      version: flo_client::FLO_VERSION.to_string(),
+      mode: Mode::Main,
+      return_page: Mode::Main,
+      port: None
     }
   }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Mode {
-  Main,
-  Settings
 }
 
 #[derive(Debug, Clone)]
 pub enum Interaction {
   ModeSelected(Mode),
   RunFlo(Opt),
-  Exit,
-  Refresh
+  SelectDirectory,
+  UpdateTokenConfirm,
+  Exit
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Message {
   Init(()),
-  RunFlo(bool),
-  RuntimeEvent(iced_native::Event),
+  RunFlo((bool, String)),
   Interaction(Interaction),
-  Error(anyhow::Error)
+  Error(String),
+  UpdateToken(String),
+  UpdateTokenConfirm(())
 }
 
 async fn init() {
-  
+  // do something maybe?
 }
 
 fn apply_config(flo_ui: &mut Flo, config: Opt) {
@@ -86,61 +103,97 @@ impl Application for Flo {
   fn update(&mut self, message: Message) -> Command<Message> {
     match update::handle_message(self, message) {
       Ok(x) => x,
-      Err(e) => Command::perform(async { e }, Message::Error),
+      Err(e) => Command::perform(async move { e.to_string() }, Message::Error),
     }
   }
   fn view(&mut self) -> Element<Message> {
 
-    let menu_container = element::menu::data_container( &self.config, &self.error, &mut self.settings_btn_state );
+    let menu_container =
+      element::menu::data_container( &self.config
+                                   , &self.error
+                                   , &mut self.settings_btn_state
+                                   , &self.version );
 
     let mut content = Column::new().push(menu_container);
 
-    let run_flo_button: Element<Interaction> = Button::new(
-        &mut self.run_btn_state,
-        Text::new("Launch Flo Worker")
-          .horizontal_alignment(HorizontalAlignment::Center)
-          .size(24),
-      )
-      .style(style::DefaultBoxedButton())
-      .on_press(Interaction::RunFlo(self.config.clone()))
-      .into();
+    match &self.mode {
 
-    let exit_button: Element<Interaction> = Button::new(
-        &mut self.exit_btn_state,
-        Text::new("Exit")
-          .horizontal_alignment(HorizontalAlignment::Center)
-          .size(24),
-      )
-      .style(style::DefaultBoxedButton())
-      .on_press(Interaction::Exit)
-      .into();
+      Mode::Main => {
+        let run_flo_button: Element<Interaction> = Button::new(
+            &mut self.run_btn_state,
+            Text::new("Launch Flo Worker")
+              .horizontal_alignment(HorizontalAlignment::Center)
+              .size(24),
+          )
+          .style(style::DefaultBoxedButton())
+          .on_press(Interaction::RunFlo(self.config.clone()))
+          .into();
 
-    let run_button_row = Row::new()
-      .spacing(2)
-      .push(run_flo_button.map(Message::Interaction));
+        let exit_button: Element<Interaction> = Button::new(
+            &mut self.exit_btn_state,
+            Text::new("Exit")
+              .horizontal_alignment(HorizontalAlignment::Center)
+              .size(24),
+          )
+          .style(style::DefaultBoxedButton())
+          .on_press(Interaction::Exit)
+          .into();
 
-    let ext_button_row = Row::new()
-      .spacing(2)
-      .push(exit_button.map(Message::Interaction));
+        let run_button_row = Row::new()
+          .spacing(2)
+          .push(run_flo_button.map(Message::Interaction));
 
-    let run_flo_container = Container::new(run_button_row)
-      .center_x()
-      .center_y()
-      .width(Length::Fill)
-      .height(Length::Shrink)
-      .style(style::DefaultStyle())
-      .padding(10);
+        let ext_button_row = Row::new()
+          .spacing(2)
+          .push(exit_button.map(Message::Interaction));
 
-    let ext_flo_container = Container::new(ext_button_row)
-      .center_x()
-      .center_y()
-      .width(Length::Fill)
-      .height(Length::Shrink)
-      .style(style::DefaultStyle())
-      .padding(10);
+        let run_flo_container = Container::new(run_button_row)
+          .center_x()
+          .center_y()
+          .width(Length::Fill)
+          .height(Length::Shrink)
+          .style(style::DefaultStyle())
+          .padding(10);
 
-    content = content.push(run_flo_container);
-    content = content.push(ext_flo_container);
+        let ext_flo_container = Container::new(ext_button_row)
+          .center_x()
+          .center_y()
+          .width(Length::Fill)
+          .height(Length::Shrink)
+          .style(style::DefaultStyle())
+          .padding(10);
+
+        content = content.push(run_flo_container);
+        content = content.push(ext_flo_container);
+      },
+
+      Mode::Running => {
+        if let Some(port) = &self.port {
+          let running_str = format!("Running on {} port", port);
+          let running_text = Text::new(running_str).size(24);
+
+          let run_text_container = Container::new(running_text)
+            .center_x()
+            .center_y()
+            .width(Length::Fill)
+            .height(Length::Shrink)
+            .style(style::DefaultStyle())
+            .padding(10);
+
+          content = content.push(run_text_container);
+        }
+      },
+
+      Mode::Settings => {
+        let settings_container =
+          element::settings::data_container( &mut self.config
+                                           , &mut self.directory_button_state
+                                           , &mut self.confirm_settings_button_state
+                                           , &mut self.token_input_state
+                                           );
+        content = content.push(settings_container);
+      }
+    };
 
     Container::new(content)
       .width(Length::Fill)

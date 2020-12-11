@@ -7,8 +7,9 @@ use::iced::{
 };
 
 pub fn data_container<'a>( _config: &Opt
-    , error: &Option<anyhow::Error>
-    , settings_button_state: &'a mut button::State, ) -> Container<'a, Message> {
+    , error: &Option<String>
+    , settings_button_state: &'a mut button::State
+    , version: &str ) -> Container<'a, Message> {
 
   let mut settings_row = Row::new().height(Length::Units(50));
 
@@ -20,7 +21,7 @@ pub fn data_container<'a>( _config: &Opt
 
   // Displays an error, if any has occured.
   let error_text = if let Some(error) = error {
-    Text::new(error.to_string()).size(14)
+    Text::new(error).size(14)
   } else {
     // Display nothing.
     Text::new("")
@@ -33,7 +34,7 @@ pub fn data_container<'a>( _config: &Opt
       .width(Length::Fill)
       .style(style::DefaultStyle());
 
-  let version_container = Container::new(Text::new("0.1.0"))
+  let version_container = Container::new(Text::new(version))
       .center_y()
       .padding(5)
       .style(style::DefaultStyle());
@@ -46,9 +47,10 @@ pub fn data_container<'a>( _config: &Opt
       .push(error_container)
       .push(version_container);
 
+  // TODO: maybe png for settings
   let settings_mode_button = Button::new(
       settings_button_state,
-      Text::new("Settings [Work in progress]")
+      Text::new("Settings")
           .horizontal_alignment(HorizontalAlignment::Center)
           .size(16),
     )

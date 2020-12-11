@@ -1534,6 +1534,7 @@ dependencies = [
  "iced",
  "iced_native",
  "once_cell",
+ "serde",
  "serde_json",
  "structopt",
  "tokio",
