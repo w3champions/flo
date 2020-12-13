@@ -82,6 +82,14 @@ impl Handler<ReplaceLanGame> for Lan {
       })
       .await??;
     if checksum.sha1 == game.map_sha1 {
+      if let Some(last_game) = self.active_game.take() {
+        if let Err(_) =
+          tokio::time::timeout(std::time::Duration::from_secs(3), last_game.shutdown()).await
+        {
+          tracing::error!("shutdown last lan game timeout.");
+        }
+      }
+
       let lan_game = LanGame::create(
         my_player_id,
         node,
@@ -92,7 +100,7 @@ impl Handler<ReplaceLanGame> for Lan {
       )
       .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");
-      self.active_game.replace(lan_game);
+      self.active_game = Some(lan_game);
     } else {
       self.active_game.take();
       return Err(Error::MapChecksumMismatch);

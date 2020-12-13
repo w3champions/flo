@@ -25,7 +25,7 @@ use flo_state::Addr;
 
 pub struct LanProxy {
   _scope: SpawnScope,
-  _node_stream: NodeStream,
+  node_stream: NodeStream,
   port: u16,
   status_tx: watch::Sender<Option<NodeGameStatus>>,
   event_tx: Sender<PlayerEvent>,
@@ -88,7 +88,7 @@ impl LanProxy {
 
     Ok(LanProxy {
       _scope: scope,
-      _node_stream: node_stream,
+      node_stream,
       port,
       status_tx,
       event_tx,
@@ -105,6 +105,10 @@ impl LanProxy {
 
   pub fn port(&self) -> u16 {
     self.port
+  }
+
+  pub async fn shutdown(self) {
+    self.node_stream.shutdown().await;
   }
 }
 

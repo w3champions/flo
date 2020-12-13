@@ -136,6 +136,10 @@ impl LanGame {
   pub fn is_same_game(&self, game_id: i32, my_player_id: i32) -> bool {
     self.state.game_id == game_id && self.state.my_player_id == my_player_id
   }
+
+  pub async fn shutdown(self) {
+    self.proxy.shutdown().await;
+  }
 }
 
 struct State {

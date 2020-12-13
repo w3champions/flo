@@ -8,7 +8,6 @@ use flo_net::proto::flo_node as proto;
 use flo_net::stream::FloStream;
 use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
 use flo_state::Addr;
-use flo_task::{SpawnScope, SpawnScopeHandle};
 use flo_types::node::NodeGameStatusSnapshot;
 use flo_w3gs::packet::Packet as W3GSPacket;
 use flo_w3gs::protocol::packet::Packet;
@@ -16,11 +15,26 @@ use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::{oneshot, Notify};
 use tracing_futures::Instrument;
 
 pub struct NodeStream {
-  _scope: SpawnScope,
   state: Arc<State>,
+  shutdown_signal: Arc<Notify>,
+  shutdown_complete_rx: Option<oneshot::Receiver<()>>,
+}
+
+impl NodeStream {
+  pub async fn shutdown(mut self) {
+    self.shutdown_signal.notify();
+    self.shutdown_complete_rx.take().unwrap().await.ok();
+  }
+}
+
+impl Drop for NodeStream {
+  fn drop(&mut self) {
+    self.shutdown_signal.notify();
+  }
 }
 
 impl NodeStream {
@@ -30,7 +44,7 @@ impl NodeStream {
     client: Addr<ControllerClient>,
     w3gs_sender: Sender<W3GSPacket>,
   ) -> Result<Self> {
-    let scope = SpawnScope::new();
+    let shutdown_signal = Arc::new(Notify::new());
     let mut stream = FloStream::connect_no_delay(addr).await?;
 
     stream
@@ -72,6 +86,8 @@ impl NodeStream {
       client,
     });
 
+    let (shutdown_complete_tx, shutdown_complete_rx) = oneshot::channel();
+
     tokio::spawn({
       Self::worker(
         state.clone(),
@@ -79,7 +95,8 @@ impl NodeStream {
         w3gs_sender,
         outgoing_receiver,
         initial_status,
-        scope.handle(),
+        shutdown_signal.clone(),
+        shutdown_complete_tx,
       )
       .instrument(tracing::debug_span!(
         "worker",
@@ -89,7 +106,8 @@ impl NodeStream {
     });
 
     Ok(Self {
-      _scope: scope,
+      shutdown_signal: shutdown_signal.clone(),
+      shutdown_complete_rx: Some(shutdown_complete_rx),
       state,
     })
   }
@@ -108,7 +126,8 @@ impl NodeStream {
     mut w3gs_sender: Sender<W3GSPacket>,
     mut outgoing_receiver: Receiver<Frame>,
     initial_status: NodeGameStatusSnapshot,
-    mut scope: SpawnScopeHandle,
+    shutdown_signal: Arc<Notify>,
+    shutdown_complete: oneshot::Sender<()>,
   ) {
     let client = state.client.clone();
 
@@ -126,8 +145,8 @@ impl NodeStream {
 
     loop {
       tokio::select! {
-        _ = scope.left() => {
-          tracing::debug!("dropped");
+        _ = shutdown_signal.notified() => {
+          tracing::debug!("shutdown signal received");
           break;
         }
         // packet from node
@@ -195,6 +214,7 @@ impl NodeStream {
       stream.send_frame(frame).await.ok();
     }
     stream.flush().await.ok();
+    shutdown_complete.send(()).ok();
     tracing::debug!("exiting...");
   }
 
