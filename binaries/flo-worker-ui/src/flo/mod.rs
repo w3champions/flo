@@ -9,7 +9,17 @@ use once_cell::sync::Lazy;
 
 static RT: Lazy<Mutex<Runtime>> = Lazy::new(|| { Mutex::new(Runtime::new().unwrap()) });
 
-async fn run_flo(opt: Opt) -> Result<u16> {
+async fn run_flo() -> Result<u16> {
+  let mut rt = RT.lock().await;
+  let client = rt.block_on(flo_client::start(Default::default()))?;
+  let port = client.port();
+  rt.spawn(
+    client.serve()
+  );
+  Ok(port)
+}
+
+async fn run_flo_worker(opt: Opt) -> Result<u16> {
   let mut rt = RT.lock().await;
   let client = rt.block_on(flo_client::start(StartConfig {
     token: opt.token,
@@ -25,8 +35,14 @@ async fn run_flo(opt: Opt) -> Result<u16> {
 }
 
 pub async fn perform_run_flo(opt: Opt) -> (bool, String) {
-  let mut res = run_flo(opt).await
-    .map_err(|err| anyhow::format_err!("Start flo worker failed: {:?}", err));
+  let res =
+    if opt.use_flo_web {
+      run_flo().await
+        .map_err(|err| anyhow::format_err!("Start flo failed: {:?}", err))
+    } else {
+      run_flo_worker(opt).await
+        .map_err(|err| anyhow::format_err!("Start flo worker failed: {:?}", err))
+    };
 
   match res {
     Ok(port) => {

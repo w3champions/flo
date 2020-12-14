@@ -25,7 +25,6 @@ pub struct Flo {
   run_btn_state: button::State,
   exit_btn_state: button::State,
   settings_btn_state: button::State,
-  directory_button_state: button::State,
   confirm_settings_button_state: button::State,
   token_input_state: text_input::State,
   error: Option<String>,
@@ -43,7 +42,6 @@ impl Default for Flo {
       run_btn_state: Default::default(),
       exit_btn_state: Default::default(),
       settings_btn_state: Default::default(),
-      directory_button_state: Default::default(),
       confirm_settings_button_state: Default::default(),
       token_input_state: Default::default(),
       error: None,
@@ -60,7 +58,6 @@ impl Default for Flo {
 pub enum Interaction {
   ModeSelected(Mode),
   RunFlo(Opt),
-  SelectDirectory,
   UpdateTokenConfirm,
   Exit
 }
@@ -72,7 +69,8 @@ pub enum Message {
   Interaction(Interaction),
   Error(String),
   UpdateToken(String),
-  UpdateTokenConfirm(())
+  UpdateTokenConfirm(()),
+  FloWeb(bool)
 }
 
 async fn init() {
@@ -125,7 +123,7 @@ impl Application for Flo {
       Mode::Main => {
         let run_flo_button: Element<Interaction> = Button::new(
             &mut self.run_btn_state,
-            Text::new("Launch Flo Worker")
+            Text::new("Run Hostbot Client")
               .horizontal_alignment(HorizontalAlignment::Center)
               .size(24),
           )
@@ -176,6 +174,28 @@ impl Application for Flo {
           let running_str = format!("Running on {} port", port);
           let running_text = Text::new(running_str).size(24);
 
+          let exit_button: Element<Interaction> = Button::new(
+              &mut self.exit_btn_state,
+              Text::new("Exit")
+                .horizontal_alignment(HorizontalAlignment::Center)
+                .size(24),
+            )
+            .style(style::DefaultBoxedButton())
+            .on_press(Interaction::Exit)
+            .into();
+
+          let ext_button_row = Row::new()
+            .spacing(2)
+            .push(exit_button.map(Message::Interaction));
+
+          let ext_flo_container = Container::new(ext_button_row)
+            .center_x()
+            .center_y()
+            .width(Length::Fill)
+            .height(Length::Shrink)
+            .style(style::DefaultStyle())
+            .padding(10);
+
           let run_text_container = Container::new(running_text)
             .center_x()
             .center_y()
@@ -185,13 +205,13 @@ impl Application for Flo {
             .padding(10);
 
           content = content.push(run_text_container);
+          content = content.push(ext_flo_container);
         }
       },
 
       Mode::Settings => {
         let settings_container =
           element::settings::data_container( &mut self.config
-                                           , &mut self.directory_button_state
                                            , &mut self.confirm_settings_button_state
                                            , &mut self.token_input_state
                                            );

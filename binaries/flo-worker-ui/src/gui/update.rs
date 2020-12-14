@@ -23,6 +23,9 @@ pub fn handle_message(flo_ui: &mut Flo, message: Message) -> anyhow::Result<Comm
     Message::UpdateToken(s) => {
       flo_ui.config.token = Some(s);
     },
+    Message::FloWeb(checked) => {
+      flo_ui.config.use_flo_web = checked;
+    },
     Message::RunFlo((res, s)) => {
       if res {
         flo_ui.flo_running = true;
@@ -54,9 +57,6 @@ pub fn handle_message(flo_ui: &mut Flo, message: Message) -> anyhow::Result<Comm
         flo_ui.mode = mode;
       }
     }
-    Message::Interaction(Interaction::SelectDirectory) => {
-      
-    },
     Message::Interaction(Interaction::UpdateTokenConfirm) => {
       flo_ui.mode = flo_ui.return_page;
       return Ok(Command::perform(
