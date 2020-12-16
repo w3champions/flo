@@ -64,6 +64,11 @@ pub fn handle_message(flo_ui: &mut Flo, message: Message) -> anyhow::Result<Comm
         Message::UpdateTokenConfirm,
       ));
     },
+    Message::Interaction(Interaction::OpenWeb(w)) => {
+      if let Err(why) = webbrowser::open(&w) {
+        flo_ui.error = Some(why.to_string());
+      }
+    },
     Message::Interaction(Interaction::Exit) => {
       std::process::exit(0);
     }

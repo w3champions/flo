@@ -23,6 +23,7 @@ pub enum Mode {
 pub struct Flo {
   config: Opt,
   run_btn_state: button::State,
+  web_btn_state: button::State,
   exit_btn_state: button::State,
   settings_btn_state: button::State,
   confirm_settings_button_state: button::State,
@@ -40,6 +41,7 @@ impl Default for Flo {
     Self {
       config: Default::default(),
       run_btn_state: Default::default(),
+      web_btn_state: Default::default(),
       exit_btn_state: Default::default(),
       settings_btn_state: Default::default(),
       confirm_settings_button_state: Default::default(),
@@ -59,6 +61,7 @@ pub enum Interaction {
   ModeSelected(Mode),
   RunFlo(Opt),
   UpdateTokenConfirm,
+  OpenWeb(String),
   Exit
 }
 
@@ -172,7 +175,30 @@ impl Application for Flo {
       Mode::Running => {
         if let Some(port) = &self.port {
           let running_str = format!("Running on {} port", port);
+          let web_str = format!("https://w3flo.com/?port={}", port);
           let running_text = Text::new(running_str).size(24);
+
+          let web_button: Element<Interaction> = Button::new(
+              &mut self.web_btn_state,
+              Text::new(web_str.clone())
+                .horizontal_alignment(HorizontalAlignment::Center)
+                .size(16),
+            )
+            .style(style::DefaultButton())
+            .on_press(Interaction::OpenWeb(web_str))
+            .into();
+
+          let web_button_row = Row::new()
+            .spacing(2)
+            .push(web_button.map(Message::Interaction));
+
+          let web_flo_container = Container::new(web_button_row)
+            .center_x()
+            .center_y()
+            .width(Length::Fill)
+            .height(Length::Shrink)
+            .style(style::DefaultStyle())
+            .padding(10);
 
           let exit_button: Element<Interaction> = Button::new(
               &mut self.exit_btn_state,
@@ -205,6 +231,7 @@ impl Application for Flo {
             .padding(10);
 
           content = content.push(run_text_container);
+          content = content.push(web_flo_container);
           content = content.push(ext_flo_container);
         }
       },
