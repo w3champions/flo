@@ -2,6 +2,11 @@ use flo_node::serve;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+  #[cfg(windows)]
+  unsafe {
+    winapi::um::timeapi::timeBeginPeriod(1);
+  }
+
   #[cfg(debug_assertions)]
   {
     dotenv::dotenv()?;

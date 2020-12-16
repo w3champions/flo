@@ -12,7 +12,7 @@ use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
 use flo_task::{SpawnScope, SpawnScopeHandle};
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction};
+use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction, TimeSlot};
 use flo_w3gs::protocol::leave::LeaveReq;
 use flo_w3gs::protocol::leave::{LeaveAck, PlayerLeft};
 use flo_w3gs::protocol::packet::*;
@@ -66,13 +66,8 @@ impl Dispatcher {
     let (action_tx, action_rx) = channel(10);
 
     tokio::spawn(
-      Self::tick(
-        state.player_map.clone(),
-        start_rx,
-        action_rx,
-        scope.handle(),
-      )
-      .instrument(tracing::debug_span!("tick_worker", game_id)),
+      Self::tick(state.shared.clone(), start_rx, action_rx, scope.handle())
+        .instrument(tracing::debug_span!("tick_worker", game_id)),
     );
 
     tokio::spawn(
@@ -126,7 +121,7 @@ impl Dispatcher {
   }
 
   async fn tick(
-    player_map: Arc<Mutex<PlayerMap>>,
+    shared: Arc<Mutex<Shared>>,
     start_rx: oneshot::Receiver<()>,
     mut rx: Receiver<ActionMsg>,
     mut scope: SpawnScopeHandle,
@@ -135,9 +130,8 @@ impl Dispatcher {
       let dropped = scope.left();
     }
 
-    let mut stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
-
     if let Ok(_) = start_rx.await {
+      let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
       loop {
         tokio::select! {
           _ = &mut dropped => {
@@ -146,12 +140,12 @@ impl Dispatcher {
           Some(msg) = rx.recv() => {
             match msg {
               ActionMsg::PlayerAction(action) => {
-                stream.add_player_action(action);
+                tick_stream.add_player_action(action);
               }
             }
           }
-          Some(tick) = stream.next() => {
-            if let Err(err) = player_map.lock().dispatch_action_tick(tick) {
+          Some(tick) = tick_stream.next() => {
+            if let Err(err) = shared.lock().dispatch_action_tick(tick) {
               tracing::error!("dispatch action tick: {}", err);
               break;
             }
@@ -172,7 +166,7 @@ enum ActionMsg {
 #[derive(Debug)]
 struct State {
   sent_tick: u32,
-  player_map: Arc<Mutex<PlayerMap>>,
+  shared: Arc<Mutex<Shared>>,
   player_ack_map: BTreeMap<i32, usize>,
   game_player_id_lookup: BTreeMap<u8, i32>,
 }
@@ -181,7 +175,7 @@ impl State {
   fn new(slots: &[PlayerSlot]) -> Self {
     State {
       sent_tick: 0,
-      player_map: Arc::new(Mutex::new(PlayerMap::new(slots))),
+      shared: Arc::new(Mutex::new(Shared::new(slots))),
       player_ack_map: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, 0))
@@ -240,7 +234,7 @@ impl State {
       },
       Message::PlayerConnect { player_id, tx, .. } => {
         {
-          self.player_map.lock().get_player(player_id)?.tx.replace(tx);
+          self.shared.lock().get_player(player_id)?.tx.replace(tx);
         }
         out_tx
           .send(GameEvent::PlayerStatusChange(
@@ -264,7 +258,7 @@ impl State {
           .await
           .map_err(|_| Error::Cancelled)?;
         {
-          let mut guard = self.player_map.lock();
+          let mut guard = self.shared.lock();
           if let Some(_) = guard.get_player(player_id)?.tx.take() {
             let pkt = Packet::simple(PlayerLeft {
               player_id: slot_player_id,
@@ -299,7 +293,7 @@ impl State {
         })?;
 
         {
-          let mut guard = self.player_map.lock();
+          let mut guard = self.shared.lock();
           let player = guard.get_player(player_id)?;
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
           player.disconnect();
@@ -357,7 +351,7 @@ impl State {
 
     let chat: ChatToHost = packet.decode_simple()?;
     packet.header.type_id = PacketTypeId::ChatFromHost;
-    self.player_map.lock().broadcast(
+    self.shared.lock().broadcast(
       packet,
       broadcast::AllowList(
         &chat
@@ -382,11 +376,11 @@ impl State {
 }
 
 #[derive(Debug)]
-struct PlayerMap {
+struct Shared {
   map: BTreeMap<i32, PlayerDispatchInfo>,
 }
 
-impl PlayerMap {
+impl Shared {
   fn new(slots: &[PlayerSlot]) -> Self {
     Self {
       map: slots
@@ -406,7 +400,10 @@ impl PlayerMap {
   }
 
   pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<()> {
-    let action_packet = Packet::with_payload(IncomingAction::from(tick))?;
+    let action_packet = Packet::with_payload(IncomingAction(TimeSlot {
+      time_increment_ms: tick.time_increment_ms,
+      actions: tick.actions,
+    }))?;
     self.broadcast(action_packet, broadcast::Everyone)?;
     Ok(())
   }
