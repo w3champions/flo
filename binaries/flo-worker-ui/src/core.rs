@@ -31,7 +31,7 @@ impl Default for Opt {
       token: None,
       installation_path: None,
       controller_host: None,
-      use_flo_web: false
+      use_flo_web: true
     }
   }
 }
