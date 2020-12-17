@@ -1,6 +1,6 @@
 [package]
 name = "flo-worker"
-version = "0.1.0"
+version = "0.5.13"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
@@ -17,3 +17,6 @@ anyhow = "1.0.34"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["processthreadsapi"] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "1.3"

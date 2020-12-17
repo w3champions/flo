@@ -624,6 +624,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "embed-resource"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b2f39c0462f098c1ca4abc408f7482949bbe2ab19bca5a4419f91f69e5bccc"
+dependencies = [
+ "vswhom",
+ "winreg 0.8.0",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -728,7 +738,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.5.12"
+version = "0.5.13"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1103,9 +1113,10 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.1.0"
+version = "0.5.13"
 dependencies = [
  "anyhow",
+ "embed-resource",
  "flo-client",
  "flo-constants",
  "once_cell",
@@ -1577,7 +1588,7 @@ dependencies = [
  "socket2",
  "widestring",
  "winapi 0.3.9",
- "winreg",
+ "winreg 0.6.2",
 ]
 
 [[package]]
@@ -3335,6 +3346,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
 
 [[package]]
+name = "vswhom"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be979b7f07507105799e854203b470ff7c78a1639e330a58f183b5fea574608b"
+dependencies = [
+ "libc",
+ "vswhom-sys",
+]
+
+[[package]]
+name = "vswhom-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc2f5402d3d0e79a069714f7b48e3ecc60be7775a2c049cb839457457a239532"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3500,6 +3531,15 @@ name = "winreg"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "winreg"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d107f8c6e916235c4c01cabb3e8acf7bea8ef6a63ca2e7fa0527c049badfc48c"
 dependencies = [
  "winapi 0.3.9",
 ]
