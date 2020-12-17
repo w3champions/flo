@@ -124,3 +124,23 @@ fn test_inspect_computers() {
   let (info, _) = W3Replay::inspect(&path).unwrap();
   dbg!(info);
 }
+
+#[test]
+fn test_inspect_time() {
+  use std::collections::BTreeMap;
+  // let path = flo_util::sample_path!("replay", "spike.w3g");
+  // let path = flo_util::sample_path!("replay", "Hippo_vs_Bido.w3g");
+  let path = r#"C:\Users\fluxx\Downloads\Replay_2020_12_17_0011.w3g"#;
+  let mut n = 0;
+  let mut t = 0;
+  let mut map = BTreeMap::new();
+  for r in W3Replay::open(&path).unwrap().into_records() {
+    let r = r.unwrap();
+    if let Record::TimeSlot(r) = r {
+      n += 1;
+      (*map.entry(r.time_increment_ms).or_insert_with(|| 0)) += 1;
+      t += r.time_increment_ms as u32;
+    }
+  }
+  println!("t = {}, n = {}, map = {:?}", t, n, map);
+}

@@ -3,36 +3,34 @@ mod lobby;
 mod proxy;
 pub mod slot;
 
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::delay_for;
-use tracing_futures::Instrument;
-
-use flo_lan::{GameInfo, MdnsPublisher};
-use flo_task::SpawnScope;
-use flo_w3gs::protocol::game::GameSettings;
-use flo_w3map::MapChecksum;
-
+pub use self::lobby::{LobbyAction, LobbyHandler};
+use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::game::LocalGameInfo;
+use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::slot::LanSlotInfo;
 #[cfg(not(feature = "worker"))]
 use crate::lan::get_lan_game_name;
 use crate::node::stream::NodeConnectToken;
 use crate::node::NodeInfo;
-
-use crate::controller::ControllerClient;
-use crate::lan::game::proxy::PlayerEvent;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_lan::{GameInfo, MdnsPublisher};
 use flo_state::Addr;
+use flo_task::SpawnScope;
+use flo_w3gs::protocol::game::GameSettings;
+use flo_w3map::MapChecksum;
 use proxy::LanProxy;
-
-pub use self::lobby::{LobbyAction, LobbyHandler};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::Notify;
+use tokio::time::delay_for;
+use tracing_futures::Instrument;
 
 pub struct LanGame {
   _scope: SpawnScope,
   state: Arc<State>,
   proxy: LanProxy,
+  mdns_shutdown_notify: Arc<Notify>,
 }
 
 #[derive(Debug)]
@@ -52,6 +50,8 @@ impl LanGame {
     map_checksum: MapChecksum,
     client: Addr<ControllerClient>,
   ) -> Result<Self> {
+    let mdns_shutdown_notify = Arc::new(Notify::new());
+
     let game_id = game.game_id;
     #[cfg(not(feature = "worker"))]
     let game_name = get_lan_game_name(game.game_id, my_player_id);
@@ -91,10 +91,14 @@ impl LanGame {
       {
         let mut scope = scope.handle();
         let mut publisher = MdnsPublisher::start(game_info).await?;
+        let mdns_shutdown_notify = mdns_shutdown_notify.clone();
         async move {
           loop {
             tokio::select! {
               _ = scope.left() => {
+                break;
+              }
+              _ = mdns_shutdown_notify.notified() => {
                 break;
               }
               _ = delay_for(Duration::from_secs(5)) => {
@@ -115,6 +119,7 @@ impl LanGame {
       _scope: scope,
       proxy,
       state,
+      mdns_shutdown_notify,
     })
   }
 
@@ -123,6 +128,9 @@ impl LanGame {
   }
 
   pub async fn update_game_status(&self, status: NodeGameStatus) {
+    if ![NodeGameStatus::Created, NodeGameStatus::Waiting].contains(&status) {
+      self.mdns_shutdown_notify.notify();
+    }
     self.proxy.dispatch_game_status_change(status).await;
   }
 

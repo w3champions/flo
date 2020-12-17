@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use trust_dns_client::rr::Name;
+use trust_dns_proto::rr::Name;
 
 lazy_static! {
   pub static ref W3_SERVICE_NAME: Name =

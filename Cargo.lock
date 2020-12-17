@@ -546,12 +546,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "data-encoding"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993a608597367c6377b258c25d7120740f00ed23a2252b729b1932dd7866f908"
-
-[[package]]
 name = "deflate"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -628,12 +622,6 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
-
-[[package]]
-name = "endian-type"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "enum-as-inner"
@@ -897,7 +885,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
- "trust-dns-client",
+ "trust-dns-proto",
 ]
 
 [[package]]
@@ -1881,12 +1869,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nibble_vec"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8d77f3db4bce033f4d04db08079b2ef1c3d02b44e86f25d08886fafa7756ffa"
-
-[[package]]
 name = "nix"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2275,16 +2257,6 @@ dependencies = [
  "log 0.4.11",
  "parking_lot",
  "scheduled-thread-pool",
-]
-
-[[package]]
-name = "radix_trie"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d3681b28cd95acfb0560ea9441f82d6a4504fa3b15b97bd7b6e952131820e95"
-dependencies = [
- "endian-type",
- "nibble_vec",
 ]
 
 [[package]]
@@ -3213,31 +3185,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "trust-dns-client"
-version = "0.20.0"
-source = "git+https://github.com/fluxxu/trust-dns.git?branch=main#83198d3078f632c3a726d057e74e498bdb84faac"
-dependencies = [
- "backtrace",
- "chrono",
- "data-encoding",
- "futures 0.3.8",
- "lazy_static",
- "log 0.4.11",
- "radix_trie",
- "rand",
- "thiserror",
- "tokio",
- "trust-dns-proto",
-]
-
-[[package]]
 name = "trust-dns-proto"
 version = "0.20.0"
 source = "git+https://github.com/fluxxu/trust-dns.git?branch=main#83198d3078f632c3a726d057e74e498bdb84faac"
 dependencies = [
  "async-trait",
  "backtrace",
- "data-encoding",
  "enum-as-inner",
  "futures-channel",
  "futures-io",
