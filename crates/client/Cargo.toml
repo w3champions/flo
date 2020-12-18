@@ -1,6 +1,6 @@
 [package]
 name = "flo-client"
-version = "0.5.13"
+version = "0.5.14"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
