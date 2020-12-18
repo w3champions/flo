@@ -1,6 +1,6 @@
 mod registry;
 pub mod stream;
 pub use registry::{
-  GetNode, GetNodePingMap, NodeInfo, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap,
-  UpdateNodes,
+  AddNode, GetNode, GetNodePingMap, NodeInfo, NodeRegistry, RemoveNode, SetActiveNode,
+  UpdateAddressesAndGetNodePingMap, UpdateNodes,
 };

@@ -146,6 +146,14 @@ message PacketGameSlotClientStatusUpdate {
   flo_common.SlotClientStatus status = 3;
 }
 
+message PacketAddNode {
+  Node node = 1;
+}
+
+message PacketRemoveNode {
+  int32 node_id = 1;
+}
+
 message NodePingMap {
   map<int32, PingStats> player_ping_map = 2;
 }

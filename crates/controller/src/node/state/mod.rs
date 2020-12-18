@@ -5,6 +5,7 @@ use crate::db::ExecutorRef;
 use crate::error::*;
 use crate::game::state::GameRegistry;
 use crate::node::{Node, NodeConnConfig};
+use crate::player::state::sender::PlayerRegistryHandle;
 use crate::state::{Data, GetActorEntry, Reload};
 use arc_swap::ArcSwap;
 use conn::NodeConnActor;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 pub struct NodeRegistry {
   db: ExecutorRef,
   game_reg_addr: Deferred<GameRegistry, Data>,
+  player_reg_handle: PlayerRegistryHandle,
   map: BTreeMap<i32, Container<NodeConnActor>>,
   nodes_snapshot: ArcSwap<Vec<Node>>,
 }
@@ -27,9 +29,11 @@ impl Service<Data> for NodeRegistry {
 
   async fn create(registry: &mut RegistryRef<Data>) -> Result<Self, Self::Error> {
     let game_reg_addr = registry.deferred::<GameRegistry>();
+    let player_reg_addr = registry.resolve().await?;
     Ok(Self {
       db: registry.data().db.clone(),
       game_reg_addr,
+      player_reg_handle: PlayerRegistryHandle::from(player_reg_addr),
       map: BTreeMap::new(),
       nodes_snapshot: ArcSwap::new(Arc::new(vec![])),
     })
@@ -86,13 +90,20 @@ impl Handler<GetActorEntry<NodeConnActor>> for NodeRegistry {
 #[async_trait]
 impl Handler<Reload> for NodeRegistry {
   async fn handle(&mut self, _: &mut Context<Self>, _: Reload) -> Result<()> {
+    use flo_net::packet::FloPacket;
+    use flo_net::proto::flo_connect::{PacketAddNode, PacketRemoveNode};
+    use s2_grpc_utils::S2ProtoPack;
+
     let nodes = self.load_snapshot().await?;
+
+    let mut broadcast_frames = vec![];
 
     let new_ids: Vec<i32> = nodes.iter().map(|c| c.id).collect();
     {
       for id in self.map.keys().cloned().collect::<Vec<i32>>() {
         if !new_ids.contains(&id) {
           self.map.remove(&id);
+          broadcast_frames.push(PacketRemoveNode { node_id: id }.encode_as_frame()?);
           tracing::info!(id, "node removed");
         }
       }
@@ -105,10 +116,24 @@ impl Handler<Reload> for NodeRegistry {
           config.id,
           NodeConnActor::new(config, self.game_reg_addr.resolve().await?).start(),
         );
+        broadcast_frames.push(
+          PacketAddNode {
+            node: node.clone().pack()?,
+          }
+          .encode_as_frame()?,
+        );
       }
     }
 
     self.nodes_snapshot.swap(Arc::new(nodes));
+
+    if !broadcast_frames.is_empty() {
+      self
+        .player_reg_handle
+        .broadcast_to_all(broadcast_frames)
+        .await?;
+    }
+
     Ok(())
   }
 }

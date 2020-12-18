@@ -26,6 +26,33 @@ impl Handler<Send> for PlayerRegistry {
 }
 
 #[derive(Debug)]
+struct BroadcastToAll {
+  frames: PlayerFrames,
+}
+
+impl Message for BroadcastToAll {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<BroadcastToAll> for PlayerRegistry {
+  async fn handle(&mut self, _: &mut Context<Self>, BroadcastToAll { frames }: BroadcastToAll) {
+    let mut remove_list = vec![];
+    for (player_id, state) in self.registry.iter_mut() {
+      let remove = { !state.try_send_frames(frames.clone()) };
+      if remove {
+        let player_id = *player_id;
+        tracing::debug!(player_id, "remove broken player sender");
+        remove_list.push(player_id);
+      }
+    }
+    for id in remove_list {
+      self.registry.remove(&id);
+    }
+  }
+}
+
+#[derive(Debug)]
 struct Broadcast {
   players: Vec<i32>,
   frames: PlayerFrames,
@@ -288,6 +315,19 @@ impl PlayerRegistryHandle {
       .0
       .send(Send {
         player_id,
+        frames: frames.into(),
+      })
+      .await?;
+    Ok(())
+  }
+
+  pub async fn broadcast_to_all<T>(&self, frames: T) -> Result<()>
+  where
+    T: Into<PlayerFrames>,
+  {
+    self
+      .0
+      .send(BroadcastToAll {
         frames: frames.into(),
       })
       .await?;

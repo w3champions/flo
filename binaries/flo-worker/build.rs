@@ -42,7 +42,6 @@ PRODUCTVERSION {version2},0
   );
 
   fs::write(&path, &res).unwrap();
-  fs::write("a.rc", res).unwrap();
 
   embed_resource::compile(path);
 }

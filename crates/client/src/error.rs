@@ -8,6 +8,8 @@ pub enum Error {
   UnexpectedNodeGameStatus(NodeGameStatus),
   #[error("Invalid node token")]
   InvalidNodeToken,
+  #[error("Invalid node config")]
+  InvalidNodeConfig,
   #[error("Not in game")]
   NotInGame,
   #[error("Node connection rejected: {1} ({0:?})")]

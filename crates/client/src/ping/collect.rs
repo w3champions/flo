@@ -6,6 +6,7 @@ use flo_types::ping::PingStats;
 use futures::future::{abortable, AbortHandle};
 use std::net::SocketAddr;
 use std::time::Duration;
+use tokio::sync::mpsc::error::SendTimeoutError;
 use tokio::sync::mpsc::Sender;
 use tokio::time::delay_for;
 
@@ -64,21 +65,27 @@ impl PingCollectActor {
     let base_time = stop_watch.elapsed_ms();
     addr.send(SetBaseTime { base_time }).await.ok();
     for seq in 0..(PACKETS as u16) {
+      buf[0] = seq as u8;
+      buf[1] = batch_id;
       let t = stop_watch.elapsed_ms() - base_time;
 
       if t > u16::MAX as u32 {
         return Err(PingError::TimeOverflow);
       }
-      buf[0] = seq as u8;
-      buf[1] = batch_id;
       (&mut buf[2..4]).copy_from_slice(&(t as u16).to_le_bytes());
       sender
-        .send(SendPing {
-          to: sock_addr,
-          data: buf,
-        })
+        .send_timeout(
+          SendPing {
+            to: sock_addr,
+            data: buf,
+          },
+          Duration::from_millis(50),
+        )
         .await
-        .map_err(|_| PingError::SenderGone)?;
+        .map_err(|err| match err {
+          SendTimeoutError::Timeout(_) => PingError::SenderTimeout,
+          SendTimeoutError::Closed(_) => PingError::SenderGone,
+        })?;
       if seq != (PACKETS as u16) - 1 {
         delay_for(Duration::from_millis(50)).await;
       }
@@ -90,6 +97,9 @@ impl PingCollectActor {
     use std::convert::identity;
     let mut values: Vec<_> = self.results.iter().cloned().filter_map(identity).collect();
     values.sort();
+
+    tracing::debug!("addr: {}, ping: {:?}", self.sock_addr, self.current);
+
     PingFinished {
       min: values.first().cloned(),
       max: values.last().cloned(),
@@ -113,6 +123,7 @@ impl PingCollectActor {
   }
 
   fn start_ping(&mut self, ctx: &mut Context<Self>) {
+    tracing::debug!(addr = self.sock_addr_string.as_str(), "start ping");
     self.results = [None; PACKETS];
     self.batch_id = self.batch_id.wrapping_add(1);
     self.current = None;
@@ -121,7 +132,7 @@ impl PingCollectActor {
       let addr = ctx.addr();
       async move {
         delay_for(TIMEOUT).await;
-        addr.send(PingCollectTimeout).await.ok();
+        addr.notify(PingCollectTimeout).await.ok();
       }
     });
     self.abort_timeout = Some(abort);
@@ -139,10 +150,10 @@ impl PingCollectActor {
       async move {
         if let Err(err) = f.await {
           tracing::error!(address = &address_string as &str, "send error: {}", err);
-          addr.send(err).await.ok();
+          addr.notify(err).await.ok();
+        } else {
+          timeout.await.ok();
         }
-
-        timeout.await.ok();
       }
     });
   }
@@ -234,9 +245,10 @@ impl Handler<PingReply> for PingCollectActor {
     if batch_id != self.batch_id {
       tracing::warn!(
         address = self.address_str(),
-        "ping reply discarded: seq = {}, batch_id = {}",
+        "ping reply discarded: seq = {}, batch_id = {}, expected_batch_id = {}",
         seq,
-        batch_id
+        batch_id,
+        self.batch_id
       );
       return;
     }

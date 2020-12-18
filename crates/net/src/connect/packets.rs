@@ -30,3 +30,5 @@ packet_type!(
   PacketGameStartPlayerClientInfoRequest
 );
 packet_type!(GameSlotClientStatusUpdate, PacketGameSlotClientStatusUpdate);
+packet_type!(AddNode, PacketAddNode);
+packet_type!(RemoveNode, PacketRemoveNode);

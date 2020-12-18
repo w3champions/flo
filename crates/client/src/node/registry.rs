@@ -1,5 +1,7 @@
 use crate::error::*;
-use crate::ping::{GetPingMap, PingActor, SetActiveAddress, UpdateAddresses};
+use crate::ping::{
+  AddAddress, GetPingMap, PingActor, RemoveAddress, SetActiveAddress, UpdateAddresses,
+};
 use crate::StartConfig;
 use flo_net::proto::flo_connect::Node;
 use flo_state::{async_trait, Actor, Container, Context, Handler, Message, RegistryRef, Service};
@@ -84,40 +86,23 @@ impl Handler<UpdateNodes> for NodeRegistry {
     }
 
     for node in nodes {
-      let name = node.name;
-      let ip_str: String = node.ip_addr;
-      let id = node.id;
-      let (ip, port) = if ip_str.contains(":") {
-        let addr = if let Some(addr) = ip_str.parse::<SocketAddrV4>().ok() {
-          addr
-        } else {
-          tracing::warn!("skipped node {}, parse addr with port failed.", node.id);
+      let socket_addr = match parse_node_addr(&node) {
+        Ok(v) => v,
+        Err(err) => {
+          tracing::error!(node_id = node.id, "skip node: {}", err);
           continue;
-        };
-
-        (
-          addr.ip().clone(),
-          addr.port() + flo_constants::NODE_ECHO_PORT_OFFSET,
-        )
-      } else {
-        let addr: Ipv4Addr = if let Some(addr) = ip_str.parse::<Ipv4Addr>().ok() {
-          addr
-        } else {
-          tracing::warn!("skipped node {}, parse ip addr failed.", node.id);
-          continue;
-        };
-        let port = flo_constants::NODE_ECHO_PORT;
-        (addr, port)
+        }
       };
+      let name = node.name;
 
       self.map.insert(
-        id,
+        node.id,
         NodeInfo {
-          id,
+          id: node.id,
           name: name.to_string(),
           location: node.location.to_string(),
           country_id: node.country_id.to_string(),
-          socket_addr: SocketAddr::from((ip, port)),
+          socket_addr,
         },
       );
     }
@@ -127,6 +112,31 @@ impl Handler<UpdateNodes> for NodeRegistry {
 
     Ok(())
   }
+}
+
+fn parse_node_addr(node: &Node) -> Result<SocketAddr> {
+  let ip_str: &str = &node.ip_addr;
+  let (ip, port) = if ip_str.contains(":") {
+    let addr = if let Some(addr) = ip_str.parse::<SocketAddrV4>().ok() {
+      addr
+    } else {
+      return Err(Error::InvalidNodeConfig);
+    };
+
+    (
+      addr.ip().clone(),
+      addr.port() + flo_constants::NODE_ECHO_PORT_OFFSET,
+    )
+  } else {
+    let addr: Ipv4Addr = if let Some(addr) = ip_str.parse::<Ipv4Addr>().ok() {
+      addr
+    } else {
+      return Err(Error::InvalidNodeConfig);
+    };
+    let port = flo_constants::NODE_ECHO_PORT;
+    (addr, port)
+  };
+  Ok(SocketAddr::from((ip, port)))
 }
 
 pub struct SetActiveNode {
@@ -217,6 +227,82 @@ impl Handler<UpdateAddressesAndGetNodePingMap> for NodeRegistry {
         })
         .collect(),
     )
+  }
+}
+
+pub struct AddNode {
+  pub node: Node,
+}
+
+impl Message for AddNode {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<AddNode> for NodeRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    AddNode { node }: AddNode,
+  ) -> <AddNode as Message>::Result {
+    let socket_addr = match parse_node_addr(&node) {
+      Ok(v) => v,
+      Err(err) => {
+        tracing::error!(node_id = node.id, "skip node: {}", err);
+        return;
+      }
+    };
+    let name = node.name;
+
+    self.map.insert(
+      node.id,
+      NodeInfo {
+        id: node.id,
+        name: name.to_string(),
+        location: node.location.to_string(),
+        country_id: node.country_id.to_string(),
+        socket_addr,
+      },
+    );
+
+    self
+      .ping
+      .notify(AddAddress {
+        address: socket_addr,
+      })
+      .await
+      .ok();
+    tracing::debug!(node_id = node.id, "add node: {}", socket_addr);
+  }
+}
+
+pub struct RemoveNode {
+  pub node_id: i32,
+}
+
+impl Message for RemoveNode {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<RemoveNode> for NodeRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    RemoveNode { node_id }: RemoveNode,
+  ) -> <RemoveNode as Message>::Result {
+    if let Some(node) = self.map.remove(&node_id) {
+      self
+        .ping
+        .notify(RemoveAddress {
+          address: node.socket_addr,
+        })
+        .await
+        .ok();
+      tracing::debug!(node_id, "remove node: {}", node.socket_addr);
+    } else {
+      tracing::warn!(node_id, "removed node was not found");
+    }
   }
 }
 

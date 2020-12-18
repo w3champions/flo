@@ -218,6 +218,10 @@ pub enum PacketTypeId {
   GameStartPlayerClientInfoRequest,
   #[bin(value = 0x1A)]
   GameSlotClientStatusUpdate,
+  #[bin(value = 0x1B)]
+  AddNode,
+  #[bin(value = 0x1C)]
+  RemoveNode,
 
   // Lobby <-> Node
   #[bin(value = 0x30)]

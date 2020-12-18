@@ -3,7 +3,7 @@ use crate::error::*;
 use crate::game::LocalGameInfo;
 use crate::message::message;
 use crate::message::message::OutgoingMessage;
-use crate::node::{GetNodePingMap, NodeRegistry, UpdateNodes};
+use crate::node::{AddNode, GetNodePingMap, NodeRegistry, RemoveNode, UpdateNodes};
 use crate::ping::PingUpdate;
 use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
 use crate::types::*;
@@ -93,6 +93,7 @@ impl ControllerStream {
     mut frame_receiver: Receiver<Frame>,
     owner: Addr<Self>,
     parent: Addr<ControllerClient>,
+    nodes_reg: Addr<NodeRegistry>,
   ) -> Result<()> {
     let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
     tracing::debug!("connect addr: {}", addr);
@@ -182,7 +183,7 @@ impl ControllerStream {
                 }
               }
 
-              match Self::handle_frame(id, player_id, frame, &mut stream, &owner, &parent).await {
+              match Self::handle_frame(id, player_id, frame, &mut stream, &owner, &parent, &nodes_reg).await {
                 Ok(_) => {},
                 Err(e) => {
                   tracing::error!("handle frame: {}", e);
@@ -225,6 +226,7 @@ impl ControllerStream {
     stream: &mut FloStream,
     owner: &Addr<Self>,
     parent: &Addr<ControllerClient>,
+    nodes: &Addr<NodeRegistry>,
   ) -> Result<()> {
     flo_net::try_flo_packet! {
       frame => {
@@ -395,6 +397,16 @@ impl ControllerStream {
             OutgoingMessage::GameStatusUpdate(p.into())
           ).notify(parent).await?;
         }
+        p: proto::PacketAddNode => {
+          nodes
+            .notify(AddNode { node: p.node.extract()? })
+            .await?;
+        }
+        p: proto::PacketRemoveNode => {
+          nodes
+            .notify(RemoveNode { node_id: p.node_id })
+            .await?;
+        }
       }
     };
     Ok(())
@@ -435,9 +447,11 @@ impl Actor for ControllerStream {
         let token = self.token.clone();
         let owner = ctx.addr();
         let parent = self.parent.clone();
+        let nodes = self.nodes.clone();
         async move {
           if let Err(err) =
-            Self::connect_and_serve(id, &domain, token, frame_rx, owner, parent.clone()).await
+            Self::connect_and_serve(id, &domain, token, frame_rx, owner, parent.clone(), nodes)
+              .await
           {
             tracing::error!("controller stream error: {}", err);
 

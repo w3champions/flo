@@ -71,16 +71,7 @@ impl Actor for PingActor {
         }
 
         // wait 15s and recreate the worker
-        let mut delay = delay_for(Duration::from_secs(15));
-        loop {
-          tokio::select! {
-            _ = &mut delay => {
-              break;
-            }
-            // consume all ping requests
-            _ = rx.recv() => {}
-          }
-        }
+        delay_for(Duration::from_secs(15)).await;
       }
     })
   }
@@ -108,7 +99,7 @@ impl Handler<RecvPong> for PingActor {
     RecvPong { from, data }: RecvPong,
   ) -> <RecvPong as Message>::Result {
     if let Some(v) = self.map.get_mut(&from) {
-      v.send(PingReply(data)).await.ok();
+      v.notify(PingReply(data)).await.ok();
     }
   }
 }
@@ -150,6 +141,49 @@ impl Handler<UpdateAddresses> for PingActor {
       tracing::debug!("remove addr: {}", addr);
       self.map.remove(&addr);
     }
+  }
+}
+
+pub struct AddAddress {
+  pub address: SocketAddr,
+}
+
+impl Message for AddAddress {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<AddAddress> for PingActor {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    AddAddress { address }: AddAddress,
+  ) -> <AddAddress as Message>::Result {
+    tracing::debug!("add addr: {}", address);
+    self.map.insert(
+      address,
+      PingCollectActor::new(self.tx.clone(), address).start(),
+    );
+  }
+}
+
+pub struct RemoveAddress {
+  pub address: SocketAddr,
+}
+
+impl Message for RemoveAddress {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<RemoveAddress> for PingActor {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    RemoveAddress { address }: RemoveAddress,
+  ) -> <RemoveAddress as Message>::Result {
+    tracing::debug!("remove addr: {}", address);
+    self.map.remove(&address);
   }
 }
 
@@ -234,6 +268,8 @@ impl Handler<SetActiveAddress> for PingActor {
 
 #[derive(Error, Debug)]
 pub enum PingError {
+  #[error("sender timeout")]
+  SenderTimeout,
   #[error("sender gone")]
   SenderGone,
   #[error("io: {0}")]

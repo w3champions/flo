@@ -506,4 +506,9 @@ impl FloController for FloControllerService {
 
     Ok(Response::new(()))
   }
+
+  async fn reload(&self, _request: Request<()>) -> Result<Response<()>, Status> {
+    self.state.reload().await?;
+    Ok(Response::new(()))
+  }
 }
