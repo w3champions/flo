@@ -135,8 +135,6 @@ impl GlobalState {
       }
     }
 
-    metrics::PLAYER_TOKENS.add(player_tokens.len() as i64);
-
     Ok(
       PacketControllerCreateGameAccept {
         game_id,
@@ -266,6 +264,7 @@ impl PlayerRegistry {
       let stale_player = if let Some(old) = state.player_token.insert(player_id, token.clone()) {
         state.map.remove(&old)
       } else {
+        tracing::debug!("player token inc: {}: {:?}", player_id, token);
         metrics::PLAYER_TOKENS.inc();
         None
       };
@@ -286,6 +285,7 @@ impl PlayerRegistry {
         use std::collections::hash_map::Entry;
         // remove token => player
         if state.map.remove(&token).is_some() {
+          tracing::debug!("player token dec: {}: {:?}", player_id, token);
           metrics::PLAYER_TOKENS.dec();
         }
         // remote player_id => token
