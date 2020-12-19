@@ -61,6 +61,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0688b520bcc7498f6ca8fa006e8031d353e3fd4f51bd4a50fb03cc4230b28bd2"
 
 [[package]]
+name = "async-dnssd"
+version = "0.5.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dac235ee9b029987d29f6da619afb328a7a8a80633bb93131d393f2a74ccda61"
+dependencies = [
+ "bitflags",
+ "futures 0.3.8",
+ "libc",
+ "log 0.4.11",
+ "mio",
+ "pin-utils",
+ "pkg-config",
+ "tokio",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -280,12 +297,6 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
-
-[[package]]
-name = "c_linked_list"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "casclib"
@@ -630,7 +641,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3b2f39c0462f098c1ca4abc408f7482949bbe2ab19bca5a4419f91f69e5bccc"
 dependencies = [
  "vswhom",
- "winreg 0.8.0",
+ "winreg",
 ]
 
 [[package]]
@@ -875,6 +886,7 @@ dependencies = [
 name = "flo-lan"
 version = "0.1.0"
 dependencies = [
+ "async-dnssd",
  "base64 0.12.3",
  "bytes 0.5.6",
  "flo-log",
@@ -985,10 +997,6 @@ dependencies = [
  "cc",
  "dotenv",
  "flo-config",
- "get_if_addrs",
- "home-dir",
- "if-addrs",
- "ipconfig",
  "plist",
  "serde",
  "thiserror",
@@ -1263,12 +1271,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gcc"
-version = "0.3.55"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
-
-[[package]]
 name = "generator"
 version = "0.6.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1289,28 +1291,6 @@ checksum = "501466ecc8a30d1d3b7fc9229b122b2ce8ed6e9d9223f1138d4babb253e51817"
 dependencies = [
  "typenum",
  "version_check",
-]
-
-[[package]]
-name = "get_if_addrs"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a54c43f691a555f724b251228f061975ce447c710898254697f97de134f40f5c"
-dependencies = [
- "c_linked_list",
- "get_if_addrs-sys",
- "libc",
- "winapi 0.2.8",
-]
-
-[[package]]
-name = "get_if_addrs-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf68ed691805f2dfe4e83cf85e3d373e704c3654c454dbb3280a15e2ea8d509"
-dependencies = [
- "gcc",
- "libc",
 ]
 
 [[package]]
@@ -1408,16 +1388,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "home-dir"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "572c4f9690c3ac7058775be826d1b508ca20fd6633261435c27ac30ad0598212"
-dependencies = [
- "nix",
- "thiserror",
-]
-
-[[package]]
 name = "hostname"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1503,27 +1473,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "if-addrs"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28538916eb3f3976311f5dfbe67b5362d0add1293d0a9cad17debf86f8e3aa48"
-dependencies = [
- "if-addrs-sys",
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "if-addrs-sys"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de74b9dd780476e837e5eb5ab7c88b49ed304126e412030a0adba99c8efe79ea"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
 name = "image"
 version = "0.23.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1577,18 +1526,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "ipconfig"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7e2f18aece9709094573a9f24f483c4f65caa4298e2f7ae1b71cc65d853fad7"
-dependencies = [
- "socket2",
- "widestring",
- "winapi 0.3.9",
- "winreg 0.6.2",
 ]
 
 [[package]]
@@ -1877,18 +1814,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "nix"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 0.1.10",
- "libc",
 ]
 
 [[package]]
@@ -3525,15 +3450,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "winreg"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
-dependencies = [
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "winreg"

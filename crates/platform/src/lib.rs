@@ -5,7 +5,6 @@ use std::path::PathBuf;
 mod windows_bindings;
 
 pub mod error;
-pub mod net;
 mod path;
 mod war3;
 

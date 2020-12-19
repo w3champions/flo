@@ -6,6 +6,7 @@ use crate::Result;
 pub enum Command {
   Token,
   Connect,
+  StartTestGame,
 }
 
 impl Command {
@@ -24,6 +25,11 @@ impl Command {
         })
         .await
         .unwrap();
+        client.serve().await;
+      }
+      Command::StartTestGame => {
+        let client = flo_client::start(Default::default()).await.unwrap();
+        client.start_test_game().await.unwrap();
         client.serve().await;
       }
     }

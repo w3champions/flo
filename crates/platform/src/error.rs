@@ -17,21 +17,9 @@ pub enum Error {
   #[error("config: {0}")]
   Config(#[from] flo_config::error::Error),
 
-  #[cfg(windows)]
-  #[error("ipconfig: {0}")]
-  IpConfig(#[from] ipconfig::error::Error),
-
-  #[cfg(target_os = "macos")]
-  #[error("get if addrs: {0}")]
-  GetIfAddrs(std::io::Error),
-
   #[cfg(target_os = "macos")]
   #[error("plist: {0}")]
   PList(#[from] plist::Error),
-
-  #[cfg(target_os = "linux")]
-  #[error("get if addrs: {0}")]
-  GetIfAddrs(std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

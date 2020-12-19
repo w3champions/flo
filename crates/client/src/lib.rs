@@ -31,6 +31,19 @@ impl FloClient {
     self.port
   }
 
+  pub async fn start_test_game(&self) -> Result<(), error::Error> {
+    use crate::platform::{Platform, StartTestGame};
+    let platform = self._registry.resolve::<Platform>().await?;
+
+    platform
+      .send(StartTestGame {
+        name: "TEST".to_string(),
+      })
+      .await??;
+
+    Ok(())
+  }
+
   pub async fn serve(self) {
     futures::future::pending().await
   }

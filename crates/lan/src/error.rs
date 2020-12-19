@@ -4,12 +4,10 @@ use thiserror::Error;
 pub enum Error {
   #[error("invalid game info: {0}")]
   InvalidGameInfo(&'static str),
-  #[error("mdns stream bind: {0}")]
-  MdnsStreamBind(std::io::Error),
-  #[error("mdns broadcast: {0}")]
-  MdnsBroadcast(std::io::Error),
-  #[error("mdns update game info: {0}")]
-  MdnsUpdateGameInfo(&'static str),
+  #[error("bonjour register: {0}")]
+  BonjourRegister(std::io::Error),
+  #[error("bonjour update: {0}")]
+  BonjourUpdate(String),
   #[error("get hostname: {0}")]
   GetHostName(std::io::Error),
   #[error("couldn't find game info record in the replay file")]
