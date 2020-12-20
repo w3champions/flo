@@ -11,9 +11,9 @@ use tokio::sync::mpsc::Sender;
 use tokio::time::delay_for;
 
 const TIMEOUT: Duration = Duration::from_secs(3);
-const INTERVAL: Duration = Duration::from_secs(30);
+const INTERVAL: Duration = Duration::from_secs(60);
 const ACTIVE_PING_INTERVAL: Duration = Duration::from_secs(10);
-const ERROR_DELAY: Duration = Duration::from_secs(30);
+const ERROR_DELAY: Duration = Duration::from_secs(60);
 
 pub struct PingCollectActor {
   sock_addr_string: String,
@@ -87,7 +87,7 @@ impl PingCollectActor {
           SendTimeoutError::Closed(_) => PingError::SenderGone,
         })?;
       if seq != (PACKETS as u16) - 1 {
-        delay_for(Duration::from_millis(50)).await;
+        delay_for(Duration::from_millis(100)).await;
       }
     }
     Ok(())

@@ -1,4 +1,3 @@
-mod constants;
 mod game_info;
 mod mdns;
 mod proto {

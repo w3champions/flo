@@ -37,7 +37,6 @@ members = [
 #stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
 stormlib = { git = "https://github.com/wc3tools/stormlib-rs.git" }
 stormlib-sys = { git = "https://github.com/wc3tools/stormlib-rs.git" }
-trust-dns-proto = { git = "https://github.com/fluxxu/trust-dns.git", branch = "main" }
 casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }

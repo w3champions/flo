@@ -90,25 +90,17 @@ impl LanGame {
     tokio::spawn(
       {
         let mut scope = scope.handle();
-        let mut publisher = MdnsPublisher::start(game_info).await?;
         let mdns_shutdown_notify = mdns_shutdown_notify.clone();
+        let publisher = MdnsPublisher::start(game_info).await?;
         async move {
-          loop {
-            tokio::select! {
-              _ = scope.left() => {
-                break;
-              }
-              _ = mdns_shutdown_notify.notified() => {
-                break;
-              }
-              _ = delay_for(Duration::from_secs(5)) => {
-                if let Err(err) = publisher.refresh().await {
-                  tracing::error!("mdns refresh: {}", err);
-                  break;
-                }
-              }
-            }
+          let _publisher = publisher;
+          tokio::select! {
+            _ = scope.left() => {}
+            _ = mdns_shutdown_notify.notified() => {}
           }
+
+          delay_for(Duration::from_secs(1)).await;
+
           tracing::debug!("exiting")
         }
       }

@@ -18,8 +18,6 @@ pub enum Error {
   NullByteInString,
   #[error("bin decode: {0}")]
   BinDecode(#[from] flo_util::binary::BinDecodeError),
-  #[error("dns protocol: {0}")]
-  DNSProtocol(#[from] trust_dns_proto::error::ProtoError),
   #[error("w3gs: {0}")]
   W3GS(#[from] flo_w3gs::error::Error),
   #[error("platform: {0}")]
