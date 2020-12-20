@@ -68,7 +68,7 @@ impl MdnsPublisher {
       "_blizzard._udp,_w3xp2730",
       port,
       RegisterData {
-        flags: async_dnssd::RegisterFlags::NO_AUTO_RENAME | async_dnssd::RegisterFlags::SHARED,
+        flags: async_dnssd::RegisterFlags::NO_AUTO_RENAME | async_dnssd::RegisterFlags::UNIQUE,
         interface: async_dnssd::Interface::Any,
         name: Some(&name),
         ..Default::default()
