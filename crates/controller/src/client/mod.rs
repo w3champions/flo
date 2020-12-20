@@ -125,7 +125,7 @@ async fn handle_stream(
         if let Some(msg) = next {
           match msg {
             PlayerSenderMessage::Frame(frame) => {
-              if let Err(e) = stream.send_frame(frame).await {
+              if let Err(e) = stream.send_frame_timeout(frame).await {
                 tracing::debug!("send error: {}", e);
                 break;
               }

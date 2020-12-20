@@ -155,7 +155,7 @@ impl ControllerStream {
       tokio::select! {
         next_send = frame_receiver.recv() => {
           if let Some(frame) = next_send {
-            match stream.send_frame(frame).await {
+            match stream.send_frame_timeout(frame).await {
               Ok(_) => {},
               Err(e) => {
                 tracing::debug!("exiting: send error: {}", e);
@@ -172,7 +172,7 @@ impl ControllerStream {
             Ok(mut frame) => {
               if frame.type_id == PacketTypeId::Ping {
                 frame.type_id = PacketTypeId::Pong;
-                match stream.send_frame(frame).await {
+                match stream.send_frame_timeout(frame).await {
                   Ok(_) => {
                     continue;
                   },
@@ -627,7 +627,7 @@ impl Handler<GetGameStartClientInfo> for ControllerStream {
       if info.game_id == game_id {
         let client_info = self
           .platform
-          .send(GetClientPlatformInfo)
+          .send(GetClientPlatformInfo { force_reload: true })
           .await?
           .map_err(|_| Error::War3NotLocated)?;
         let war3_version = client_info.version;

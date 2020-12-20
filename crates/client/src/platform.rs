@@ -104,7 +104,9 @@ impl Handler<GetMapList> for Platform {
   }
 }
 
-pub struct GetClientPlatformInfo;
+pub struct GetClientPlatformInfo {
+  pub force_reload: bool,
+}
 
 impl Message for GetClientPlatformInfo {
   type Result = Result<ClientPlatformInfo, PlatformStateError>;
@@ -115,9 +117,16 @@ impl Handler<GetClientPlatformInfo> for Platform {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    _: GetClientPlatformInfo,
+    GetClientPlatformInfo { force_reload }: GetClientPlatformInfo,
   ) -> <GetClientPlatformInfo as Message>::Result {
-    self.info.clone()
+    if force_reload {
+      let (config, info) = load(&self.start_config).await;
+      self.config = config;
+      self.info = info;
+      self.info.clone()
+    } else {
+      self.info.clone()
+    }
   }
 }
 

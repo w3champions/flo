@@ -165,7 +165,7 @@ impl BinEncode for MessageScope {
 }
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
-pub struct ChatFromHost(ChatToHost);
+pub struct ChatFromHost(pub ChatToHost);
 
 impl From<ChatToHost> for ChatFromHost {
   fn from(inner: ChatToHost) -> Self {
@@ -174,6 +174,10 @@ impl From<ChatToHost> for ChatFromHost {
 }
 
 impl ChatFromHost {
+  pub fn from_player(&self) -> u8 {
+    self.0.from_player
+  }
+
   pub fn lobby(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
     ChatToHost::lobby(from, to, message).into()
   }

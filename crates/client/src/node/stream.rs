@@ -211,7 +211,7 @@ impl NodeStream {
     tracing::debug!("flushing...");
     outgoing_receiver.close();
     while let Some(frame) = outgoing_receiver.recv().await {
-      stream.send_frame(frame).await.ok();
+      stream.send_frame_timeout(frame).await.ok();
     }
     stream.flush().await.ok();
     shutdown_complete.send(()).ok();

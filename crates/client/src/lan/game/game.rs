@@ -14,6 +14,7 @@ use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
+use std::collections::BTreeSet;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -32,6 +33,7 @@ pub struct GameHandler<'a> {
   w3gs_rx: &'a mut Receiver<Packet>,
   tick_recv: u32,
   tick_ack: u32,
+  muted_players: BTreeSet<u8>,
 }
 
 impl<'a> GameHandler<'a> {
@@ -54,6 +56,7 @@ impl<'a> GameHandler<'a> {
       w3gs_rx,
       tick_recv: 0,
       tick_ack: 0,
+      muted_players: BTreeSet::new(),
     }
   }
 
@@ -117,6 +120,20 @@ impl<'a> GameHandler<'a> {
         self.tick_recv += 1;
       }
       OutgoingAction::PACKET_TYPE_ID => {}
+      ChatFromHost::PACKET_TYPE_ID => {
+        if !self.muted_players.is_empty() {
+          let pkt: ChatFromHost = pkt.decode_simple()?;
+          if let ChatToHost {
+            message: ChatMessage::Scoped { .. },
+            ..
+          } = pkt.0
+          {
+            if self.muted_players.contains(&pkt.from_player()) {
+              return Ok(());
+            }
+          }
+        }
+      }
       _ => {}
     }
 
@@ -193,6 +210,147 @@ impl<'a> GameHandler<'a> {
           self.tick_recv, self.tick_ack
         )],
       ),
+      cmd if cmd.starts_with("mute") => {
+        let targets: Vec<(u8, &str)> = self
+          .info
+          .slot_info
+          .player_infos
+          .iter()
+          .filter_map(|slot| {
+            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+              return None;
+            }
+            if !self.muted_players.contains(&slot.slot_player_id) {
+              Some((slot.slot_player_id, slot.name.as_str()))
+            } else {
+              None
+            }
+          })
+          .collect();
+
+        if cmd.trim_end() == "mute" {
+          match targets.len() {
+            0 => {
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("You have silenced all the players.")],
+              );
+              return;
+            }
+            1 => {
+              self.muted_players.insert(targets[0].0);
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("Muted: {}", targets[0].1)],
+              );
+            }
+            _ => {
+              let mut msgs = vec![format!("Type `!mute <ID>` to mute a player:")];
+              for (id, name) in targets {
+                msgs.push(format!(" ID={} {}", id, name));
+              }
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+            }
+          }
+        } else {
+          if let Some(id) = (&cmd["mute ".len()..]).parse::<u8>().ok() {
+            if let Some(info) = self
+              .info
+              .slot_info
+              .player_infos
+              .iter()
+              .find(|info| info.slot_player_id == id)
+            {
+              self.muted_players.insert(id);
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("Muted: {}", info.name)],
+              );
+            } else {
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, {
+                let mut msgs = vec![format!("Invalid player id. Players:")];
+                for (id, name) in targets {
+                  msgs.push(format!(" ID={} {}", id, name));
+                }
+                msgs
+              });
+            }
+          } else {
+            self.send_chats_to_self(
+              self.info.slot_info.slot_player_id,
+              vec![format!("Invalid syntax. Example: !mute 1")],
+            );
+          }
+        }
+      }
+      cmd if cmd.starts_with("unmute") => {
+        let targets: Vec<(u8, &str)> = self
+          .muted_players
+          .iter()
+          .cloned()
+          .filter_map(|id| {
+            if id == self.info.slot_info.slot_player_id {
+              return None;
+            }
+            self
+              .info
+              .slot_info
+              .player_infos
+              .iter()
+              .find(|info| info.slot_player_id == id)
+              .map(|info| (info.slot_player_id, info.name.as_str()))
+          })
+          .collect();
+
+        if cmd.trim_end() == "unmute" {
+          match targets.len() {
+            0 => {
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("No player to unmute.")],
+              );
+              return;
+            }
+            1 => {
+              self.muted_players.remove(&targets[0].0);
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("Un-muted: {}", targets[0].1)],
+              );
+            }
+            _ => {
+              let mut msgs = vec![format!("Type `!unmute <ID>` to unmute a player:")];
+              for (id, name) in targets {
+                msgs.push(format!(" ID={} {}", id, name));
+              }
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+            }
+          }
+        } else {
+          if let Some(id) = (&cmd["unmute ".len()..]).parse::<u8>().ok() {
+            if let Some(name) = targets.iter().find(|info| info.0 == id).map(|info| info.1) {
+              self.muted_players.remove(&id);
+              self.send_chats_to_self(
+                self.info.slot_info.slot_player_id,
+                vec![format!("Un-muted: {}", name)],
+              );
+            } else {
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, {
+                let mut msgs = vec![format!("Invalid player id. Muted players:")];
+                for (id, name) in targets {
+                  msgs.push(format!(" ID={} {}", id, name));
+                }
+                msgs
+              });
+            }
+          } else {
+            self.send_chats_to_self(
+              self.info.slot_info.slot_player_id,
+              vec![format!("Invalid syntax. Example: !unmute 1")],
+            );
+          }
+        }
+      }
       _ => self.send_chats_to_self(
         self.info.slot_info.slot_player_id,
         vec![format!("Unknown command")],

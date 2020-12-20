@@ -69,10 +69,16 @@ impl FloStream {
     self.transport.get_ref().peer_addr().map_err(Into::into)
   }
 
-  pub async fn send_frame(&mut self, frame: Frame) -> Result<()> {
+  pub async fn send_frame_timeout(&mut self, frame: Frame) -> Result<()> {
     timeout(self.timeout, self.transport.send(frame))
       .await
       .map_err(|_elapsed| Error::StreamTimeout)??;
+    Ok(())
+  }
+
+  #[inline]
+  pub async fn send_frame(&mut self, frame: Frame) -> Result<()> {
+    self.transport.send(frame).await?;
     Ok(())
   }
 
@@ -93,7 +99,7 @@ impl FloStream {
   where
     T: FloPacket,
   {
-    self.send_frame(packet.encode_as_frame()?).await?;
+    self.send_frame_timeout(packet.encode_as_frame()?).await?;
     Ok(())
   }
 

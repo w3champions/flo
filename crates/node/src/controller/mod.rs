@@ -157,7 +157,7 @@ async fn handle_stream(
       }
       next = rx.recv() => {
         if let Some(frame) = next {
-          stream.send_frame(frame).await?;
+          stream.send_frame_timeout(frame).await?;
         } else {
           break;
         }

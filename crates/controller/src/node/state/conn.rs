@@ -166,7 +166,7 @@ impl NodeConnActor {
           keepalive_timer.reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
           keepalive_status = KeepAliveStatus::Idle;
 
-          if let Err(err) = stream.send_frame(frame).await {
+          if let Err(err) = stream.send_frame_timeout(frame).await {
             tracing::error!("send: {}", err);
             addr.send(Disconnected).await.ok();
             break;

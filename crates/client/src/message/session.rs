@@ -173,7 +173,12 @@ impl Worker {
   }
 
   async fn get_client_info_message(&self) -> Result<OutgoingMessage> {
-    let info = self.platform.send(GetClientPlatformInfo).await?;
+    let info = self
+      .platform
+      .send(GetClientPlatformInfo {
+        force_reload: false,
+      })
+      .await?;
     Ok(OutgoingMessage::ClientInfo(ClientInfo {
       version: crate::version::FLO_VERSION_STRING.into(),
       war3_info: get_war3_info(info),

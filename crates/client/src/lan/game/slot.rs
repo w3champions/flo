@@ -102,6 +102,6 @@ pub fn build_player_slot_info(
   })
 }
 
-fn index_to_player_id(index: usize) -> u8 {
+pub fn index_to_player_id(index: usize) -> u8 {
   return (index + 1) as u8;
 }
