@@ -10,3 +10,6 @@ flo.toml
 /build/release
 /logs
 /flo-logs
+
+# Config files
+*.json
