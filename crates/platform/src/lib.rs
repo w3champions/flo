@@ -104,7 +104,7 @@ impl ClientPlatformInfo {
 
   #[cfg(target_os = "linux")]
   pub fn with_config(_config: &ClientConfig) -> Result<Self> {
-    unimplemented!();
+    Err(Error::NoInstallationFolder)
   }
 
   pub fn from_env() -> Result<Self> {
