@@ -59,6 +59,7 @@ jobs:
     displayName: 'install rust'
   
   - powershell: |
+      $env:BONJOUR_SDK_HOME="$(Build.Repository.LocalPath)\deps\bonjour-sdk-windows"
       cargo build -p flo-worker --release
     displayName: 'build flo worker'
   
