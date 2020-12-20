@@ -179,6 +179,19 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
+      "help" => {
+        let messages = vec![
+          "Chat commands:".to_string(),
+          " !flo: print game information.".to_string(),
+          " !muteall: Mute all players.".to_string(),
+          " !unmuteall: Mute all players.".to_string(),
+          " !mute: Mute your opponent (1v1), or display a player list.".to_string(),
+          " !mute <ID>: Mute a player.".to_string(),
+          " !unmute: Unmute your opponent (1v1), or display a player list.".to_string(),
+          " !unmute <ID>: Unmute a player.".to_string(),
+        ];
+        self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
+      }
       "flo" => {
         let mut messages = vec![
           format!(
@@ -210,6 +223,32 @@ impl<'a> GameHandler<'a> {
           self.tick_recv, self.tick_ack
         )],
       ),
+      "muteall" => {
+        let targets: Vec<u8> = self
+          .info
+          .slot_info
+          .player_infos
+          .iter()
+          .filter_map(|slot| {
+            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+              return None;
+            }
+            Some(slot.slot_player_id)
+          })
+          .collect();
+        self.muted_players.extend(targets);
+        self.send_chats_to_self(
+          self.info.slot_info.slot_player_id,
+          vec![format!("All players muted.")],
+        );
+      }
+      "unmuteall" => {
+        self.muted_players.clear();
+        self.send_chats_to_self(
+          self.info.slot_info.slot_player_id,
+          vec![format!("All players un-muted.")],
+        );
+      }
       cmd if cmd.starts_with("mute") => {
         let targets: Vec<(u8, &str)> = self
           .info
