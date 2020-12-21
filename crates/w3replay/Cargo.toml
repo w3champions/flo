@@ -8,8 +8,8 @@ edition = "2018"
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 
-flate2 = "1.0.16"
+flate2 = "1.0"
 thiserror = "1"
 bitflags = "1"
-crc32fast = "1.2.0"
-bytes = "0.5.5"
+crc32fast = "1.2"
+bytes = "0.5"

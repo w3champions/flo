@@ -8,5 +8,5 @@ edition = "2018"
 flo-client = { path = "../../crates/client" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 
-dotenv = "0.15.0"
-tokio = { version = "0.2.22", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "signal", "rt-threaded"] }
+dotenv = "0.15"
+tokio = { version = "0.2", features = ["time", "tcp", "udp", "stream", "macros", "sync", "blocking", "signal", "rt-threaded"] }

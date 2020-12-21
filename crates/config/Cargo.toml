@@ -9,6 +9,6 @@ edition = "2018"
 [dependencies]
 flo-constants = { path = "../constants" }
 
-serde = { version = "1.0.114", features = ["derive"] }
-toml = "0.5.6"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5"
 thiserror = "1"
