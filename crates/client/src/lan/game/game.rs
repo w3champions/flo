@@ -184,7 +184,7 @@ impl<'a> GameHandler<'a> {
           "Chat commands:".to_string(),
           " !flo: print game information.".to_string(),
           " !muteall: Mute all players.".to_string(),
-          " !unmuteall: Mute all players.".to_string(),
+          " !unmuteall: Unmute all players.".to_string(),
           " !mute: Mute your opponent (1v1), or display a player list.".to_string(),
           " !mute <ID>: Mute a player.".to_string(),
           " !unmute: Unmute your opponent (1v1), or display a player list.".to_string(),
