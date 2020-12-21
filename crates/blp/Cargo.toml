@@ -7,4 +7,4 @@ edition = "2018"
 [dependencies]
 flo-util = { path = "../util" }
 
-image = "0.23.6"
+image = "0.23"
