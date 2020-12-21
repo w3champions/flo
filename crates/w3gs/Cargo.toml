@@ -14,7 +14,7 @@ prost = "0.6"
 futures = "0.3"
 tokio = { version = "0.2", features = ["tcp", "io-util"] }
 tokio-util = { version = "0.3.1", features = ["codec"] }
-rand = "0.7.3"
+rand = "0.8"
 crc32fast = "1.2.0"
 
 [build-dependencies]

@@ -39,7 +39,7 @@ serde_json = "1.0.56"
 base64 = "0.12.3"
 lazy_static = "1.4"
 hash-ids = "0.2.1"
-rand = "0.7.3"
+rand = "0.8"
 
 [dev-dependencies]
 dotenv = "0.15.0"
