@@ -438,6 +438,7 @@ impl Shared {
           }
           PlayerSendError::ChannelFull => {
             tracing::info!(player_id, "removing player: channel full");
+            self.get_player(player_id)?.tx.take();
           }
           _ => {}
         }
