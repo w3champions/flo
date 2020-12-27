@@ -48,6 +48,7 @@ pub enum Message {
 
 #[derive(Debug)]
 pub struct Dispatcher {
+  game_id: i32,
   scope: SpawnScope,
   start_tx: Option<oneshot::Sender<()>>,
 }
@@ -60,7 +61,7 @@ impl Dispatcher {
     out_tx: GameEventSender,
   ) -> Self {
     let scope = SpawnScope::new();
-    let state = State::new(slots);
+    let state = State::new(game_id, slots);
 
     let (start_tx, start_rx) = oneshot::channel();
     let (action_tx, action_rx) = channel(10);
@@ -77,6 +78,7 @@ impl Dispatcher {
 
     Dispatcher {
       scope,
+      game_id,
       start_tx: Some(start_tx),
     }
   }
@@ -165,6 +167,7 @@ enum ActionMsg {
 
 #[derive(Debug)]
 struct State {
+  game_id: i32,
   sent_tick: u32,
   shared: Arc<Mutex<Shared>>,
   player_ack_map: BTreeMap<i32, usize>,
@@ -172,10 +175,11 @@ struct State {
 }
 
 impl State {
-  fn new(slots: &[PlayerSlot]) -> Self {
+  fn new(game_id: i32, slots: &[PlayerSlot]) -> Self {
     State {
+      game_id,
       sent_tick: 0,
-      shared: Arc::new(Mutex::new(Shared::new(slots))),
+      shared: Arc::new(Mutex::new(Shared::new(game_id, slots))),
       player_ack_map: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, 0))
@@ -285,7 +289,12 @@ impl State {
     match packet.type_id() {
       PacketTypeId::LeaveReq => {
         let req: LeaveReq = packet.decode_simple()?;
-        tracing::info!(player_id, "leave: {:?}", req.reason());
+        tracing::info!(
+          game_id = self.game_id,
+          player_id,
+          "leave: {:?}",
+          req.reason()
+        );
 
         let pkt = Packet::simple(PlayerLeft {
           player_id: slot_player_id,
@@ -377,12 +386,14 @@ impl State {
 
 #[derive(Debug)]
 struct Shared {
+  game_id: i32,
   map: BTreeMap<i32, PlayerDispatchInfo>,
 }
 
 impl Shared {
-  fn new(slots: &[PlayerSlot]) -> Self {
+  fn new(game_id: i32, slots: &[PlayerSlot]) -> Self {
     Self {
+      game_id,
       map: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, PlayerDispatchInfo::new(slot)))
@@ -433,11 +444,19 @@ impl Shared {
       for (player_id, err) in errors {
         match err {
           PlayerSendError::Closed(_frame) => {
-            tracing::info!(player_id, "removing player: stream broken");
+            tracing::info!(
+              game_id = self.game_id,
+              player_id,
+              "removing player: stream broken"
+            );
             self.get_player(player_id)?.tx.take();
           }
           PlayerSendError::ChannelFull => {
-            tracing::info!(player_id, "removing player: channel full");
+            tracing::info!(
+              game_id = self.game_id,
+              player_id,
+              "removing player: channel full"
+            );
             self.get_player(player_id)?.tx.take();
           }
           _ => {}

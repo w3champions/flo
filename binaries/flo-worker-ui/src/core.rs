@@ -1,7 +1,7 @@
-use structopt::StructOpt;
 use std::path::PathBuf;
+use structopt::StructOpt;
 
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 pub const JSON_CONF_FNAME: &str = "flo-config.json";
 
@@ -21,7 +21,7 @@ pub struct Opt {
   pub controller_host: Option<String>,
 
   #[structopt(long)]
-  pub use_flo_web: bool
+  pub use_flo_web: bool,
 }
 
 impl Default for Opt {
@@ -31,7 +31,7 @@ impl Default for Opt {
       token: None,
       installation_path: None,
       controller_host: None,
-      use_flo_web: true
+      use_flo_web: true,
     }
   }
 }

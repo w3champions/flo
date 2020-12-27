@@ -154,6 +154,18 @@ message PacketRemoveNode {
   int32 node_id = 1;
 }
 
+message PacketPlayerMuteListUpdate {
+  repeated int32 mute_list = 1;
+}
+
+message PacketPlayerMuteAddRequest {
+  int32 player_id = 1;
+}
+
+message PacketPlayerMuteRemoveRequest {
+  int32 player_id = 1;
+}
+
 message NodePingMap {
   map<int32, PingStats> player_ping_map = 2;
 }

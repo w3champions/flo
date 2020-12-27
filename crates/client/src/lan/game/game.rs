@@ -1,20 +1,20 @@
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::watch::Receiver as WatchReceiver;
-
-use flo_w3gs::net::W3GSStream;
-use flo_w3gs::packet::*;
-use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
-use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
-use flo_w3gs::protocol::leave::LeaveAck;
-
+use crate::controller::{ControllerClient, GetMuteList, MutePlayer, UnmutePlayer};
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
+use flo_w3gs::net::W3GSStream;
+use flo_w3gs::packet::*;
+use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
+use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
+use flo_w3gs::protocol::leave::LeaveAck;
 use std::collections::BTreeSet;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::watch::Receiver as WatchReceiver;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -22,7 +22,6 @@ pub enum GameResult {
   Leave,
 }
 
-#[derive(Debug)]
 pub struct GameHandler<'a> {
   info: &'a LanGameInfo,
   node: &'a NodeInfo,
@@ -31,6 +30,7 @@ pub struct GameHandler<'a> {
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_tx: &'a mut Sender<Packet>,
   w3gs_rx: &'a mut Receiver<Packet>,
+  client: &'a mut Addr<ControllerClient>,
   tick_recv: u32,
   tick_ack: u32,
   muted_players: BTreeSet<u8>,
@@ -45,6 +45,8 @@ impl<'a> GameHandler<'a> {
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
+
+    client: &'a mut Addr<ControllerClient>,
   ) -> Self {
     GameHandler {
       info,
@@ -54,6 +56,7 @@ impl<'a> GameHandler<'a> {
       status_rx,
       w3gs_tx,
       w3gs_rx,
+      client,
       tick_recv: 0,
       tick_ack: 0,
       muted_players: BTreeSet::new(),
@@ -62,6 +65,25 @@ impl<'a> GameHandler<'a> {
 
   pub async fn run(&mut self) -> Result<GameResult> {
     let mut loop_state = GameLoopState::new(&self.info);
+
+    let mute_list = if let Ok(v) = self.client.send(GetMuteList).await {
+      v
+    } else {
+      vec![]
+    };
+    let mut muted_names = vec![];
+    for p in &self.info.slot_info.player_infos {
+      if mute_list.contains(&p.player_id) {
+        muted_names.push(p.name.clone());
+        self.muted_players.insert(p.slot_player_id);
+      }
+    }
+    if !muted_names.is_empty() {
+      self.send_chats_to_self(
+        self.info.slot_info.slot_player_id,
+        vec![format!("Auto muted: {}", muted_names.join(", "))],
+      )
+    }
 
     loop {
       tokio::select! {
@@ -181,14 +203,14 @@ impl<'a> GameHandler<'a> {
     match cmd.trim_end() {
       "help" => {
         let messages = vec![
-          "Chat commands:".to_string(),
-          " !flo: print game information.".to_string(),
-          " !muteall: Mute all players.".to_string(),
-          " !unmuteall: Unmute all players.".to_string(),
-          " !mute: Mute your opponent (1v1), or display a player list.".to_string(),
-          " !mute <ID>: Mute a player.".to_string(),
-          " !unmute: Unmute your opponent (1v1), or display a player list.".to_string(),
-          " !unmute <ID>: Unmute a player.".to_string(),
+          "!flo: print game information.".to_string(),
+          "!muteall: Mute all players.".to_string(),
+          "!muteopps: Mute all opponents.".to_string(),
+          "!unmuteall: Unmute all players.".to_string(),
+          "!mute/mutef: Mute your opponent (1v1), or display a player list.".to_string(),
+          "!mute/mutef <ID>: Mute a player.".to_string(),
+          "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
+          "!unmute/unmutef <ID>: Unmute a player.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
@@ -242,6 +264,29 @@ impl<'a> GameHandler<'a> {
           vec![format!("All players muted.")],
         );
       }
+      "muteopps" => {
+        let my_team = self.info.slot_info.my_slot.team;
+        let targets: Vec<u8> = self
+          .info
+          .slot_info
+          .player_infos
+          .iter()
+          .filter_map(|slot| {
+            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+              return None;
+            }
+            if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
+              return None;
+            }
+            Some(slot.slot_player_id)
+          })
+          .collect();
+        self.muted_players.extend(targets);
+        self.send_chats_to_self(
+          self.info.slot_info.slot_player_id,
+          vec![format!("All opponents muted.")],
+        );
+      }
       "unmuteall" => {
         self.muted_players.clear();
         self.send_chats_to_self(
@@ -250,7 +295,7 @@ impl<'a> GameHandler<'a> {
         );
       }
       cmd if cmd.starts_with("mute") => {
-        let targets: Vec<(u8, &str)> = self
+        let targets: Vec<(u8, &str, i32)> = self
           .info
           .slot_info
           .player_infos
@@ -260,14 +305,16 @@ impl<'a> GameHandler<'a> {
               return None;
             }
             if !self.muted_players.contains(&slot.slot_player_id) {
-              Some((slot.slot_player_id, slot.name.as_str()))
+              Some((slot.slot_player_id, slot.name.as_str(), slot.player_id))
             } else {
               None
             }
           })
           .collect();
 
-        if cmd.trim_end() == "mute" {
+        let cmd = cmd.trim_end();
+        if cmd == "mute" || cmd == "mutef" {
+          let forever = cmd == "mutef";
           match targets.len() {
             0 => {
               self.send_chats_to_self(
@@ -278,21 +325,31 @@ impl<'a> GameHandler<'a> {
             }
             1 => {
               self.muted_players.insert(targets[0].0);
-              self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
-                vec![format!("Muted: {}", targets[0].1)],
-              );
+              if forever {
+                self.save_mute(targets[0].2, targets[0].1.to_string(), true);
+              } else {
+                self.send_chats_to_self(
+                  self.info.slot_info.slot_player_id,
+                  vec![format!("Muted: {}", targets[0].1)],
+                );
+              }
             }
             _ => {
-              let mut msgs = vec![format!("Type `!mute <ID>` to mute a player:")];
-              for (id, name) in targets {
+              let mut msgs = vec![format!("Type `!mute or !mutef <ID>` to mute a player:")];
+              for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
               self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
             }
           }
         } else {
-          if let Some(id) = (&cmd["mute ".len()..]).parse::<u8>().ok() {
+          let forever = cmd.starts_with("mutef");
+          let id = if forever {
+            &cmd["mutef ".len()..]
+          } else {
+            &cmd["mute ".len()..]
+          };
+          if let Some(id) = id.parse::<u8>().ok() {
             if let Some(info) = self
               .info
               .slot_info
@@ -301,14 +358,19 @@ impl<'a> GameHandler<'a> {
               .find(|info| info.slot_player_id == id)
             {
               self.muted_players.insert(id);
-              self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
-                vec![format!("Muted: {}", info.name)],
-              );
+
+              if forever {
+                self.save_mute(info.player_id, info.name.clone(), true);
+              } else {
+                self.send_chats_to_self(
+                  self.info.slot_info.slot_player_id,
+                  vec![format!("Muted: {}", info.name)],
+                );
+              }
             } else {
               self.send_chats_to_self(self.info.slot_info.slot_player_id, {
                 let mut msgs = vec![format!("Invalid player id. Players:")];
-                for (id, name) in targets {
+                for (id, name, _) in targets {
                   msgs.push(format!(" ID={} {}", id, name));
                 }
                 msgs
@@ -323,7 +385,7 @@ impl<'a> GameHandler<'a> {
         }
       }
       cmd if cmd.starts_with("unmute") => {
-        let targets: Vec<(u8, &str)> = self
+        let targets: Vec<(u8, &str, i32)> = self
           .muted_players
           .iter()
           .cloned()
@@ -337,11 +399,13 @@ impl<'a> GameHandler<'a> {
               .player_infos
               .iter()
               .find(|info| info.slot_player_id == id)
-              .map(|info| (info.slot_player_id, info.name.as_str()))
+              .map(|info| (info.slot_player_id, info.name.as_str(), info.player_id))
           })
           .collect();
 
-        if cmd.trim_end() == "unmute" {
+        let cmd = cmd.trim_end();
+        if cmd == "unmute" || cmd == "unmutef" {
+          let forever = cmd == "unmutef";
           match targets.len() {
             0 => {
               self.send_chats_to_self(
@@ -352,31 +416,51 @@ impl<'a> GameHandler<'a> {
             }
             1 => {
               self.muted_players.remove(&targets[0].0);
-              self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
-                vec![format!("Un-muted: {}", targets[0].1)],
-              );
+
+              if forever {
+                self.save_mute(targets[0].2, targets[0].1.to_string(), false);
+              } else {
+                self.send_chats_to_self(
+                  self.info.slot_info.slot_player_id,
+                  vec![format!("Un-muted: {}", targets[0].1)],
+                );
+              }
             }
             _ => {
               let mut msgs = vec![format!("Type `!unmute <ID>` to unmute a player:")];
-              for (id, name) in targets {
+              for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
               self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
             }
           }
         } else {
-          if let Some(id) = (&cmd["unmute ".len()..]).parse::<u8>().ok() {
-            if let Some(name) = targets.iter().find(|info| info.0 == id).map(|info| info.1) {
+          let forever = cmd.starts_with("unmutef");
+          let id = if forever {
+            &cmd["unmutef ".len()..]
+          } else {
+            &cmd["unmute ".len()..]
+          };
+          if let Some(id) = id.parse::<u8>().ok() {
+            if let Some((name, player_id)) = targets
+              .iter()
+              .find(|info| info.0 == id)
+              .map(|info| (info.1, info.2))
+            {
               self.muted_players.remove(&id);
-              self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
-                vec![format!("Un-muted: {}", name)],
-              );
+
+              if forever {
+                self.save_mute(player_id, name.to_string(), false);
+              } else {
+                self.send_chats_to_self(
+                  self.info.slot_info.slot_player_id,
+                  vec![format!("Un-muted: {}", name)],
+                );
+              }
             } else {
               self.send_chats_to_self(self.info.slot_info.slot_player_id, {
                 let mut msgs = vec![format!("Invalid player id. Muted players:")];
-                for (id, name) in targets {
+                for (id, name, _) in targets {
                   msgs.push(format!(" ID={} {}", id, name));
                 }
                 msgs
@@ -399,18 +483,51 @@ impl<'a> GameHandler<'a> {
 
   fn send_chats_to_self(&self, player_id: u8, messages: Vec<String>) {
     let mut tx = self.w3gs_tx.clone();
+    tokio::spawn(async move { send_chats_to_self(&mut tx, player_id, messages).await });
+  }
+
+  fn save_mute(&self, player_id: i32, name: String, muted: bool) {
+    let mut tx = self.w3gs_tx.clone();
+    let client = self.client.clone();
+    let my_slot_player_id = self.info.slot_info.slot_player_id;
     tokio::spawn(async move {
-      for message in messages {
-        match Packet::simple(ChatFromHost::private_to_self(player_id, message)) {
-          Ok(pkt) => {
-            tx.send(pkt).await.ok();
-          }
-          Err(err) => {
-            tracing::error!("encode chat packet: {}", err);
-          }
-        }
+      let action = if muted { "Muted" } else { "Un-muted" };
+      let send = if muted {
+        client.send(MutePlayer { player_id }).await
+      } else {
+        client.send(UnmutePlayer { player_id }).await
+      }
+      .map_err(Error::from);
+      if let Err(err) = send.and_then(std::convert::identity) {
+        tracing::error!("save mute failed: {}", err);
+        send_chats_to_self(
+          &mut tx,
+          my_slot_player_id,
+          vec![format!("{} temporary: {}", action, name)],
+        )
+        .await;
+      } else {
+        send_chats_to_self(
+          &mut tx,
+          my_slot_player_id,
+          vec![format!("{} forever: {}", action, name)],
+        )
+        .await;
       }
     });
+  }
+}
+
+async fn send_chats_to_self(tx: &mut Sender<Packet>, player_id: u8, messages: Vec<String>) {
+  for message in messages {
+    match Packet::simple(ChatFromHost::private_to_self(player_id, message)) {
+      Ok(pkt) => {
+        tx.send(pkt).await.ok();
+      }
+      Err(err) => {
+        tracing::error!("encode chat packet: {}", err);
+      }
+    }
   }
 }
 

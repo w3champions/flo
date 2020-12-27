@@ -22,11 +22,13 @@ pub enum Error {
   SlotNotResolved,
   #[error("Stream closed unexpectedly")]
   StreamClosed,
+  #[error("Disconnected from Flo controller")]
+  ControllerDisconnected,
   #[error("Invalid map info")]
   InvalidMapInfo,
   #[error("Ping: {0}")]
   Ping(#[from] PingError),
-  #[error("Warcraft ||| not located")]
+  #[error("Warcraft III not located")]
   War3NotLocated,
   #[error("Connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(crate::types::RejectReason),

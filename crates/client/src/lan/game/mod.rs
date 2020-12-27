@@ -120,7 +120,13 @@ impl LanGame {
   }
 
   pub async fn update_game_status(&self, status: NodeGameStatus) {
-    if ![NodeGameStatus::Created, NodeGameStatus::Waiting].contains(&status) {
+    if ![
+      NodeGameStatus::Created,
+      NodeGameStatus::Waiting,
+      NodeGameStatus::Loading,
+    ]
+    .contains(&status)
+    {
       self.mdns_shutdown_notify.notify();
     }
     self.proxy.dispatch_game_status_change(status).await;

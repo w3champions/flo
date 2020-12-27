@@ -24,12 +24,15 @@ impl Handler<PlayerJoin> for GameActor {
     PlayerJoin { player_id }: PlayerJoin,
   ) -> Result<Game> {
     let game_id = self.game_id;
-    let game = self
+    let (game, mute_list) = self
       .db
       .exec(move |conn| {
         conn.transaction(|| {
           crate::game::db::add_player(conn, game_id, player_id)?;
-          crate::game::db::get_full(conn, game_id)
+          let game = crate::game::db::get_full(conn, game_id)?;
+          let mut mute_list_map =
+            crate::player::db::get_mute_list_map(conn, &game.get_player_ids())?;
+          Ok::<_, Error>((game, mute_list_map.remove(&player_id).unwrap_or_default()))
         })
       })
       .await?;
@@ -39,7 +42,7 @@ impl Handler<PlayerJoin> for GameActor {
     // send game info to joined player
     self
       .player_reg
-      .player_replace_game(player_id, game.clone())
+      .player_replace_game(player_id, game.clone(), mute_list)
       .await?;
 
     {

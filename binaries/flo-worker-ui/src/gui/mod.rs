@@ -7,8 +7,8 @@ mod update;
 use image::ImageFormat;
 
 use iced::{
-  button, Application, Command, Element, Container, Column, Length, Settings, Button, Text,
-  HorizontalAlignment, Row, text_input
+  button, text_input, Application, Button, Column, Command, Container, Element,
+  HorizontalAlignment, Length, Row, Settings, Text,
 };
 
 static WINDOW_ICON: &[u8] = include_bytes!("../../resources/flo.ico");
@@ -17,7 +17,7 @@ static WINDOW_ICON: &[u8] = include_bytes!("../../resources/flo.ico");
 pub enum Mode {
   Main,
   Running,
-  Settings
+  Settings,
 }
 
 pub struct Flo {
@@ -33,7 +33,7 @@ pub struct Flo {
   version: String,
   mode: Mode,
   return_page: Mode,
-  port: Option<String>
+  port: Option<String>,
 }
 
 impl Default for Flo {
@@ -51,7 +51,7 @@ impl Default for Flo {
       version: flo_client::FLO_VERSION.to_string(),
       mode: Mode::Main,
       return_page: Mode::Main,
-      port: None
+      port: None,
     }
   }
 }
@@ -62,7 +62,7 @@ pub enum Interaction {
   RunFlo(Opt),
   UpdateTokenConfirm,
   OpenWeb(String),
-  Exit
+  Exit,
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ pub enum Message {
   Error(String),
   UpdateToken(String),
   UpdateTokenConfirm(()),
-  FloWeb(bool)
+  FloWeb(bool),
 }
 
 async fn init() {
@@ -90,9 +90,7 @@ impl Application for Flo {
   type Flags = Opt;
 
   fn new(config: Opt) -> (Self, Command<Message>) {
-    let init_commands = vec![
-      Command::perform(init(), Message::Init),
-    ];
+    let init_commands = vec![Command::perform(init(), Message::Init)];
     let mut flo_ui = Flo::default();
 
     apply_config(&mut flo_ui, config);
@@ -112,37 +110,36 @@ impl Application for Flo {
     }
   }
   fn view(&mut self) -> Element<Message> {
-
-    let menu_container =
-      element::menu::data_container( &self.config
-                                   , &self.error
-                                   , &mut self.settings_btn_state
-                                   , &self.version );
+    let menu_container = element::menu::data_container(
+      &self.config,
+      &self.error,
+      &mut self.settings_btn_state,
+      &self.version,
+    );
 
     let mut content = Column::new().push(menu_container);
 
     match &self.mode {
-
       Mode::Main => {
         let run_flo_button: Element<Interaction> = Button::new(
-            &mut self.run_btn_state,
-            Text::new("Run Hostbot Client")
-              .horizontal_alignment(HorizontalAlignment::Center)
-              .size(24),
-          )
-          .style(style::DefaultBoxedButton())
-          .on_press(Interaction::RunFlo(self.config.clone()))
-          .into();
+          &mut self.run_btn_state,
+          Text::new("Run Hostbot Client")
+            .horizontal_alignment(HorizontalAlignment::Center)
+            .size(24),
+        )
+        .style(style::DefaultBoxedButton())
+        .on_press(Interaction::RunFlo(self.config.clone()))
+        .into();
 
         let exit_button: Element<Interaction> = Button::new(
-            &mut self.exit_btn_state,
-            Text::new("Exit")
-              .horizontal_alignment(HorizontalAlignment::Center)
-              .size(24),
-          )
-          .style(style::DefaultBoxedButton())
-          .on_press(Interaction::Exit)
-          .into();
+          &mut self.exit_btn_state,
+          Text::new("Exit")
+            .horizontal_alignment(HorizontalAlignment::Center)
+            .size(24),
+        )
+        .style(style::DefaultBoxedButton())
+        .on_press(Interaction::Exit)
+        .into();
 
         let run_button_row = Row::new()
           .spacing(2)
@@ -170,7 +167,7 @@ impl Application for Flo {
 
         content = content.push(run_flo_container);
         content = content.push(ext_flo_container);
-      },
+      }
 
       Mode::Running => {
         if let Some(port) = &self.port {
@@ -178,14 +175,14 @@ impl Application for Flo {
           let running_text = Text::new(running_str).size(24);
 
           let exit_button: Element<Interaction> = Button::new(
-              &mut self.exit_btn_state,
-              Text::new("Exit")
-                .horizontal_alignment(HorizontalAlignment::Center)
-                .size(24),
-            )
-            .style(style::DefaultBoxedButton())
-            .on_press(Interaction::Exit)
-            .into();
+            &mut self.exit_btn_state,
+            Text::new("Exit")
+              .horizontal_alignment(HorizontalAlignment::Center)
+              .size(24),
+          )
+          .style(style::DefaultBoxedButton())
+          .on_press(Interaction::Exit)
+          .into();
 
           let ext_button_row = Row::new()
             .spacing(2)
@@ -213,14 +210,14 @@ impl Application for Flo {
             let web_str = format!("https://w3flo.com/?port={}", port);
 
             let web_button: Element<Interaction> = Button::new(
-                &mut self.web_btn_state,
-                Text::new(web_str.clone())
-                  .horizontal_alignment(HorizontalAlignment::Center)
-                  .size(16),
-              )
-              .style(style::DefaultButton())
-              .on_press(Interaction::OpenWeb(web_str))
-              .into();
+              &mut self.web_btn_state,
+              Text::new(web_str.clone())
+                .horizontal_alignment(HorizontalAlignment::Center)
+                .size(16),
+            )
+            .style(style::DefaultButton())
+            .on_press(Interaction::OpenWeb(web_str))
+            .into();
 
             let web_button_row = Row::new()
               .spacing(2)
@@ -239,14 +236,14 @@ impl Application for Flo {
 
           content = content.push(ext_flo_container);
         }
-      },
+      }
 
       Mode::Settings => {
-        let settings_container =
-          element::settings::data_container( &mut self.config
-                                           , &mut self.confirm_settings_button_state
-                                           , &mut self.token_input_state
-                                           );
+        let settings_container = element::settings::data_container(
+          &mut self.config,
+          &mut self.confirm_settings_button_state,
+          &mut self.token_input_state,
+        );
         content = content.push(settings_container);
       }
     };

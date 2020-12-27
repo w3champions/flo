@@ -69,7 +69,6 @@ impl MdnsPublisher {
       port,
       RegisterData {
         flags: async_dnssd::RegisterFlags::NO_AUTO_RENAME | async_dnssd::RegisterFlags::UNIQUE,
-        interface: async_dnssd::Interface::Any,
         name: Some(&name),
         ..Default::default()
       },

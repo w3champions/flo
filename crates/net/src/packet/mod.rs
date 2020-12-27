@@ -222,6 +222,12 @@ pub enum PacketTypeId {
   AddNode,
   #[bin(value = 0x1C)]
   RemoveNode,
+  #[bin(value = 0x1D)]
+  PlayerMuteListUpdate,
+  #[bin(value = 0x1E)]
+  PlayerMuteAddRequest,
+  #[bin(value = 0x1F)]
+  PlayerMuteRemoveRequest,
 
   // Lobby <-> Node
   #[bin(value = 0x30)]

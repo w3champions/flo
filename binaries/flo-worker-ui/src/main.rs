@@ -2,8 +2,8 @@
 
 mod core;
 mod flo;
-mod log;
 mod gui;
+mod log;
 
 use structopt::StructOpt;
 use tracing::instrument;

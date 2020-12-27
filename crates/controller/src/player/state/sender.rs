@@ -92,6 +92,7 @@ impl Handler<BroadcastMap> for PlayerRegistry {
 pub struct PlayerReplaceGame {
   pub player_id: i32,
   pub game: Game,
+  pub mute_list: Vec<i32>,
 }
 
 impl Message for PlayerReplaceGame {
@@ -103,7 +104,11 @@ impl Handler<PlayerReplaceGame> for PlayerRegistry {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    PlayerReplaceGame { player_id, game }: PlayerReplaceGame,
+    PlayerReplaceGame {
+      player_id,
+      game,
+      mute_list,
+    }: PlayerReplaceGame,
   ) -> Result<()> {
     use flo_net::proto::flo_connect::*;
     let game_id = game.id;
@@ -111,6 +116,7 @@ impl Handler<PlayerReplaceGame> for PlayerRegistry {
     if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
       let frames = vec![
         get_session_update_packet(Some(game.id)).encode_as_frame()?,
+        PacketPlayerMuteListUpdate { mute_list }.encode_as_frame()?,
         PacketGameInfo {
           game: Some(game.pack()?),
         }
@@ -129,6 +135,7 @@ impl Handler<PlayerReplaceGame> for PlayerRegistry {
 pub struct PlayersReplaceGame {
   pub player_ids: Vec<i32>,
   pub game: Game,
+  pub mute_list_map: BTreeMap<i32, Vec<i32>>,
 }
 
 impl Message for PlayersReplaceGame {
@@ -140,23 +147,33 @@ impl Handler<PlayersReplaceGame> for PlayerRegistry {
   async fn handle(
     &mut self,
     _: &mut Context<Self>,
-    PlayersReplaceGame { player_ids, game }: PlayersReplaceGame,
+    PlayersReplaceGame {
+      player_ids,
+      game,
+      mut mute_list_map,
+    }: PlayersReplaceGame,
   ) -> Result<()> {
     use flo_net::proto::flo_connect::*;
     let game_id = game.id;
 
-    let frames = vec![
-      get_session_update_packet(Some(game.id)).encode_as_frame()?,
-      PacketGameInfo {
-        game: Some(game.pack()?),
-      }
-      .encode_as_frame()?,
-    ];
+    let frame_session_update = get_session_update_packet(Some(game.id)).encode_as_frame()?;
+    let frame_game_info = PacketGameInfo {
+      game: Some(game.pack()?),
+    }
+    .encode_as_frame()?;
 
     for player_id in player_ids {
       if let Entry::Occupied(mut entry) = self.registry.entry(player_id) {
+        let frames = vec![
+          frame_session_update.clone(),
+          PacketPlayerMuteListUpdate {
+            mute_list: mute_list_map.remove(&player_id).unwrap_or_default(),
+          }
+          .encode_as_frame()?,
+          frame_game_info.clone(),
+        ];
         entry.get_mut().game_id = Some(game_id);
-        if !entry.get_mut().try_send_frames(frames.clone().into()) {
+        if !entry.get_mut().try_send_frames(frames.into()) {
           entry.remove();
         }
       }
@@ -361,15 +378,36 @@ impl PlayerRegistryHandle {
     Ok(())
   }
 
-  pub async fn player_replace_game(&self, player_id: i32, game: Game) -> Result<()> {
-    self.0.send(PlayerReplaceGame { player_id, game }).await??;
+  pub async fn player_replace_game(
+    &self,
+    player_id: i32,
+    game: Game,
+    mute_list: Vec<i32>,
+  ) -> Result<()> {
+    self
+      .0
+      .send(PlayerReplaceGame {
+        player_id,
+        game,
+        mute_list,
+      })
+      .await??;
     Ok(())
   }
 
-  pub async fn players_replace_game(&self, player_ids: Vec<i32>, game: Game) -> Result<()> {
+  pub async fn players_replace_game(
+    &self,
+    player_ids: Vec<i32>,
+    game: Game,
+    mute_list_map: BTreeMap<i32, Vec<i32>>,
+  ) -> Result<()> {
     self
       .0
-      .send(PlayersReplaceGame { player_ids, game })
+      .send(PlayersReplaceGame {
+        player_ids,
+        game,
+        mute_list_map,
+      })
       .await??;
     Ok(())
   }

@@ -21,6 +21,8 @@ use crate::platform::{GetClientConfig, Platform};
 use crate::types::PlayerSession;
 use crate::StartConfig;
 use flo_config::ClientConfig;
+use flo_net::packet::FloPacket;
+use flo_net::packet::Frame;
 use flo_state::{
   async_trait, Actor, Addr, Container, Context, Handler, Message, RegistryRef, Service,
 };
@@ -36,6 +38,7 @@ pub struct ControllerClient {
   ws_conn: Option<Session>,
   current_session: Option<PlayerSession>,
   initial_token: Option<String>,
+  mute_list: Vec<i32>,
 }
 
 impl ControllerClient {
@@ -114,6 +117,15 @@ impl ControllerClient {
         .await;
     }
   }
+
+  async fn send_frame(&mut self, frame: Frame) -> Result<()> {
+    if let Some(stream) = self.conn.as_mut() {
+      stream.send(SendFrame(frame)).await??;
+      Ok(())
+    } else {
+      Err(Error::ControllerDisconnected)
+    }
+  }
 }
 
 #[async_trait]
@@ -142,6 +154,7 @@ impl Service<StartConfig> for ControllerClient {
       ws_conn: None,
       current_session: None,
       initial_token: registry.data().token.clone(),
+      mute_list: vec![],
     })
   }
 }
@@ -441,5 +454,86 @@ impl Handler<LanEvent> for ControllerClient {
         }
       },
     }
+  }
+}
+
+pub struct UpdateMuteList {
+  pub mute_list: Vec<i32>,
+}
+
+impl Message for UpdateMuteList {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<UpdateMuteList> for ControllerClient {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateMuteList { mute_list }: UpdateMuteList,
+  ) -> <UpdateMuteList as Message>::Result {
+    self.mute_list = mute_list;
+  }
+}
+
+pub struct GetMuteList;
+
+impl Message for GetMuteList {
+  type Result = Vec<i32>;
+}
+
+#[async_trait]
+impl Handler<GetMuteList> for ControllerClient {
+  async fn handle(&mut self, _: &mut Context<Self>, _: GetMuteList) -> Vec<i32> {
+    self.mute_list.clone()
+  }
+}
+
+pub struct MutePlayer {
+  pub player_id: i32,
+}
+
+impl Message for MutePlayer {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<MutePlayer> for ControllerClient {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    MutePlayer { player_id }: MutePlayer,
+  ) -> Result<()> {
+    self
+      .send_frame(
+        flo_net::proto::flo_connect::PacketPlayerMuteAddRequest { player_id }.encode_as_frame()?,
+      )
+      .await?;
+    Ok(())
+  }
+}
+
+pub struct UnmutePlayer {
+  pub player_id: i32,
+}
+
+impl Message for UnmutePlayer {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<UnmutePlayer> for ControllerClient {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UnmutePlayer { player_id }: UnmutePlayer,
+  ) -> Result<()> {
+    self
+      .send_frame(
+        flo_net::proto::flo_connect::PacketPlayerMuteRemoveRequest { player_id }
+          .encode_as_frame()?,
+      )
+      .await?;
+    Ok(())
   }
 }

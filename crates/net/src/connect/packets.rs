@@ -32,3 +32,6 @@ packet_type!(
 packet_type!(GameSlotClientStatusUpdate, PacketGameSlotClientStatusUpdate);
 packet_type!(AddNode, PacketAddNode);
 packet_type!(RemoveNode, PacketRemoveNode);
+packet_type!(PlayerMuteListUpdate, PacketPlayerMuteListUpdate);
+packet_type!(PlayerMuteAddRequest, PacketPlayerMuteAddRequest);
+packet_type!(PlayerMuteRemoveRequest, PacketPlayerMuteRemoveRequest);

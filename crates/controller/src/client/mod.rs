@@ -118,7 +118,7 @@ async fn handle_stream(
         tokio::spawn(set_ping_timeout);
       }
       _ = ping_timeout_notify.notified() => {
-          tracing::error!("heartbeat timeout");
+          tracing::debug!("heartbeat timeout");
           break;
       }
       next = receiver.recv() => {
@@ -179,6 +179,12 @@ async fn handle_stream(
             packet: flo_net::proto::flo_connect::PacketGameStartPlayerClientInfoRequest => {
               handle_game_start_player_client_info_request(state.clone(), player_id, packet).await?;
             }
+            packet: proto::flo_connect::PacketPlayerMuteAddRequest => {
+              handle_player_mute_list_update_request(state.clone(), player_id, packet.into()).await?;
+            }
+            packet: proto::flo_connect::PacketPlayerMuteRemoveRequest => {
+              handle_player_mute_list_update_request(state.clone(), player_id, packet.into()).await?;
+            }
           }
         }
       }
@@ -215,7 +221,7 @@ async fn send_initial_state(
     })
     .await?;
 
-  let mut frames = vec![connect::PacketClientConnectAccept {
+  let frame_accept = connect::PacketClientConnectAccept {
     lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
     session: Some({
       use proto::flo_connect::*;
@@ -231,7 +237,9 @@ async fn send_initial_state(
     }),
     nodes: state.nodes.send(ListNode).await?.pack()?,
   }
-  .encode_as_frame()?];
+  .encode_as_frame()?;
+
+  let mut frames = vec![frame_accept];
 
   if let Some(game_id) = game_id {
     let (game, node_player_token) = state
@@ -426,6 +434,40 @@ async fn handle_game_start_player_client_info_request(
   state
     .games
     .send_to(packet.game_id, StartGamePlayerAck::new(player_id, packet))
+    .await?;
+  Ok(())
+}
+
+enum PlayerMuteListUpdate {
+  Add(proto::flo_connect::PacketPlayerMuteAddRequest),
+  Remove(proto::flo_connect::PacketPlayerMuteRemoveRequest),
+}
+
+impl From<proto::flo_connect::PacketPlayerMuteAddRequest> for PlayerMuteListUpdate {
+  fn from(v: proto::flo_connect::PacketPlayerMuteAddRequest) -> Self {
+    PlayerMuteListUpdate::Add(v)
+  }
+}
+
+impl From<proto::flo_connect::PacketPlayerMuteRemoveRequest> for PlayerMuteListUpdate {
+  fn from(v: proto::flo_connect::PacketPlayerMuteRemoveRequest) -> Self {
+    PlayerMuteListUpdate::Remove(v)
+  }
+}
+
+async fn handle_player_mute_list_update_request(
+  state: ControllerStateRef,
+  player_id: i32,
+  update: PlayerMuteListUpdate,
+) -> Result<()> {
+  state
+    .db
+    .exec(move |conn| match update {
+      PlayerMuteListUpdate::Add(req) => crate::player::db::add_mute(conn, player_id, req.player_id),
+      PlayerMuteListUpdate::Remove(req) => {
+        crate::player::db::remove_mute(conn, player_id, req.player_id)
+      }
+    })
     .await?;
   Ok(())
 }

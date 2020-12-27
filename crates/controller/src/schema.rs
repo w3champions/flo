@@ -85,6 +85,15 @@ table! {
     }
 }
 
+table! {
+    player_mute (id) {
+        id -> Int4,
+        player_id -> Int4,
+        mute_player_id -> Int4,
+        created_at -> Timestamptz,
+    }
+}
+
 joinable!(game -> node (node_id));
 joinable!(game -> player (created_by));
 joinable!(game_used_slot -> game (game_id));
@@ -98,4 +107,5 @@ allow_tables_to_appear_in_same_query!(
     map_checksum,
     node,
     player,
+    player_mute,
 );

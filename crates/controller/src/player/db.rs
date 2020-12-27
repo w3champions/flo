@@ -1,11 +1,11 @@
 use crate::db::DbConn;
 use crate::error::*;
 use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
-use crate::schema::player;
+use crate::schema::{player, player_mute};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub fn get(conn: &DbConn, id: i32) -> Result<Player> {
   player::table
@@ -102,6 +102,59 @@ pub fn upsert(conn: &DbConn, data: &UpsertPlayer) -> Result<Player> {
     .get_result::<Row>(conn)
     .map(Into::into)
     .map_err(Into::into)
+}
+
+pub fn add_mute(conn: &DbConn, player_id: i32, mute_player_id: i32) -> Result<()> {
+  #[derive(Insertable)]
+  #[table_name = "player_mute"]
+  struct Insert {
+    player_id: i32,
+    mute_player_id: i32,
+  }
+
+  diesel::insert_into(player_mute::table)
+    .values(&Insert {
+      player_id,
+      mute_player_id,
+    })
+    .on_conflict((player_mute::player_id, player_mute::mute_player_id))
+    .do_nothing()
+    .execute(conn)?;
+
+  Ok(())
+}
+
+pub fn remove_mute(conn: &DbConn, player_id: i32, mute_player_id: i32) -> Result<()> {
+  diesel::delete(
+    player_mute::table.filter(
+      player_mute::player_id
+        .eq(player_id)
+        .and(player_mute::mute_player_id.eq(mute_player_id)),
+    ),
+  )
+  .execute(conn)?;
+
+  Ok(())
+}
+
+pub fn get_mute_list_map(conn: &DbConn, player_ids: &[i32]) -> Result<BTreeMap<i32, Vec<i32>>> {
+  use diesel::pg::expression::dsl::any;
+  let pairs: Vec<(i32, i32)> = player_mute::table
+    .select((player_mute::player_id, player_mute::mute_player_id))
+    .filter(
+      player_mute::player_id
+        .eq(any(player_ids))
+        .and(player_mute::mute_player_id.eq(any(player_ids))),
+    )
+    .load(conn)?;
+  let mut map = BTreeMap::new();
+  for (player_id, mute_player_id) in pairs {
+    map
+      .entry(player_id)
+      .or_insert_with(|| vec![])
+      .push(mute_player_id);
+  }
+  Ok(map)
 }
 
 #[derive(Debug, Insertable)]

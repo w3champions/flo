@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::game::db::{CreateGameAsBotParams, CreateGameParams};
 use crate::game::state::registry::Register;
 use crate::game::state::GameRegistry;
@@ -36,7 +36,7 @@ impl Handler<CreateGame> for GameRegistry {
 
     self
       .players
-      .player_replace_game(player_id, game.clone())
+      .player_replace_game(player_id, game.clone(), vec![])
       .await?;
 
     Ok(game)
@@ -64,12 +64,15 @@ impl Handler<CreateGameAsBot> for GameRegistry {
       params,
     }: CreateGameAsBot,
   ) -> <CreateGameAsBot as Message>::Result {
-    let game = self
+    let (game, player_ids, mute_list_map) = self
       .db
-      .exec(move |conn| crate::game::db::create_as_bot(conn, api_client_id, api_player_id, params))
+      .exec(move |conn| {
+        let game = crate::game::db::create_as_bot(conn, api_client_id, api_player_id, params)?;
+        let player_ids = game.get_player_ids();
+        let mute_list_map = crate::player::db::get_mute_list_map(conn, &player_ids)?;
+        Ok::<_, Error>((game, player_ids, mute_list_map))
+      })
       .await?;
-
-    let player_ids = game.get_player_ids();
 
     self.register(Register {
       id: game.id,
@@ -81,7 +84,7 @@ impl Handler<CreateGameAsBot> for GameRegistry {
 
     self
       .players
-      .players_replace_game(player_ids, game.clone())
+      .players_replace_game(player_ids, game.clone(), mute_list_map)
       .await?;
 
     Ok(game)

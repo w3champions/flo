@@ -1,4 +1,4 @@
-use crate::controller::{ControllerClient, SendWs};
+use crate::controller::{ControllerClient, SendWs, UpdateMuteList};
 use crate::error::*;
 use crate::game::LocalGameInfo;
 use crate::message::message;
@@ -383,6 +383,12 @@ impl ControllerStream {
           } else {
             tracing::warn!("received player token but there is no active game");
           }
+        }
+        p: proto::PacketPlayerMuteListUpdate => {
+          tracing::debug!("mute list update: {:?}", p.mute_list);
+          parent.notify(UpdateMuteList {
+            mute_list: p.mute_list
+          }).await?;
         }
         // client status update from node
         p: proto::PacketGameSlotClientStatusUpdate => {

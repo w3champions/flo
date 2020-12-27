@@ -1,17 +1,3 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::stream::StreamExt;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::{oneshot, watch};
-use tracing_futures::Instrument;
-
-use flo_task::{SpawnScope, SpawnScopeHandle};
-use flo_w3gs::net::{W3GSListener, W3GSStream};
-use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
-use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
-use flo_w3gs::protocol::packet::Packet;
-use flo_w3gs::protocol::packet::*;
-
 use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::lan::game::game::GameHandler;
@@ -22,6 +8,18 @@ use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamHandle};
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
+use flo_task::{SpawnScope, SpawnScopeHandle};
+use flo_w3gs::net::{W3GSListener, W3GSStream};
+use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
+use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
+use flo_w3gs::protocol::packet::Packet;
+use flo_w3gs::protocol::packet::*;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::stream::StreamExt;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::{oneshot, watch};
+use tracing_futures::Instrument;
 
 pub struct LanProxy {
   _scope: SpawnScope,
@@ -68,9 +66,18 @@ impl LanProxy {
       let state = state.clone();
       let scope = scope.handle();
       let node = node.clone();
+      let client = client.clone();
       async move {
         let res = state
-          .serve(listener, event_rx, w3gs_tx, w3gs_rx, scope, node)
+          .serve(
+            listener,
+            event_rx,
+            w3gs_tx,
+            w3gs_rx,
+            scope,
+            node,
+            client.clone(),
+          )
           .await;
 
         if let Err(res) = res {
@@ -128,6 +135,7 @@ impl State {
     mut w3gs_rx: Receiver<Packet>,
     mut scope: SpawnScopeHandle,
     node: Arc<NodeInfo>,
+    mut client: Addr<ControllerClient>,
   ) -> Result<()> {
     let mut node_stream = self.stream.clone();
     let mut status_rx = self.game_status_rx.clone();
@@ -228,6 +236,7 @@ impl State {
       &mut status_rx,
       &mut w3gs_tx,
       &mut w3gs_rx,
+      &mut client,
     );
     tokio::select! {
       _ = &mut dropped => {
