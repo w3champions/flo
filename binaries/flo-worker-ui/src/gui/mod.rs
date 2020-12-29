@@ -207,7 +207,7 @@ impl Application for Flo {
           content = content.push(run_text_container);
 
           if self.config.use_flo_web {
-            let web_str = format!("https://w3flo.com/?port={}", port);
+            let web_str = format!("https://w3flo.com/setup?port={}", port);
 
             let web_button: Element<Interaction> = Button::new(
               &mut self.web_btn_state,
