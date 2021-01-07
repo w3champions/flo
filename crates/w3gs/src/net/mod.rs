@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::stream::Stream;
+use tokio_stream::Stream;
 use tokio_util::codec::Framed;
 
 use crate::error::*;
@@ -69,7 +69,7 @@ impl W3GSStream {
   where
     I: IntoIterator<Item = Packet>,
   {
-    let mut stream = tokio::stream::iter(iter.into_iter().map(Ok));
+    let mut stream = tokio_stream::iter(iter.into_iter().map(Ok));
     self.transport.send_all(&mut stream).await?;
     Ok(())
   }
@@ -102,7 +102,9 @@ impl Incoming<'_> {
     let (socket, addr) = ready!(self.inner.poll_accept(cx))?;
 
     socket.set_nodelay(true).ok();
-    socket.set_keepalive(None).ok();
+
+    //TODO: for now not supported by tokio https://github.com/tokio-rs/tokio/pull/3146
+    //socket.set_keepalive(None).ok();
 
     let stream = W3GSStream {
       local_addr: socket.local_addr()?,

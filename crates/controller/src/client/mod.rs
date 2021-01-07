@@ -3,9 +3,9 @@ use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::stream::StreamExt;
+use tokio_stream::StreamExt;
 use tokio::sync::Notify;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use flo_net::connect;
 use flo_net::listener::FloListener;
@@ -101,7 +101,7 @@ async fn handle_stream(
   let mut ping_timeout_abort = None;
 
   loop {
-    let mut next_ping = delay_for(PING_INTERVAL);
+    let mut next_ping = sleep(PING_INTERVAL);
 
     tokio::select! {
       _ = &mut next_ping => {
@@ -111,8 +111,8 @@ async fn handle_stream(
           ms: stop_watch.elapsed_ms()
         }).await?;
         let (set_ping_timeout, abort) = abortable(async move {
-          delay_for(PING_TIMEOUT).await;
-          notify.notify();
+          sleep(PING_TIMEOUT).await;
+          notify.notify_one();
         });
         ping_timeout_abort = Some(abort);
         tokio::spawn(set_ping_timeout);

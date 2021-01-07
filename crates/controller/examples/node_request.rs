@@ -3,7 +3,7 @@ use flo_controller::node::messages::NodePlayerLeave;
 use flo_controller::node::{NodeConnActor, NodeConnConfig};
 use flo_state::{mock::Mock, Actor};
 use futures::TryFutureExt;
-use tokio::stream::StreamExt;
+use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -7,7 +7,7 @@ use dispatch::{Dispatcher, Message};
 use s2_grpc_utils::S2ProtoEnum;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::stream::StreamExt;
+use tokio_stream::StreamExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing_futures::Instrument;
 

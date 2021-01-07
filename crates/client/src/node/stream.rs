@@ -26,14 +26,14 @@ pub struct NodeStream {
 
 impl NodeStream {
   pub async fn shutdown(mut self) {
-    self.shutdown_signal.notify();
+    self.shutdown_signal.notify_one();
     self.shutdown_complete_rx.take().unwrap().await.ok();
   }
 }
 
 impl Drop for NodeStream {
   fn drop(&mut self) {
-    self.shutdown_signal.notify();
+    self.shutdown_signal.notify_one();
   }
 }
 

@@ -76,9 +76,15 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
+<<<<<<< HEAD
 version = "1.0.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afddf7f520a80dbf76e6f50a35bca42a2331ef227a28b3b6dc5c2e2338d114b1"
+=======
+version = "1.0.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee67c11feeac938fae061b232e38e0b6d94f97a9df10e6271319325ac4c56a86"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 
 [[package]]
 name = "approx"
@@ -117,10 +123,14 @@ dependencies = [
  "futures 0.3.13",
  "libc",
  "log",
- "mio",
+ "mio 0.6.23",
  "pin-utils",
  "pkg-config",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "winapi 0.3.9",
 ]
 
@@ -158,15 +168,20 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.7.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2760f968801f873112e651c5a9c3b60c11ae6d66e7ca3f2d51aafbfcef9495fa"
+checksum = "f7cc5408453d37e2b1c6f01d8078af1da58b6cfa6a80fa2ede3bd2b9a6ada9c4"
 dependencies = [
  "futures-io",
  "futures-util",
  "log",
+<<<<<<< HEAD
  "pin-project 0.4.27",
  "tokio 0.2.25",
+=======
+ "pin-project 1.0.3",
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tungstenite",
 ]
 
@@ -197,7 +212,11 @@ dependencies = [
  "instant",
  "pin-project 0.4.27",
  "rand 0.7.3",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -277,7 +296,11 @@ dependencies = [
  "dotenv",
  "futures 0.3.13",
  "thiserror",
+<<<<<<< HEAD
  "tokio 1.2.0",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -343,9 +366,9 @@ checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
 name = "bytes"
-version = "0.6.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
+checksum = "ad1f8e949d755f9d79112b5bb46938e0ef9d3804a0b16dfab13aafcaa5f0fa72"
 
 [[package]]
 name = "bytes"
@@ -584,13 +607,26 @@ version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "615f6e27d000a2bffbc7f2f6a8669179378fa27ee4d0a509e985dfc0a7defb40"
 dependencies = [
+<<<<<<< HEAD
  "getrandom 0.2.2",
+=======
+ "getrandom 0.2.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "lazy_static",
  "proc-macro-hack",
  "tiny-keccak",
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "const_fn"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
+
+[[package]]
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -733,6 +769,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2584f639eb95fea8c798496315b297cf81b9b58b6d30ab066a75455333cf4b12"
 dependencies = [
  "cfg-if 1.0.0",
+<<<<<<< HEAD
+=======
+ "const_fn",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "crossbeam-utils",
  "lazy_static",
  "memoffset",
@@ -741,7 +781,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
+<<<<<<< HEAD
 version = "0.8.3"
+=======
+version = "0.8.1"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e9d99fa91428effe99c5c6d4634cdeba32b8cf784fc428a2a687f61a952c49"
 dependencies = [
@@ -849,9 +893,15 @@ dependencies = [
 
 [[package]]
 name = "derivative"
+<<<<<<< HEAD
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+=======
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaed5874effa6cde088c644ddcdcb4ffd1511391c5be4fdd7a5ccd02c7e4a183"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1104,7 +1154,12 @@ dependencies = [
  "dotenv",
  "flo-client",
  "flo-log-subscriber",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -1128,10 +1183,16 @@ dependencies = [
  "flo-net",
  "flo-w3map",
  "flo-w3storage",
+<<<<<<< HEAD
  "hex",
  "rand 0.8.3",
  "structopt",
  "tokio 0.2.25",
+=======
+ "rand 0.8.1",
+ "structopt",
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tonic",
  "tracing",
  "tracing-futures",
@@ -1166,12 +1227,21 @@ dependencies = [
  "http",
  "lazy_static",
  "parking_lot",
+<<<<<<< HEAD
  "rand 0.8.3",
+=======
+ "rand 0.8.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "s2-grpc-utils",
  "serde",
  "serde_json",
  "thiserror",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "tracing-futures",
 ]
@@ -1228,12 +1298,21 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "prometheus",
+<<<<<<< HEAD
  "rand 0.8.3",
+=======
+ "rand 0.8.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "s2-grpc-utils",
  "serde",
  "serde_json",
  "thiserror",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tonic",
  "tracing",
  "tracing-futures",
@@ -1247,7 +1326,12 @@ dependencies = [
  "dotenv",
  "flo-controller",
  "flo-log-subscriber",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
 ]
 
@@ -1255,8 +1339,13 @@ dependencies = [
 name = "flo-event"
 version = "0.1.0"
 dependencies = [
+<<<<<<< HEAD
  "futures 0.3.13",
  "tokio 0.2.25",
+=======
+ "futures 0.3.8",
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
 ]
 
@@ -1265,10 +1354,14 @@ name = "flo-grpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bytes 0.6.0",
- "prost",
+ "bytes 1.0.0",
+ "prost 0.6.1",
  "prost-types",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tonic",
  "tonic-build",
 ]
@@ -1279,7 +1372,7 @@ version = "0.1.0"
 dependencies = [
  "async-dnssd",
  "base64 0.12.3",
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "flo-log",
  "flo-platform",
  "flo-util",
@@ -1292,10 +1385,15 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "pretty-hex 0.1.1",
- "prost",
+ "prost 0.6.1",
  "prost-build",
  "thiserror",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "tracing-futures",
 ]
@@ -1320,11 +1418,12 @@ dependencies = [
 name = "flo-net"
 version = "0.1.0"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "flo-constants",
  "flo-state",
  "flo-util",
  "flo-w3gs",
+<<<<<<< HEAD
  "futures 0.3.13",
  "prost",
  "prost-build",
@@ -1332,6 +1431,16 @@ dependencies = [
  "thiserror",
  "tokio 0.2.25",
  "tokio-util",
+=======
+ "futures 0.3.8",
+ "prost 0.7.0",
+ "prost-build",
+ "serde",
+ "thiserror",
+ "tokio 1.0.1",
+ "tokio-stream",
+ "tokio-util 0.6.0",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
 ]
 
@@ -1339,7 +1448,7 @@ dependencies = [
 name = "flo-node"
 version = "0.1.2"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "dashmap",
  "flo-constants",
  "flo-event",
@@ -1358,7 +1467,12 @@ dependencies = [
  "s2-grpc-utils",
  "smallvec",
  "thiserror",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "tracing-futures",
  "uuid 0.8.2",
@@ -1371,7 +1485,12 @@ dependencies = [
  "dotenv",
  "flo-log-subscriber",
  "flo-node",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "winapi 0.3.9",
 ]
@@ -1406,14 +1525,22 @@ dependencies = [
  "flo-task 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.13",
  "thiserror",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
 name = "flo-task"
 version = "0.1.0"
 dependencies = [
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -1422,7 +1549,11 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a1af878931927af976680ff2eb008cbd7c22dcb0573415c8e281e34e653ce25"
 dependencies = [
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -1439,13 +1570,13 @@ dependencies = [
 name = "flo-util"
 version = "0.1.0"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "enumflags2",
  "flo-codegen",
  "lazy_static",
  "pretty-hex 0.2.1",
  "thiserror",
- "tokio-util",
+ "tokio-util 0.6.0",
 ]
 
 [[package]]
@@ -1469,12 +1600,20 @@ dependencies = [
  "flo-util",
  "futures 0.3.13",
  "lazy_static",
- "prost",
+ "prost 0.6.1",
  "prost-build",
+<<<<<<< HEAD
  "rand 0.8.3",
  "thiserror",
  "tokio 0.2.25",
  "tokio-util",
+=======
+ "rand 0.8.1",
+ "thiserror",
+ "tokio 1.0.1",
+ "tokio-stream",
+ "tokio-util 0.6.0",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -1499,7 +1638,7 @@ name = "flo-w3replay"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "crc32fast",
  "flate2",
  "flo-util",
@@ -1511,7 +1650,7 @@ dependencies = [
 name = "flo-w3storage"
 version = "0.1.0"
 dependencies = [
- "bytes 0.5.6",
+ "bytes 1.0.0",
  "casclib",
  "dotenv",
  "flo-platform",
@@ -1533,7 +1672,11 @@ dependencies = [
  "once_cell",
  "serde_json",
  "structopt",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing-appender",
  "tracing-subscriber",
  "winapi 0.3.9",
@@ -1554,7 +1697,11 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 1.0.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -1753,7 +1900,11 @@ dependencies = [
  "futures-sink",
  "futures-task",
  "memchr",
+<<<<<<< HEAD
  "pin-project-lite 0.2.6",
+=======
+ "pin-project 1.0.3",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "pin-utils",
  "proc-macro-hack",
  "proc-macro-nested",
@@ -1802,6 +1953,7 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
+<<<<<<< HEAD
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9495705279e7140bf035dde1f6e750c162df8b625267cd52cc44e0b156732c8"
@@ -1809,6 +1961,15 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "wasi 0.10.2+wasi-snapshot-preview1",
+=======
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4060f4657be78b8e766215b02b18a2e862d83745545de804638e2b545e81aee6"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -1996,8 +2157,13 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
+<<<<<<< HEAD
  "tokio 0.2.25",
  "tokio-util",
+=======
+ "tokio 0.2.24",
+ "tokio-util 0.3.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing",
  "tracing-futures",
 ]
@@ -2010,9 +2176,12 @@ checksum = "9289cbc8064a1c2f505c92d4d17f7fe5050d487728c19cee7936bd204069bc9d"
 
 [[package]]
 name = "hashbrown"
-version = "0.9.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "heck"
@@ -2108,9 +2277,15 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
+<<<<<<< HEAD
  "pin-project 1.0.5",
  "socket2",
  "tokio 0.2.25",
+=======
+ "pin-project 1.0.3",
+ "socket2",
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-service",
  "tracing",
  "want",
@@ -2284,9 +2459,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.6.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb1fa934250de4de8aef298d81c729a7d33d8c239daa3a7575e6b92bfc7313b"
+checksum = "4e47a3566dd4fd4eec714ae6ceabdee0caec795be835c223d92c2d40f1e8cf1c"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -2324,6 +2499,15 @@ name = "itertools"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
 dependencies = [
  "either",
 ]
@@ -2585,6 +2769,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mio"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e50ae3f04d169fcc9bde0b547d1c205219b7157e07ded9c5aff03e0637cb3ed7"
+dependencies = [
+ "libc",
+ "log",
+ "miow 0.3.6",
+ "ntapi",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "mio-extras"
 version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2592,31 +2789,8 @@ checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
 dependencies = [
  "lazycell",
  "log",
- "mio",
+ "mio 0.6.23",
  "slab",
-]
-
-[[package]]
-name = "mio-named-pipes"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
-dependencies = [
- "log",
- "mio",
- "miow 0.3.6",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "mio-uds"
-version = "0.6.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afcb699eb26d4332647cc848492bbc15eafb26f08d0304550d5aa1f612e066f0"
-dependencies = [
- "iovec",
- "libc",
- "mio",
 ]
 
 [[package]]
@@ -2747,6 +2921,15 @@ checksum = "e7413f999671bd4745a7b624bd370a569fb6bc574b23c83a3c5ed2e453f3d5e2"
 dependencies = [
  "memchr",
  "version_check",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6bb902e437b6d86e03cce10a7e2af662292c5dfef23b65899ea3ac9354ad44"
+dependencies = [
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2923,9 +3106,15 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
+<<<<<<< HEAD
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa7a782938e745763fe6907fc6ba86946d72f49fe7e21de074e08128a99fb018"
+=======
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ccb628cad4f84851442432c60ad8e1f607e29752d0bf072cbd0baf28aa34272"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "cfg-if 1.0.0",
  "instant",
@@ -2992,11 +3181,19 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
+<<<<<<< HEAD
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96fa8ebb90271c4477f144354485b8068bd8f6b78b428b01ba892ca26caf0b63"
 dependencies = [
  "pin-project-internal 1.0.5",
+=======
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a83804639aad6ba65345661744708855f9fbcb71176ea8d28d05aeb11d975e7"
+dependencies = [
+ "pin-project-internal 1.0.3",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -3012,9 +3209,15 @@ dependencies = [
 
 [[package]]
 name = "pin-project-internal"
+<<<<<<< HEAD
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "758669ae3558c6f74bd2a18b41f7ac0b5a195aea6639d6a9b5e5d1ad5ba24c0b"
+=======
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7bcc46b8f73443d15bc1c5fecbb315718491fa9187fa483f0e359323cde8b3a"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3029,9 +3232,15 @@ checksum = "257b64915a082f7811703966789728173279bdebb956b143dbcd23f6f970a777"
 
 [[package]]
 name = "pin-project-lite"
+<<<<<<< HEAD
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
+=======
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e36743d754ccdf9954c2e352ce2d4b106e024c814f6499c2dadff80da9a442d8"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 
 [[package]]
 name = "pin-utils"
@@ -3047,9 +3256,15 @@ checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
 name = "plist"
+<<<<<<< HEAD
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "679104537029ed2287c216bfb942bbf723f48ee98f0aef15611634173a74ef21"
+=======
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dc57ccf442c7414b790e8e7b72fb4d776a66c7680129360946d9aaa6f5311e9"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "base64 0.13.0",
  "chrono",
@@ -3173,7 +3388,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
 dependencies = [
  "bytes 0.5.6",
- "prost-derive",
+ "prost-derive 0.6.1",
+]
+
+[[package]]
+name = "prost"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e6984d2f1a23009bd270b8bb56d0926810a3d483f59c987d77969e9d8e840b2"
+dependencies = [
+ "bytes 1.0.0",
+ "prost-derive 0.7.0",
 ]
 
 [[package]]
@@ -3184,11 +3409,11 @@ checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
  "bytes 0.5.6",
  "heck",
- "itertools",
+ "itertools 0.8.2",
  "log",
  "multimap",
  "petgraph",
- "prost",
+ "prost 0.6.1",
  "prost-types",
  "tempfile",
  "which",
@@ -3201,7 +3426,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.8.2",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
+dependencies = [
+ "anyhow",
+ "itertools 0.9.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -3214,14 +3452,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1834f67c0697c001304b75be76f67add9c89742eda3a085ad8ee0bb38c3417aa"
 dependencies = [
  "bytes 0.5.6",
- "prost",
+ "prost 0.6.1",
 ]
 
 [[package]]
 name = "protobuf"
+<<<<<<< HEAD
 version = "2.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f72884896d22e0da0e5b266cb9a780b791f6c3b2f5beab6368d6cd4f0dbb86"
+=======
+version = "2.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86473d5f16580f10b131a0bf0afb68f8e029d1835d33a00f37281b05694e5312"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 
 [[package]]
 name = "quote"
@@ -3259,6 +3503,7 @@ dependencies = [
 
 [[package]]
 name = "rand"
+<<<<<<< HEAD
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ef9e7e66b4468674bfcb0c81af8b7fa0bb154fa9f28eb840da5c447baeb8d7e"
@@ -3266,6 +3511,15 @@ dependencies = [
  "libc",
  "rand_chacha 0.3.0",
  "rand_core 0.6.2",
+=======
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c24fcd450d3fa2b592732565aa4f17a27a61c65ece4726353e000939b0edee34"
+dependencies = [
+ "libc",
+ "rand_chacha 0.3.0",
+ "rand_core 0.6.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "rand_hc 0.3.0",
 ]
 
@@ -3286,7 +3540,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e12735cf05c9e10bf21534da50a147b924d555dc7a547c42e6bb2d5b6017ae0d"
 dependencies = [
  "ppv-lite86",
+<<<<<<< HEAD
  "rand_core 0.6.2",
+=======
+ "rand_core 0.6.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -3300,11 +3558,19 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
+<<<<<<< HEAD
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34cf66eb183df1c5876e2dcf6b13d57340741e8dc255b48e40a26de954d06ae7"
 dependencies = [
  "getrandom 0.2.2",
+=======
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c026d7df8b298d90ccbbc5190bd04d85e159eaf5576caeacf8741da93ccbd2e5"
+dependencies = [
+ "getrandom 0.2.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -3322,7 +3588,11 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
 dependencies = [
+<<<<<<< HEAD
  "rand_core 0.6.2",
+=======
+ "rand_core 0.6.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -3390,7 +3660,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de0737333e7a9502c789a36d7c7fa6092a49895d4faa31ca5df163857ded2e9d"
 dependencies = [
  "getrandom 0.1.16",
+<<<<<<< HEAD
  "redox_syscall 0.1.57",
+=======
+ "redox_syscall",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "rust-argon2",
 ]
 
@@ -3619,9 +3893,15 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
+<<<<<<< HEAD
 version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "799e97dc9fdae36a5c8b8f2cae9ce2ee9fdce2058c57a93e6099d919fd982f79"
+=======
+version = "1.0.61"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fceb2595057b6891a4ee808f70054bd2d12f0e97f1cbb78689b59f676df325a"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "itoa",
  "ryu",
@@ -3747,6 +4027,7 @@ checksum = "c46a3482db8f247956e464d783693ece164ca056e6e67563ee5505bdb86452cd"
 
 [[package]]
 name = "smallvec"
+<<<<<<< HEAD
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
@@ -3756,6 +4037,17 @@ name = "smithay-client-toolkit"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4750c76fd5d3ac95fa3ed80fe667d6a3d8590a960e5b575b98eea93339a80b80"
+=======
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a55ca5f3b68e41c979bf8c46a6f1da892ca4db8f94023ce0bd32407573b1ac0"
+
+[[package]]
+name = "smithay-client-toolkit"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "316e13a3eb853ce7bf72ad3530dc186cb2005c57c521ef5f4ada5ee4eed74de6"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "andrew",
  "bitflags",
@@ -3896,9 +4188,15 @@ dependencies = [
 
 [[package]]
 name = "syn"
+<<<<<<< HEAD
 version = "1.0.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed22b90a0e734a23a7610f4283ac9e5acfb96cbb30dfefa540d66f866f1c09c5"
+=======
+version = "1.0.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc60a3d73ea6594cd712d830cc1f0390fd71542d8c8cd24e70cc54cdfd5e05d5"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3942,18 +4240,30 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+<<<<<<< HEAD
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0f4a65597094d4483ddaed134f409b2cb7c1beccf25201a9f73c719254fa98e"
+=======
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76cc616c6abf8c8928e2fdcc0dbfab37175edd8fb49a4641066ad1364fdab146"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
+<<<<<<< HEAD
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7765189610d8241a44529806d6fd1f2e0a08734313a35d5b3a556f92b381f3c0"
+=======
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be73a2caec27583d0046ef3796c3794f868a5bc813db689eed00c7631275cd1"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4025,16 +4335,36 @@ dependencies = [
  "futures-core",
  "iovec",
  "lazy_static",
- "libc",
  "memchr",
- "mio",
- "mio-named-pipes",
- "mio-uds",
+ "mio 0.6.23",
  "num_cpus",
+<<<<<<< HEAD
  "pin-project-lite 0.1.12",
  "signal-hook-registry",
+=======
+ "pin-project-lite 0.1.11",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "slab",
- "tokio-macros",
+ "tokio-macros 0.2.6",
+]
+
+[[package]]
+name = "tokio"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d258221f566b6c803c7b4714abadc080172b272090cdc5e244a6d4dd13c3a6bd"
+dependencies = [
+ "autocfg",
+ "bytes 1.0.0",
+ "libc",
+ "memchr",
+ "mio 0.7.7",
+ "num_cpus",
+ "once_cell",
+ "parking_lot",
+ "pin-project-lite 0.2.1",
+ "signal-hook-registry",
+ "tokio-macros 1.0.0",
  "winapi 0.3.9",
 ]
 
@@ -4060,6 +4390,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-macros"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42517d2975ca3114b22a16192634e8241dc5cc1f130be194645970cc1c371494"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4cdeb73537e63f98adcd73138af75e3f368ccaecffaa29d7eb61b9f5a440457"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.1",
+ "tokio 1.0.1",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4069,8 +4421,28 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "log",
+<<<<<<< HEAD
  "pin-project-lite 0.1.12",
  "tokio 0.2.25",
+=======
+ "pin-project-lite 0.1.11",
+ "tokio 0.2.24",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36135b7e7da911f5f8b9331209f7fab4cc13498f3fff52f72a710c78187e3148"
+dependencies = [
+ "bytes 1.0.0",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite 0.2.1",
+ "tokio 1.0.1",
+ "tokio-stream",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 ]
 
 [[package]]
@@ -4099,10 +4471,17 @@ dependencies = [
  "hyper",
  "percent-encoding",
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "prost",
  "prost-derive",
  "tokio 0.2.25",
  "tokio-util",
+=======
+ "prost 0.6.1",
+ "prost-derive 0.6.1",
+ "tokio 0.2.24",
+ "tokio-util 0.3.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower",
  "tower-balance",
  "tower-load",
@@ -4154,7 +4533,11 @@ dependencies = [
  "pin-project 0.4.27",
  "rand 0.7.3",
  "slab",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-discover",
  "tower-layer",
  "tower-load",
@@ -4172,7 +4555,11 @@ checksum = "c4887dc2a65d464c8b9b66e0e4d51c2fd6cf5b3373afc72805b0a60bce00446a"
 dependencies = [
  "futures-core",
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-layer",
  "tower-service",
  "tracing",
@@ -4203,7 +4590,11 @@ checksum = "92c3040c5dbed68abffaa0d4517ac1a454cd741044f33ab0eefab6b8d1361404"
 dependencies = [
  "futures-core",
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-layer",
  "tower-load",
  "tower-service",
@@ -4218,7 +4609,11 @@ dependencies = [
  "futures-core",
  "log",
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-discover",
  "tower-service",
 ]
@@ -4241,7 +4636,11 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce50370d644a0364bf4877ffd4f76404156a248d104e2cc234cd391ea5cdc965"
 dependencies = [
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-service",
 ]
 
@@ -4255,7 +4654,11 @@ dependencies = [
  "futures-util",
  "indexmap",
  "log",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-service",
 ]
 
@@ -4267,7 +4670,11 @@ checksum = "e6727956aaa2f8957d4d9232b308fe8e4e65d99db30f42b225646e86c9b6a952"
 dependencies = [
  "futures-core",
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-layer",
  "tower-service",
 ]
@@ -4285,7 +4692,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "127b8924b357be938823eaaec0608c482d40add25609481027b96198b2e4b31e"
 dependencies = [
  "pin-project 0.4.27",
+<<<<<<< HEAD
  "tokio 0.2.25",
+=======
+ "tokio 0.2.24",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tower-layer",
  "tower-service",
 ]
@@ -4310,7 +4721,11 @@ checksum = "01ebdc2bb4498ab1ab5f5b73c5803825e60199229ccba0698170e3be0e7f959f"
 dependencies = [
  "cfg-if 1.0.0",
  "log",
+<<<<<<< HEAD
  "pin-project-lite 0.2.6",
+=======
+ "pin-project-lite 0.2.1",
+>>>>>>> c6caede (tokio 1 migration (work in progress))
  "tracing-attributes",
  "tracing-core",
 ]
@@ -4688,9 +5103,15 @@ checksum = "7d6f8ec44822dd71f5f221a5847fb34acd9060535c1211b70a05844c0f6383b1"
 
 [[package]]
 name = "wayland-client"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06ca44d86554b85cf449f1557edc6cc7da935cc748c8e4bf1c507cbd43bae02c"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdbdbe01d03b2267809f3ed99495b37395387fde789e0f2ebb78e8b43f75b6d7"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "bitflags",
  "downcast-rs",
@@ -4704,9 +5125,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-commons"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd75ae380325dbcff2707f0cd9869827ea1d2d6d534cff076858d3f0460fd5a"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "480450f76717edd64ad04a4426280d737fc3d10a236b982df7b1aee19f0e2d56"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "nix 0.20.0",
  "once_cell",
@@ -4716,9 +5143,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-cursor"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b37e5455ec72f5de555ec39b5c3704036ac07c2ecd50d0bffe02d5fe2d4e65ab"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6eb122c160223a7660feeaf949d0100281d1279acaaed3720eb3c9894496e5f"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "nix 0.20.0",
  "wayland-client",
@@ -4727,9 +5160,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-egl"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9461a67930ec16da7a4fd8b50e9ffa23f4417240b43ec84008bd1b2c94421c94"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c653507447113c967a1aeee413699acb42d96d6302ec967c6d51930eae8aa7f5"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "wayland-client",
  "wayland-sys",
@@ -4737,9 +5176,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95df3317872bcf9eec096c864b69aa4769a1d5d6291a5b513f8ba0af0efbd52c"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "319a82b4d3054dd25acc32d9aee0f84fa95b63bc983fffe4703b6b8d47e01a30"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "bitflags",
  "wayland-client",
@@ -4749,9 +5194,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "389d680d7bd67512dc9c37f39560224327038deb0f0e8d33f870900441b68720"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7010ba5767b3fcd350decc59055390b4ebe6bd1b9279a9feb1f1888987f1133d"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4760,9 +5211,15 @@ dependencies = [
 
 [[package]]
 name = "wayland-sys"
+<<<<<<< HEAD
 version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2907bd297eef464a95ba9349ea771611771aa285b932526c633dc94d5400a8e2"
+=======
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6793834e0c35d11fd96a97297abe03d37be627e1847da52e17d7e0e3b51cc099"
+>>>>>>> c6caede (tokio 1 migration (work in progress))
 dependencies = [
  "dlib 0.5.0",
  "lazy_static",
@@ -4911,7 +5368,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "mio",
+ "mio 0.6.23",
  "mio-extras",
  "ndk",
  "ndk-glue",

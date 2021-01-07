@@ -52,7 +52,9 @@ impl Incoming<'_> {
     let (socket, _addr) = ready!(self.inner.poll_accept(cx))?;
 
     socket.set_nodelay(true).ok();
-    socket.set_keepalive(None).ok();
+
+    //TODO: not supported atm by tokio
+    //socket.set_keepalive(None).ok();
 
     let stream = FloStream::new(socket);
 

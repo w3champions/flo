@@ -9,7 +9,8 @@ flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-node = { path = "../../crates/node" }
 
 dotenv = "0.15"
-tokio = { version = "0.2", features = ["time", "sync", "stream", "macros", "blocking"] }
+tokio = { version = "1.0", features = ["time", "sync", "macros"] }
+tokio-stream = { version = "0.1", features = ["time"] }
 tracing = "0.1"
 
 [target.'cfg(windows)'.dependencies]

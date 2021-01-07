@@ -1,4 +1,4 @@
-use bytes::buf::ext::Reader;
+use bytes::buf::Reader;
 use bytes::Buf;
 use std::fs::File;
 use std::io::prelude::*;

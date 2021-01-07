@@ -21,7 +21,7 @@ use crate::player::PlayerBanType;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing_futures::Instrument;
 
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -92,7 +92,7 @@ impl NodeConnActor {
     tracing::error!(node_id = self.config.id, "reconnect: backoff: {:?}", delay);
     let addr = ctx.addr();
     ctx.spawn(async move {
-      delay_for(delay).await;
+      sleep(delay).await;
       addr.send(Connect).await.ok();
     });
   }
@@ -137,7 +137,7 @@ impl NodeConnActor {
     const IDLE_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
     const PING_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
     let start_instant = Instant::now();
-    let mut keepalive_timer = delay_for(IDLE_TIMEOUT_DURATION);
+    let mut keepalive_timer = sleep(IDLE_TIMEOUT_DURATION);
     enum KeepAliveStatus {
       Idle,
       Pinged,

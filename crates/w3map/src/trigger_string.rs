@@ -157,7 +157,7 @@ impl BinDecode for TriggerStringRef {
       _ => {}
     }
 
-    if buf.bytes().starts_with(b"TRIGSTR_") {
+    if buf.chunk().starts_with(b"TRIGSTR_") {
       buf.get_tag("TRIGSTR_")?;
       let (bytes, _) = buf.get_delimited_bytes(b'\0')?;
       if let Some(pos) = bytes.iter().position(|b| *b != b'0') {

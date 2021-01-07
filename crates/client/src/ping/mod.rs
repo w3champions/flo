@@ -11,7 +11,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 mod collect;
 
@@ -69,7 +69,7 @@ impl Actor for PingActor {
         }
 
         // wait 15s and recreate the worker
-        delay_for(Duration::from_secs(15)).await;
+        sleep(Duration::from_secs(15)).await;
       }
     })
   }
@@ -287,7 +287,7 @@ pub struct PingUpdate {
 
 #[tokio::test]
 async fn test_ping() {
-  use tokio::time::delay_for;
+  use tokio::time::sleep;
 
   flo_log_subscriber::init_env_override("DEBUG");
 
@@ -308,7 +308,7 @@ async fn test_ping() {
   actor.send(UpdateAddresses { addresses }).await.unwrap();
 
   for i in 0..10 {
-    delay_for(std::time::Duration::from_secs(2)).await;
+    sleep(std::time::Duration::from_secs(2)).await;
     tracing::debug!("getting #{}", i);
     let map = actor.send(GetPingMap).await.unwrap();
     tracing::debug!(

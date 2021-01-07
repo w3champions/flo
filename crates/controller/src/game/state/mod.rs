@@ -27,7 +27,7 @@ use start::StartGameState;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const GAME_INACTIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600 * 30);
 
@@ -180,7 +180,7 @@ impl Handler<RemoveExpiredGames> for GameRegistry {
     }
     let addr = ctx.addr();
     ctx.spawn(async move {
-      delay_for(GAME_INACTIVE_CHECK_INTERVAL).await;
+      sleep(GAME_INACTIVE_CHECK_INTERVAL).await;
       addr.notify(RemoveExpiredGames).await.ok();
     });
   }

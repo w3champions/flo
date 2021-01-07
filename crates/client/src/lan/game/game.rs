@@ -124,12 +124,13 @@ impl<'a> GameHandler<'a> {
             return Ok(GameResult::Disconnected)
           }
         }
-        next = self.status_rx.recv() => {
-          let next = if let Some(next) = next {
-            next
-          } else {
-            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
-          };
+        changed = self.status_rx.changed() => {
+          let next =
+            if changed.is_ok() {
+              self.status_rx.borrow().clone()
+            } else {
+              return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
+            };
           match next {
             Some(status) => {
               self.handle_game_status_change(&mut loop_state, status).await?;

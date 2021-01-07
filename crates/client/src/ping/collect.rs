@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::sync::mpsc::error::SendTimeoutError;
 use tokio::sync::mpsc::Sender;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const PACKETS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(3);
@@ -88,7 +88,7 @@ impl PingCollectActor {
           SendTimeoutError::Closed(_) => PingError::SenderGone,
         })?;
       if seq != (PACKETS as u16) - 1 {
-        delay_for(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
       }
     }
     Ok(())
@@ -118,7 +118,7 @@ impl PingCollectActor {
     self.abort_timeout.take().map(|v| v.abort());
     let addr = ctx.addr();
     ctx.spawn(async move {
-      delay_for(delay).await;
+      sleep(delay).await;
       addr.send(PingStart).await.ok();
     });
   }
@@ -132,7 +132,7 @@ impl PingCollectActor {
     let (timeout, abort) = abortable({
       let addr = ctx.addr();
       async move {
-        delay_for(TIMEOUT).await;
+        sleep(TIMEOUT).await;
         addr.notify(PingCollectTimeout).await.ok();
       }
     });

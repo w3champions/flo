@@ -26,7 +26,7 @@ pub enum Error {
   #[error("tokio io: {0}")]
   Tokio(#[from] tokio::io::Error),
   #[error("operation timeout")]
-  Timeout(#[from] tokio::time::Elapsed),
+  Timeout(#[from] tokio::time::error::Elapsed),
   #[error("w3gs: {0}")]
   W3GS(#[from] flo_w3gs::error::Error),
   #[error("net: {0}")]

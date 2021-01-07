@@ -16,7 +16,7 @@ use std::task::Poll;
 use std::time::Duration;
 use tokio::sync::Notify;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing_futures::Instrument;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -131,7 +131,7 @@ impl Handler<Request> for NodeRequestActor {
         let addr = ctx.addr();
         let mut frame_tx = self.frame_tx.clone();
         async move {
-          let timeout = delay_for(REQUEST_TIMEOUT);
+          let timeout = sleep(REQUEST_TIMEOUT);
           let send = frame_tx.send(frame);
           tracing::debug!("request sent: {:?}", id);
 

@@ -16,7 +16,7 @@ use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing_futures::Instrument;
 
 pub struct ControllerStream {
@@ -436,12 +436,12 @@ impl Actor for ControllerStream {
       let parent = self.parent.clone();
       let nodes = self.nodes.clone();
       async move {
-        delay_for(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(2)).await;
         loop {
           if let Err(err) = Self::report_ping(id, frame_tx.clone(), &parent, &nodes).await {
             tracing::error!("report ping: {}", err)
           }
-          delay_for(Duration::from_secs(5)).await;
+          sleep(Duration::from_secs(5)).await;
         }
       }
     });

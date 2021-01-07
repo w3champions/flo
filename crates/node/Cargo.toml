@@ -16,9 +16,10 @@ flo-task = { path = "../task" }
 flo-state = "0.6.1"
 
 thiserror = "1.0"
-bytes = "0.5"
+bytes = "1.0"
 futures = "0.3"
-tokio = { version = "0.2", features = ["time", "sync", "stream", "macros", "blocking", "udp", "tcp"] }
+tokio = { version = "1.0", features = ["time", "sync", "macros", "net"] }
+tokio-stream = { version = "0.1", features = ["time", "net"] }
 tracing = "0.1"
 tracing-futures = "0.2"
 parking_lot = "0.11"

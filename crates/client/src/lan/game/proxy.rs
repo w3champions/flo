@@ -16,7 +16,7 @@ use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::stream::StreamExt;
+use tokio_stream::StreamExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, watch};
 use tracing_futures::Instrument;
@@ -394,12 +394,13 @@ impl State {
           }
         }
         // node status ack
-        next = status_rx.recv() => {
-          let next = if let Some(next) = next {
-            next
-          } else {
-            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
-          };
+        changed = status_rx.changed() => {
+          let next =
+            if changed.is_ok() {
+              status_rx.borrow().clone()
+            } else {
+              return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
+            };
           match next {
             Some(status) => {
               match status {

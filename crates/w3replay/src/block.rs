@@ -57,12 +57,11 @@ impl<R> Blocks<R> {
   }
 }
 
-impl<B> Blocks<bytes::buf::ext::Reader<B>>
+impl<B> Blocks<bytes::buf::Reader<B>>
 where
   B: Buf,
 {
   pub fn from_buf(buf: B, num_blocks: usize) -> Self {
-    use bytes::buf::ext::BufExt;
     Self {
       total_size: buf.remaining(),
       r: buf.reader(),
@@ -99,8 +98,9 @@ where
       crc16_compressed_data: 0,
       ..header.clone()
     };
-    let mut r =
-      CrcReader::new(Cursor::new(header_for_crc.encode_to_bytes()).chain(self.r.by_ref()));
+    let chain =
+      std::io::Read::chain(Cursor::new(header_for_crc.encode_to_bytes()), self.r.by_ref());
+    let mut r = CrcReader::new(chain);
     if let Err(e) = r.read_exact(&mut buf[0..BlockHeader::MIN_SIZE]) {
       return Some(Err(Error::ReadBlockHeader(e)));
     }
