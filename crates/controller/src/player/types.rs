@@ -95,3 +95,13 @@ pub struct BNetState {
   pub access_token: String,
   pub access_token_exp: u64,
 }
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, BSDieselEnum, S2ProtoEnum)]
+#[repr(i32)]
+#[s2_grpc(proto_enum_type(
+  flo_grpc::player::PlayerBanType,
+  flo_net::proto::flo_node::PlayerBanType
+))]
+pub enum PlayerBanType {
+  Chat = 0,
+}

@@ -1,0 +1,1 @@
+drop table player_ban;

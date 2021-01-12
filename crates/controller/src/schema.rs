@@ -86,6 +86,16 @@ table! {
 }
 
 table! {
+    player_ban (id) {
+        id -> Int4,
+        player_id -> Int4,
+        ban_type -> Int4,
+        ban_expires_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+    }
+}
+
+table! {
     player_mute (id) {
         id -> Int4,
         player_id -> Int4,
@@ -99,6 +109,7 @@ joinable!(game -> player (created_by));
 joinable!(game_used_slot -> game (game_id));
 joinable!(game_used_slot -> player (player_id));
 joinable!(player -> api_client (api_client_id));
+joinable!(player_ban -> player (player_id));
 
 allow_tables_to_appear_in_same_query!(
     api_client,
@@ -107,5 +118,6 @@ allow_tables_to_appear_in_same_query!(
     map_checksum,
     node,
     player,
+    player_ban,
     player_mute,
 );

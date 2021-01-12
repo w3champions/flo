@@ -14,6 +14,14 @@ pub struct ChatToHost {
 }
 
 impl ChatToHost {
+  pub fn is_in_game_chat(&self) -> bool {
+    if let ChatMessage::Scoped { .. } = self.message {
+      true
+    } else {
+      false
+    }
+  }
+
   pub fn lobby(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
     ChatToHost {
       to_players_len: to.len() as u8,

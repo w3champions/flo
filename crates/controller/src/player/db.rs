@@ -1,7 +1,7 @@
 use crate::db::DbConn;
 use crate::error::*;
-use crate::player::{Player, PlayerRef, PlayerSource, SourceState};
-use crate::schema::{player, player_mute};
+use crate::player::{Player, PlayerBanType, PlayerRef, PlayerSource, SourceState};
+use crate::schema::{player, player_ban, player_mute};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use serde_json::Value;
@@ -153,6 +153,73 @@ pub fn get_mute_list_map(conn: &DbConn, player_ids: &[i32]) -> Result<BTreeMap<i
       .entry(player_id)
       .or_insert_with(|| vec![])
       .push(mute_player_id);
+  }
+  Ok(map)
+}
+
+pub fn add_ban(
+  conn: &DbConn,
+  player_id: i32,
+  ban_type: PlayerBanType,
+  ban_expires_at: Option<DateTime<Utc>>,
+) -> Result<()> {
+  #[derive(Insertable)]
+  #[table_name = "player_ban"]
+  struct Insert {
+    player_id: i32,
+    ban_type: PlayerBanType,
+    ban_expires_at: Option<DateTime<Utc>>,
+  }
+
+  diesel::insert_into(player_ban::table)
+    .values(&Insert {
+      player_id,
+      ban_type,
+      ban_expires_at,
+    })
+    .on_conflict((player_ban::player_id, player_ban::ban_type))
+    .do_update()
+    .set(player_ban::ban_expires_at.eq(ban_expires_at))
+    .execute(conn)?;
+
+  Ok(())
+}
+
+pub fn remove_ban(conn: &DbConn, player_id: i32, ban_type: PlayerBanType) -> Result<()> {
+  diesel::delete(
+    player_ban::table.filter(
+      player_ban::player_id
+        .eq(player_id)
+        .and(player_ban::ban_type.eq(ban_type)),
+    ),
+  )
+  .execute(conn)?;
+
+  Ok(())
+}
+
+pub fn get_ban_list_map(
+  conn: &DbConn,
+  player_ids: &[i32],
+) -> Result<BTreeMap<i32, Vec<PlayerBanType>>> {
+  use diesel::dsl::sql;
+  use diesel::pg::expression::dsl::any;
+  let pairs: Vec<(i32, PlayerBanType)> = player_ban::table
+    .select((player_ban::player_id, player_ban::ban_type))
+    .filter(
+      player_ban::player_id.eq(any(player_ids)).and(
+        player_ban::ban_expires_at
+          .gt(sql("now()"))
+          .or(player_ban::ban_expires_at.is_null()),
+      ),
+    )
+    .load(conn)?;
+  let mut map = BTreeMap::new();
+  for (player_id, ban_type) in pairs {
+    map
+      .entry(player_id)
+      .or_insert_with(|| vec![])
+      .push(ban_type);
   }
   Ok(map)
 }

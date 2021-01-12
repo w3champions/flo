@@ -20,12 +20,13 @@ use flo_w3gs::protocol::packet::*;
 use super::broadcast;
 use crate::error::*;
 use crate::game::{
-  GameEvent, GameEventSender, PlayerSlot, SlotClientStatus, SlotClientStatusUpdateSource,
+  GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
+  SlotClientStatusUpdateSource,
 };
 
 use super::clock::ActionTickStream;
 use crate::game::host::clock::Tick;
-use flo_w3gs::protocol::chat::ChatToHost;
+use flo_w3gs::protocol::chat::{ChatFromHost, ChatToHost};
 use flo_w3gs::protocol::constants::LeaveReason;
 
 #[derive(Debug)]
@@ -66,9 +67,20 @@ impl Dispatcher {
     let (start_tx, start_rx) = oneshot::channel();
     let (action_tx, action_rx) = channel(10);
 
+    let mut start_messages = vec![];
+    if !state.chat_banned_player_ids.is_empty() {
+      start_messages.push("One or more players in this game have been muted.".to_string());
+    }
+
     tokio::spawn(
-      Self::tick(state.shared.clone(), start_rx, action_rx, scope.handle())
-        .instrument(tracing::debug_span!("tick_worker", game_id)),
+      Self::tick(
+        state.shared.clone(),
+        start_messages,
+        start_rx,
+        action_rx,
+        scope.handle(),
+      )
+      .instrument(tracing::debug_span!("tick_worker", game_id)),
     );
 
     tokio::spawn(
@@ -124,6 +136,7 @@ impl Dispatcher {
 
   async fn tick(
     shared: Arc<Mutex<Shared>>,
+    start_messages: Vec<String>,
     start_rx: oneshot::Receiver<()>,
     mut rx: Receiver<ActionMsg>,
     mut scope: SpawnScopeHandle,
@@ -134,6 +147,14 @@ impl Dispatcher {
 
     if let Ok(_) = start_rx.await {
       let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
+
+      {
+        let mut shared = shared.lock();
+        for msg in start_messages {
+          shared.broadcast_message(msg);
+        }
+      }
+
       loop {
         tokio::select! {
           _ = &mut dropped => {
@@ -172,6 +193,7 @@ struct State {
   shared: Arc<Mutex<Shared>>,
   player_ack_map: BTreeMap<i32, usize>,
   game_player_id_lookup: BTreeMap<u8, i32>,
+  chat_banned_player_ids: Vec<i32>,
 }
 
 impl State {
@@ -187,6 +209,16 @@ impl State {
       game_player_id_lookup: slots
         .into_iter()
         .map(|slot| ((slot.id + 1) as u8, slot.player.player_id))
+        .collect(),
+      chat_banned_player_ids: slots
+        .into_iter()
+        .filter_map(|v| {
+          if v.player.ban_list.contains(&PlayerBanType::Chat) {
+            Some(v.player.player_id)
+          } else {
+            None
+          }
+        })
         .collect(),
     }
   }
@@ -359,6 +391,11 @@ impl State {
     use flo_w3gs::protocol::constants::PacketTypeId;
 
     let chat: ChatToHost = packet.decode_simple()?;
+
+    if self.chat_banned_player_ids.contains(&player_id) && chat.is_in_game_chat() {
+      return Ok(());
+    }
+
     packet.header.type_id = PacketTypeId::ChatFromHost;
     self.shared.lock().broadcast(
       packet,
@@ -424,21 +461,23 @@ impl Shared {
     packet: Packet,
     target: T,
   ) -> Result<()> {
-    let frame = w3gs_to_frame(packet);
-    let errors: Vec<_> = self
-      .map
-      .iter_mut()
-      .filter_map(|(player_id, info)| {
-        if !target.contains(*player_id) {
-          return None;
-        }
-        if info.connected() {
-          info.send(frame.clone()).err().map(|err| (*player_id, err))
-        } else {
-          None
-        }
-      })
-      .collect();
+    let errors: Vec<_> = {
+      let frame = w3gs_to_frame(packet);
+      self
+        .map
+        .iter_mut()
+        .filter_map(|(player_id, info)| {
+          if !target.contains(*player_id) {
+            return None;
+          }
+          if info.connected() {
+            info.send(frame.clone()).err().map(|err| (*player_id, err))
+          } else {
+            None
+          }
+        })
+        .collect()
+    };
 
     if !errors.is_empty() {
       for (player_id, err) in errors {
@@ -466,6 +505,22 @@ impl Shared {
 
     Ok(())
   }
+
+  pub fn broadcast_message<T: AsRef<str> + Send + 'static>(&mut self, message: T) {
+    self.map.iter_mut().for_each(|(_, info)| {
+      if info.connected() {
+        let payload = ChatFromHost::private_to_self(info.slot_player_id, message.as_ref());
+        let frame = match Packet::simple(payload) {
+          Ok(pkt) => w3gs_to_frame(pkt),
+          Err(err) => {
+            tracing::warn!("encode broadcast message packet: {}", err);
+            return;
+          }
+        };
+        info.send(frame).ok();
+      }
+    });
+  }
 }
 
 #[derive(Debug)]
@@ -473,14 +528,18 @@ struct PlayerDispatchInfo {
   ticks: usize,
   pending_ack_packets: Vec<Packet>,
   tx: Option<Sender<Frame>>,
+  ban_list: Vec<PlayerBanType>,
+  slot_player_id: u8,
 }
 
 impl PlayerDispatchInfo {
-  fn new(_slot: &PlayerSlot) -> Self {
+  fn new(slot: &PlayerSlot) -> Self {
     Self {
       pending_ack_packets: vec![],
       ticks: 0,
       tx: None,
+      ban_list: slot.player.ban_list.clone(),
+      slot_player_id: (slot.id + 1) as _,
     }
   }
 

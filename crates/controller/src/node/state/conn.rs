@@ -14,8 +14,10 @@ use flo_net::stream::FloStream;
 use flo_state::reply::FutureReply;
 use flo_state::{async_trait, Actor, Addr, Container, Context, Handler, Message};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
+use std::collections::BTreeMap;
 
 use crate::game::state::registry::Remove;
+use crate::player::PlayerBanType;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
@@ -394,6 +396,7 @@ impl Handler<IncomingFrame> for NodeConnActor {
 
 pub struct NodeCreateGame {
   pub game: Game,
+  pub ban_list_map: BTreeMap<i32, Vec<PlayerBanType>>,
 }
 
 impl Message for NodeCreateGame {
@@ -405,7 +408,7 @@ impl Handler<NodeCreateGame> for NodeConnActor {
   async fn handle(
     &mut self,
     ctx: &mut Context<Self>,
-    NodeCreateGame { game }: NodeCreateGame,
+    NodeCreateGame { game, ban_list_map }: NodeCreateGame,
   ) -> Result<FutureReply<Result<CreatedGameInfo>>> {
     let addr = self
       .request_actor
@@ -414,7 +417,7 @@ impl Handler<NodeCreateGame> for NodeConnActor {
       .ok_or_else(|| Error::NodeNotReady)?;
     let (tx, rx) = FutureReply::channel();
     ctx.spawn(async move {
-      tx.send(addr.create_game(game).await).ok();
+      tx.send(addr.create_game(game, ban_list_map).await).ok();
     });
     Ok(rx)
   }

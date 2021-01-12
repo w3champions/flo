@@ -152,6 +152,11 @@ message GameSettings {
 message GamePlayer {
   int32 player_id = 1;
   string name = 2;
+  repeated PlayerBanType ban_list = 3;
+}
+
+enum PlayerBanType {
+  PlayerBanTypeChat = 0;
 }
 
 message GameSlot {

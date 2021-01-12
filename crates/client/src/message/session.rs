@@ -50,7 +50,7 @@ impl Session {
       }
       .instrument(tracing::debug_span!("worker")),
     );
-    Self { scope, tx: tx }
+    Self { scope, tx }
   }
 
   pub fn sender(&self) -> WsSender {

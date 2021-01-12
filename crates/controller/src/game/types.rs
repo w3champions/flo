@@ -1,13 +1,12 @@
+use crate::map::Map;
+use crate::node::{NodeRef, NodeRefColumns};
+use crate::player::{PlayerRef, PlayerRefColumns};
+use crate::schema::{game, game_used_slot};
 use bs_diesel_utils::BSDieselEnum;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
-
-use crate::map::Map;
-use crate::node::{NodeRef, NodeRefColumns};
-use crate::player::{PlayerRef, PlayerRefColumns};
-use crate::schema::{game, game_used_slot};
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
 #[s2_grpc(message_type(flo_grpc::game::Game))]

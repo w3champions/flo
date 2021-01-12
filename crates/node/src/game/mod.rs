@@ -580,6 +580,7 @@ pub enum Computer {
 pub struct GamePlayer {
   pub player_id: i32,
   pub name: String,
+  pub ban_list: Vec<PlayerBanType>,
 }
 
 impl<'a> From<&'a State> for NodeGameStatusSnapshot {
@@ -594,4 +595,11 @@ impl<'a> From<&'a State> for NodeGameStatusSnapshot {
         .collect(),
     }
   }
+}
+
+#[derive(Debug, Copy, Clone, S2ProtoEnum, PartialEq)]
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_node::PlayerBanType))]
+#[repr(i32)]
+pub enum PlayerBanType {
+  Chat = 0,
 }

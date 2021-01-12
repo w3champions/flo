@@ -1,16 +1,15 @@
 use crate::error::*;
 use crate::game::{Game, SlotClientStatus, SlotStatus};
 use crate::node::PlayerToken;
+use crate::player::PlayerBanType;
 use flo_net::packet::*;
 use flo_net::proto::flo_node::*;
-
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
-
 use futures::FutureExt;
 use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::future::Future;
-
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
@@ -228,13 +227,21 @@ impl Future for PendingResponse {
 
 #[async_trait]
 pub trait NodeRequestExt {
-  async fn create_game(&self, game: Game) -> Result<CreatedGameInfo>;
+  async fn create_game(
+    &self,
+    game: Game,
+    ban_list_map: BTreeMap<i32, Vec<PlayerBanType>>,
+  ) -> Result<CreatedGameInfo>;
   async fn player_force_leave(&self, game_id: i32, player_id: i32) -> Result<PlayerLeaveResponse>;
 }
 
 #[async_trait]
 impl NodeRequestExt for Addr<NodeRequestActor> {
-  async fn create_game(&self, game: Game) -> Result<CreatedGameInfo> {
+  async fn create_game(
+    &self,
+    game: Game,
+    mut ban_list_map: BTreeMap<i32, Vec<PlayerBanType>>,
+  ) -> Result<CreatedGameInfo> {
     let game_id = game.id;
 
     let req_id = RequestId::CreateGame(game_id);
@@ -247,6 +254,10 @@ impl NodeRequestExt for Addr<NodeRequestActor> {
           player: slot.player.as_ref().map(|player| GamePlayer {
             player_id: player.id,
             name: player.name.clone(),
+            ban_list: ban_list_map
+              .remove(&player.id)
+              .map(|items| items.into_iter().map(|v| v as i32).collect())
+              .unwrap_or_default(),
           }),
           settings: Some(slot.settings.clone().pack()?),
           client_status: Default::default(),

@@ -104,9 +104,13 @@ impl GameActor {
       return Ok(Err(pkt));
     }
 
-    let game = self
+    let (game, ban_list_map) = self
       .db
-      .exec(move |conn| crate::game::db::get_full(conn, game_id))
+      .exec(move |conn| {
+        let game = crate::game::db::get_full(conn, game_id)?;
+        let players = game.get_player_ids();
+        Ok::<_, Error>((game, crate::player::db::get_ban_list_map(conn, &players)?))
+      })
       .await?;
 
     let node_id = if let Some(id) = game.node.as_ref().map(|node| node.id) {
@@ -117,7 +121,7 @@ impl GameActor {
 
     let created = self
       .nodes
-      .send_to(node_id, NodeCreateGame { game })
+      .send_to(node_id, NodeCreateGame { game, ban_list_map })
       .await?
       .await
       .or_cancelled();
