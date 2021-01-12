@@ -235,7 +235,17 @@ pub fn create_as_bot(
     return Err(Error::MapHasNoPlayer);
   }
 
-  if params.slots.len() > max_players {
+  if params.slots.len() > 24 {
+    return Err(Error::TooManyPlayers);
+  }
+
+  let player_slots_count = params
+    .slots
+    .iter()
+    .filter(|s| { s.settings.team < 24 })
+    .count();
+
+  if player_slots_count > max_players {
     return Err(Error::TooManyPlayers);
   }
 
