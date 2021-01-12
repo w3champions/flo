@@ -5,7 +5,7 @@ use flo_grpc::game::*;
 
 const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
-pub async fn create_game(players: Vec<i32>) -> Result<i32> {
+pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
 
   let nodes = client.list_nodes(()).await?.into_inner().nodes;
@@ -16,26 +16,42 @@ pub async fn create_game(players: Vec<i32>) -> Result<i32> {
   let game_name = format!("GAME-{:x}", rand::random::<u32>());
   tracing::info!("game name = {}", game_name);
 
+  let mut slots: Vec<_> = players
+    .into_iter()
+    .enumerate()
+    .map(|(idx, id)| CreateGameSlot {
+      player_id: Some(id),
+      settings: SlotSettings {
+        team: idx as i32,
+        color: idx as i32,
+        status: 2,
+        handicap: 100,
+        ..Default::default()
+      }
+      .into(),
+    })
+    .collect();
+
+  if let Some(id) = ob {
+    slots.push(CreateGameSlot {
+      player_id: Some(id),
+      settings: SlotSettings {
+        team: 24,
+        color: 0,
+        status: 2,
+        handicap: 100,
+        ..Default::default()
+      }
+      .into(),
+    });
+  }
+
   let res = client
     .create_game_as_bot(CreateGameAsBotRequest {
       name: game_name,
       map: Some(get_map()?),
       node_id,
-      slots: players
-        .into_iter()
-        .enumerate()
-        .map(|(idx, id)| CreateGameSlot {
-          player_id: Some(id),
-          settings: SlotSettings {
-            team: idx as i32,
-            color: idx as i32,
-            status: 2,
-            handicap: 100,
-            ..Default::default()
-          }
-          .into(),
-        })
-        .collect(),
+      slots,
       ..Default::default()
     })
     .await?;

@@ -8,10 +8,21 @@ use flo_controller::player::PlayerSource;
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
-  UpsertPlayer { id: String, name: Option<String> },
-  RunGame { player: Vec<i32> },
-  StartGame { id: i32 },
-  CancelGame { id: i32 },
+  UpsertPlayer {
+    id: String,
+    name: Option<String>,
+  },
+  RunGame {
+    player: Vec<i32>,
+    #[structopt(long)]
+    ob: Option<i32>,
+  },
+  StartGame {
+    id: i32,
+  },
+  CancelGame {
+    id: i32,
+  },
 }
 
 impl Command {
@@ -32,8 +43,8 @@ impl Command {
         tracing::info!("player id: {}", player.id);
         tracing::info!("token: {}", res.token);
       }
-      Command::RunGame { player } => {
-        let game_id = create_game(player).await?;
+      Command::RunGame { player, ob } => {
+        let game_id = create_game(player, ob).await?;
         tracing::info!(game_id);
         let res = client
           .start_game_as_bot(StartGameAsBotRequest { game_id })
