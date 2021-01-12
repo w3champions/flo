@@ -146,14 +146,14 @@ impl Dispatcher {
     }
 
     if let Ok(_) = start_rx.await {
-      let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
-
-      {
+      if !start_messages.is_empty() {
         let mut shared = shared.lock();
         for msg in start_messages {
           shared.broadcast_message(msg);
         }
       }
+
+      let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
 
       loop {
         tokio::select! {

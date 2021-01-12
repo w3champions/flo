@@ -135,7 +135,7 @@ fn test_inspect_time() {
   // let path = flo_util::sample_path!("replay", "201227_ag3nt_spike.w3g");
   // let path = flo_util::sample_path!("replay", "grubby_happy.w3g");
   // let path = r#"C:\Users\fluxx\OneDrive\Documents\Warcraft III\BattleNet\298266\Replays\Autosaved\Multiplayer\Replay_2020_06_18_2318.w3g"#;
-  let path = r#"C:\Data\Projects\flo\deps\wc3-samples\replay\netease2.nwg"#;
+  let path = r#"C:\Users\fluxx\OneDrive\Documents\Warcraft III\BattleNet\298266\Replays\11111.w3g"#;
   let mut n = 0;
   let mut t = 0;
   let mut map = BTreeMap::new();
