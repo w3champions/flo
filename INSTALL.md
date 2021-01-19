@@ -110,18 +110,64 @@ run node first
 ./target/release/flo-controller-service
 ```
 
-TODO
-----
+Running as sercice
+------------------
 
-Actually need to write systemd `.service` files for those, to use:
+Create following service files for systemd:
+
+ - /usr/lib/systemd/system/flo-node.service
+ 
+```service
+[Unit]
+Description=Flo Node Service
+After=network.target
+After=postgresql.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/flo
+ExecStart=/bin/bash -l -c "FLO_NODE_SECRET='mawa' ./target/release/flo-node-service"
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+ - /usr/lib/systemd/system/flo-controller.service
+
+```service
+[Unit]
+Description=Flo Controller Service
+After=network.target
+After=postgresql.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/flo
+ExecStart=/bin/bash -l -c "FLO_NODE_SECRET='mawa' ./target/release/flo-controller-service"
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Run with
 
 ```shell
-systemctl start flo-node-service
-systemctl start flo-controller-service
+systemctl start flo-node
+systemctl start flo-controller
 ```
 
 Trace logs:
 
 ```shell
-journalctl -f -u flo-node-service
+journalctl -f -u flo-node
+```
+
+Run automatically with system start:
+
+```shell
+systemctl enable postgresql
+systemctl enable flo-node
+systemctl enable flo-controller
 ```
