@@ -103,8 +103,28 @@ impl ClientPlatformInfo {
   }
 
   #[cfg(target_os = "linux")]
-  pub fn with_config(_config: &ClientConfig) -> Result<Self> {
-    Err(Error::NoInstallationFolder)
+  pub fn with_config(config: &ClientConfig) -> Result<Self> {
+    let installation_path = config
+      .installation_path
+      .clone()
+      .ok_or_else(|| Error::NoInstallationFolder)?;
+
+    let executable_path = installation_path.join("_retail_/x86_64/Warcraft III.exe");
+    tracing::debug!("executable_path: {:?}", executable_path);
+
+    let user_data_path = config
+      .user_data_path
+      .clone()
+      .ok_or_else(|| Error::NoUserDataPath)?;
+    tracing::debug!("user_data_path: {:?}", user_data_path);
+
+    //TODO: maybe put version into config for Linux
+    Ok(ClientPlatformInfo {
+      user_data_path,
+      installation_path,
+      version: String::from("1.32.6"),
+      executable_path,
+    })
   }
 
   pub fn from_env() -> Result<Self> {

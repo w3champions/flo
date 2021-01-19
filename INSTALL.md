@@ -192,4 +192,5 @@ run
 
 ```shell
 ./target/release/flo-cli server --help
+./target/release/flo-cli server list-nodes
 ```
