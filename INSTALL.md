@@ -151,6 +151,12 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+Make those visible with running:
+
+```shell
+systemctl daemon-reload
+```
+
 Run with
 
 ```shell
