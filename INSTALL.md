@@ -177,3 +177,19 @@ systemctl enable postgresql
 systemctl enable flo-node
 systemctl enable flo-controller
 ```
+
+TESTING
+-------
+
+build flo-cli
+
+```shell
+apt install libavahi-compat-libdnssd-dev zlib1g-dev libbz2-dev
+cargo build -p flo-cli --release
+```
+
+run
+
+```shell
+./target/release/flo-cli server --help
+```
