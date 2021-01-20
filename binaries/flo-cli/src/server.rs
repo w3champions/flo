@@ -23,6 +23,7 @@ pub enum Command {
   CancelGame {
     id: i32,
   },
+  ListNodes
 }
 
 impl Command {
@@ -63,6 +64,10 @@ impl Command {
         client
           .cancel_game_as_bot(CancelGameAsBotRequest { game_id: id })
           .await?;
+      }
+      Command::ListNodes => {
+        let res = client.list_nodes(()).await;
+        tracing::info!("nodes: {:?}", res);
       }
     }
 

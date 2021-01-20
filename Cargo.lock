@@ -1133,6 +1133,7 @@ dependencies = [
  "flo-net",
  "flo-w3map",
  "flo-w3storage",
+ "hex",
  "rand 0.8.0",
  "structopt",
  "tokio",
@@ -2018,6 +2019,12 @@ checksum = "5aca5565f760fb5b220e499d72710ed156fdb74e631659e99377d9ebfbd13ae8"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "home-dir"
