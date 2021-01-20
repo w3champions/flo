@@ -78,6 +78,7 @@ diesel setup
 ```
 
 add api_client and node rows to postgres
+(NOTE: use server ip and not 127.0.0.1)
 
 ```shell
 psql -U postgres -d flo -c "insert into api_client (name, secret_key) VALUES ('mawa', 'mawa')"
@@ -193,4 +194,28 @@ run
 ```shell
 ./target/release/flo-cli server --help
 ./target/release/flo-cli server list-nodes
+./target/release/flo-cli server upsert-player 1
+```
+
+copy token from the last command and use it to run flo-worker locally
+
+```shell
+flo-worker.exe --controller-host="45.33.104.208" --token="eyJ0...."
+```
+
+if you get no errors you can create test game
+
+```shell
+./target/release/flo-cli server run-game 2
+```
+
+Tips
+----
+
+to update ip addres you may use:
+```shell
+psql -U postgres -d flo -c "update node set ip_addr = '45.33.104.208' WHERE id = 1"
+psql -U postgres -d flo -c "select * from node"
+systemctl restart flo-node
+systemctl restart flo-controller
 ```

@@ -6,6 +6,10 @@ use flo_grpc::game::*;
 const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
+  if players.is_empty() {
+    panic!("Need to sepcify at least one player");
+  }
+
   let mut client = get_grpc_client().await;
 
   let nodes = client.list_nodes(()).await?.into_inner().nodes;
@@ -16,21 +20,49 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let game_name = format!("GAME-{:x}", rand::random::<u32>());
   tracing::info!("game name = {}", game_name);
 
-  let mut slots: Vec<_> = players
-    .into_iter()
-    .enumerate()
-    .map(|(idx, id)| CreateGameSlot {
-      player_id: Some(id),
-      settings: SlotSettings {
-        team: idx as i32,
-        color: idx as i32,
-        status: 2,
-        handicap: 100,
-        ..Default::default()
-      }
-      .into(),
-    })
-    .collect();
+  let player1_slot_settings = SlotSettings {
+    team: 1,
+    color: 1,
+    handicap: 100,
+    status: 2,
+    race: 4, // random
+    ..Default::default()
+  };
+
+  let (player2_slot_settings, player2_id)
+    = if players.len() > 1 {
+    (SlotSettings {
+      team: 2,
+      color: 2,
+      handicap: 100,
+      status: 2,
+      race: 4,
+      ..Default::default()
+    }, Some(players[1]))
+  } else {
+    (SlotSettings {
+      team: 2,
+      color: 2,
+      computer: 2,
+      handicap: 100,
+      status: 2,
+      race: 4,
+      ..Default::default()
+    }, None)
+  };
+
+  let mut slots = vec![
+    CreateGameSlot {
+      player_id: Some(players[0]),
+      settings: Some(player1_slot_settings),
+      ..Default::default()
+    },
+    CreateGameSlot {
+      player_id: player2_id,
+      settings: Some(player2_slot_settings),
+      ..Default::default()
+    }
+  ];
 
   if let Some(id) = ob {
     slots.push(CreateGameSlot {
@@ -79,6 +111,7 @@ pub fn get_map_server() -> Result<Map> {
   Ok(map)
 }
 
+#[allow(dead_code)]
 fn get_map() -> Result<Map> {
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;
