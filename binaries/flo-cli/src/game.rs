@@ -21,7 +21,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   tracing::info!("game name = {}", game_name);
 
   let player1_slot_settings = SlotSettings {
-    team: 1,
+    team: 0,
     color: 1,
     handicap: 100,
     status: 2,
@@ -32,7 +32,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let (player2_slot_settings, player2_id)
     = if players.len() > 1 {
     (SlotSettings {
-      team: 2,
+      team: 1,
       color: 2,
       handicap: 100,
       status: 2,
@@ -41,7 +41,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
     }, Some(players[1]))
   } else {
     (SlotSettings {
-      team: 2,
+      team: 1,
       color: 2,
       computer: 2,
       handicap: 100,
