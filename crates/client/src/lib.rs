@@ -18,6 +18,7 @@ pub use version::FLO_VERSION;
 pub struct StartConfig {
   pub token: Option<String>,
   pub installation_path: Option<PathBuf>,
+  pub user_data_path: Option<PathBuf>,
   pub controller_host: Option<String>,
 }
 
