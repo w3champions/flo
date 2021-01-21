@@ -17,6 +17,9 @@ pub struct Opt {
   #[structopt(long, parse(from_os_str))]
   pub installation_path: Option<PathBuf>,
 
+  #[structopt(long, parse(from_os_str))]
+  pub user_data_path: Option<PathBuf>,
+
   #[structopt(long)]
   pub controller_host: Option<String>,
 
@@ -30,6 +33,7 @@ impl Default for Opt {
       debug: false,
       token: None,
       installation_path: None,
+      user_data_path: None,
       controller_host: None,
       use_flo_web: true,
     }

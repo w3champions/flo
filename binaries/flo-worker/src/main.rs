@@ -19,6 +19,9 @@ struct Opt {
   #[structopt(long, parse(from_os_str))]
   installation_path: Option<PathBuf>,
 
+  #[structopt(long, parse(from_os_str))]
+  user_data_path: Option<PathBuf>,
+
   #[structopt(long)]
   controller_host: Option<String>,
 }
@@ -41,6 +44,7 @@ fn main() {
     let client = rt.block_on(flo_client::start(StartConfig {
       token: opt.token,
       installation_path: opt.installation_path,
+      user_data_path: opt.user_data_path,
       controller_host: opt.controller_host.clone(),
       ..Default::default()
     }))?;

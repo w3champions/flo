@@ -22,6 +22,7 @@ async fn run_flo_worker(opt: Opt) -> Result<u16> {
   let client = rt.block_on(flo_client::start(StartConfig {
     token: opt.token,
     installation_path: opt.installation_path,
+    user_data_path: opt.user_data_path,
     controller_host: opt.controller_host.clone(),
     ..Default::default()
   }))?;

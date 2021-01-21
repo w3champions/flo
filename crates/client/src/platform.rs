@@ -281,13 +281,16 @@ impl Platform {
         }
       }
 
-      if let Some(cfg) = self.info.as_ref().ok() {
-        let s = W3Storage::new(cfg)?;
-        let r = f(&s);
-        self.storage = Some(s);
-        r
-      } else {
-        Err(Error::War3NotLocated)
+      match self.info.as_ref() {
+        Ok(cfg) => {
+          let s = W3Storage::new(cfg)?;
+          let r = f(&s);
+          self.storage = Some(s);
+          r
+        }, Err(e) => {
+          tracing::debug!("Failed to locate WC3: {:?}", e);
+          Err(Error::War3NotLocated)
+        }
       }
     })
   }
@@ -329,6 +332,7 @@ async fn load(
     #[cfg(feature = "worker")]
     let config = ClientConfig {
       installation_path: start_config.installation_path.clone(),
+      user_data_path: start_config.user_data_path.clone(),
       controller_host: start_config
         .controller_host
         .clone()

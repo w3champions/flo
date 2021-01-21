@@ -39,6 +39,9 @@ pub fn main() {
   if let Some(installation_path) = opt_from_args.installation_path {
     opt.installation_path = Some(installation_path);
   }
+  if let Some(user_data_path) = opt_from_args.user_data_path {
+    opt.installation_path = Some(user_data_path);
+  }
   if let Some(controller_host) = opt_from_args.controller_host {
     opt.token = Some(controller_host);
   }
