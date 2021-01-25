@@ -310,7 +310,7 @@ impl<'a> GameHandler<'a> {
         if !targets.is_empty() {
           let target = targets[0].clone();
           if let Ok(Ok(result)) =
-            tokio::task::spawn_blocking(move || {
+            tokio::spawn(async move {
              w3c::search(&target)
             }).await {
             self.send_chats_to_self(
@@ -323,7 +323,7 @@ impl<'a> GameHandler<'a> {
       cmd if cmd.starts_with("stats") => {
         let target = String::from( &cmd["stats ".len()..] );
         if let Ok(Ok(result)) =
-          tokio::task::spawn_blocking(move || {
+          tokio::spawn(async move {
             w3c::search(&target)
           }).await {
           self.send_chats_to_self(
