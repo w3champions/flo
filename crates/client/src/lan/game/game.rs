@@ -180,7 +180,7 @@ impl<'a> GameHandler<'a> {
         match pkt.message {
           ChatMessage::Scoped { message, .. } => {
             if let Some(cmd) = parse_chat_command(message.as_bytes()) {
-              self.handle_chat_command(&cmd);
+              self.handle_chat_command(&cmd).await;
               return Ok(());
             }
           }
@@ -200,7 +200,7 @@ impl<'a> GameHandler<'a> {
     Ok(())
   }
 
-  fn handle_chat_command(&mut self, cmd: &str) {
+  async fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
       "help" => {
         let messages = vec![
@@ -212,7 +212,8 @@ impl<'a> GameHandler<'a> {
           "!mute/mutef <ID>: Mute a player.".to_string(),
           "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "!unmute/unmutef <ID>: Unmute a player.".to_string(),
-          "!stats: print opponent statistics.".to_string()
+          "!stats: print first opponent statistics.".to_string(),
+          "!stats <name>: print payer statistics.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
@@ -306,19 +307,28 @@ impl<'a> GameHandler<'a> {
             Some(slot.name.clone())
           })
           .collect();
-        if let Ok(res) = w3c::search(targets[0].as_str()) {
-          self.send_chats_to_self(
-            self.info.slot_info.slot_player_id,
-            vec![res],
-          );
+        if !targets.is_empty() {
+          let target = targets[0].clone();
+          if let Ok(Ok(result)) =
+            tokio::task::spawn_blocking(move || {
+             w3c::search(&target)
+            }).await {
+            self.send_chats_to_self(
+              self.info.slot_info.slot_player_id,
+              vec![result],
+            );
+          }
         }
       }
       cmd if cmd.starts_with("stats") => {
-        let target = &cmd["stats ".len()..];
-        if let Ok(res) = w3c::search(target) {
+        let target = String::from( &cmd["stats ".len()..] );
+        if let Ok(Ok(result)) =
+          tokio::task::spawn_blocking(move || {
+            w3c::search(&target)
+          }).await {
           self.send_chats_to_self(
             self.info.slot_info.slot_player_id,
-            vec![res],
+            vec![result],
           );
         }
       }

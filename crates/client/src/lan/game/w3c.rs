@@ -100,9 +100,9 @@ pub fn search(target: &str) -> anyhow::Result<String> {
               String::from("Calibrating")
             } else {
               if gmstat.leagueOrder > 1 {
-                format!("*League*: **{}** *Division:* **{}**", league_str, gmstat.division)
+                format!("{} {}", league_str, gmstat.division)
               } else {
-                format!("*League*: **{}**", league_str)
+                format!("{}", league_str)
               }
             };
           league_info = format!("{}: {} Rank: {} Winrate: {}%, MMR: {}",
