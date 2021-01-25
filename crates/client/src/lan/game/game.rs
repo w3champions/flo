@@ -180,7 +180,7 @@ impl<'a> GameHandler<'a> {
         match pkt.message {
           ChatMessage::Scoped { message, .. } => {
             if let Some(cmd) = parse_chat_command(message.as_bytes()) {
-              self.handle_chat_command(&cmd).await;
+              self.handle_chat_command(&cmd);
               return Ok(());
             }
           }
@@ -200,7 +200,7 @@ impl<'a> GameHandler<'a> {
     Ok(())
   }
 
-  async fn handle_chat_command(&mut self, cmd: &str) {
+  fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
       "help" => {
         let messages = vec![
@@ -308,11 +308,7 @@ impl<'a> GameHandler<'a> {
           })
           .collect();
         if !targets.is_empty() {
-          let target = targets[0].clone();
-          if let Ok(Ok(result)) =
-            tokio::spawn(async move {
-             w3c::search(&target)
-            }).await {
+          if let Ok(result) = w3c::search(&targets[0]) {
             self.send_chats_to_self(
               self.info.slot_info.slot_player_id,
               vec![result],
@@ -321,11 +317,7 @@ impl<'a> GameHandler<'a> {
         }
       }
       cmd if cmd.starts_with("stats") => {
-        let target = String::from( &cmd["stats ".len()..] );
-        if let Ok(Ok(result)) =
-          tokio::spawn(async move {
-            w3c::search(&target)
-          }).await {
+        if let Ok(result) = w3c::search(&cmd["stats ".len()..]) {
           self.send_chats_to_self(
             self.info.slot_info.slot_player_id,
             vec![result],
