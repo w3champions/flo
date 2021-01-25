@@ -40,6 +40,7 @@ base64 = "0.12"
 lazy_static = "1.4"
 hash-ids = "0.2"
 rand = "0.8"
+ureq = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 dotenv = "0.15"

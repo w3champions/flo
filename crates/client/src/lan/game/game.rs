@@ -4,6 +4,7 @@ use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use crate::lan::game::w3c;
 use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
@@ -211,6 +212,7 @@ impl<'a> GameHandler<'a> {
           "!mute/mutef <ID>: Mute a player.".to_string(),
           "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "!unmute/unmutef <ID>: Unmute a player.".to_string(),
+          "!stats: print opponent statistics.".to_string()
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
@@ -238,13 +240,6 @@ impl<'a> GameHandler<'a> {
 
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
-      "tick" => self.send_chats_to_self(
-        self.info.slot_info.slot_player_id,
-        vec![format!(
-          "tick_recv = {}, tick_ack = {}",
-          self.tick_recv, self.tick_ack
-        )],
-      ),
       "muteall" => {
         let targets: Vec<u8> = self
           .info
@@ -293,6 +288,39 @@ impl<'a> GameHandler<'a> {
           self.info.slot_info.slot_player_id,
           vec![format!("All players un-muted.")],
         );
+      }
+      "stats" => {
+        let my_team = self.info.slot_info.my_slot.team;
+        let targets: Vec<String> = self
+          .info
+          .slot_info
+          .player_infos
+          .iter()
+          .filter_map(|slot| {
+            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+              return None;
+            }
+            if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
+              return None;
+            }
+            Some(slot.name.clone())
+          })
+          .collect();
+        if let Ok(res) = w3c::search(targets[0].as_str()) {
+          self.send_chats_to_self(
+            self.info.slot_info.slot_player_id,
+            vec![res],
+          );
+        }
+      }
+      cmd if cmd.starts_with("stats") => {
+        let target = &cmd["stats ".len()..];
+        if let Ok(res) = w3c::search(target) {
+          self.send_chats_to_self(
+            self.info.slot_info.slot_player_id,
+            vec![res],
+          );
+        }
       }
       cmd if cmd.starts_with("mute") => {
         let targets: Vec<(u8, &str, i32)> = self

@@ -1,3 +1,4 @@
+pub mod w3c;
 mod game;
 mod lobby;
 mod proxy;
