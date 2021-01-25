@@ -81,7 +81,9 @@ pub fn search(target: &str) -> anyhow::Result<String> {
   let mut league_info = String::new();
   if !search.is_empty() {
     if !search[0].player.playerIds.is_empty() {
-      let user = search[0].player.playerIds[0].battleTag.clone().replace("#","%23");
+      let player = search[0].player.playerIds[0].battleTag.clone();
+      let name = &player.split('#').collect::<Vec<&str>>()[0];
+      let user = player.replace("#","%23");
       let game_mode_uri = format!("https://statistic-service.w3champions.com/api/players/{}/game-mode-stats?season={}&gateWay=20", user, season);
       let game_mode_stats: Vec<GMStats> = ureq::get(&game_mode_uri).call()?.into_json::<Vec<GMStats>>()?;
       for gmstat in game_mode_stats {
@@ -103,8 +105,8 @@ pub fn search(target: &str) -> anyhow::Result<String> {
                 format!("*League*: **{}**", league_str)
               }
             };
-          league_info = format!("**Winrate**: **{}%** **MMR**: __**{}**__ (*{}*)\n{} *Rank*: **{}**",
-            winrate, gmstat.mmr, progr, &league_division, gmstat.rank);
+          league_info = format!("{}: {} Rank: {} Winrate: {}%, MMR: {}",
+            name, &league_division, gmstat.rank, winrate, gmstat.mmr);
         }
       }
     }
