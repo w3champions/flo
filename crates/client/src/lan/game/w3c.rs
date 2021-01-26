@@ -1,6 +1,7 @@
 use anyhow;
 use ureq;
-use serde::{Deserialize, de::DeserializeOwned};
+
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct PlayerId {
@@ -90,11 +91,6 @@ pub fn search(target: &str) -> anyhow::Result<String> {
         // solo games
         if gmstat.gameMode == 1 && league_info.is_empty() {
           let winrate = (gmstat.winrate * 100.0).round();
-          let progr = if gmstat.rankingPointsProgress.mmr > 0 {
-              format!("+{}", gmstat.rankingPointsProgress.mmr)
-            } else {
-              gmstat.rankingPointsProgress.mmr.to_string()
-            };
           let league_str = get_league(gmstat.leagueOrder);
           let league_division = if gmstat.games < 5 {
               String::from("Calibrating")
@@ -105,8 +101,13 @@ pub fn search(target: &str) -> anyhow::Result<String> {
                 format!("{}", league_str)
               }
             };
-          league_info = format!("{}: {} Rank: {} Winrate: {}%, MMR: {}",
-            name, &league_division, gmstat.rank, winrate, gmstat.mmr);
+          league_info = format!("{}: {} Rank: {} Games {}-{} Winrate: {}%, MMR: {}",
+            name, &league_division
+                , gmstat.wins
+                , gmstat.losses
+                , gmstat.rank
+                , winrate
+                , gmstat.mmr);
         }
       }
     }

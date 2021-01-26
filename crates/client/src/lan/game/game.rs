@@ -213,7 +213,7 @@ impl<'a> GameHandler<'a> {
           "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "!unmute/unmutef <ID>: Unmute a player.".to_string(),
           "!stats: print first opponent statistics.".to_string(),
-          "!stats <name>: print payer statistics.".to_string(),
+          "!stats <ID>: print payer statistics.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
@@ -292,7 +292,7 @@ impl<'a> GameHandler<'a> {
       }
       "stats" => {
         let my_team = self.info.slot_info.my_slot.team;
-        let targets: Vec<String> = self
+        let targets: Vec<&str> = self
           .info
           .slot_info
           .player_infos
@@ -304,19 +304,37 @@ impl<'a> GameHandler<'a> {
             if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
               return None;
             }
-            Some(slot.name.clone())
+            Some(slot.name.as_str())
           })
           .collect();
         if !targets.is_empty() {
-          let target = String::from( &targets[0] );
+          let target = String::from( targets[0] );
           self.send_stats_to_self(
             self.info.slot_info.slot_player_id, target);
         }
       }
       cmd if cmd.starts_with("stats") => {
-        let target = String::from( &cmd["stats ".len()..] );
-        self.send_stats_to_self(
-          self.info.slot_info.slot_player_id, target);
+        let id = &cmd["stats ".len()..];
+        if let Some(id) = id.parse::<u8>().ok() {
+          let targets: Vec<&str> = self
+            .info
+            .slot_info
+            .player_infos
+            .iter()
+            .filter_map(|info|
+              if info.slot_player_id == id {
+                Some( info.name.as_str() )
+              } else {
+                None
+              }
+            )
+            .collect();
+          if !targets.is_empty() {
+            let target = String::from( targets[0] );
+            self.send_stats_to_self(
+              self.info.slot_info.slot_player_id, target);
+          }
+        }
       }
       cmd if cmd.starts_with("mute") => {
         let targets: Vec<(u8, &str, i32)> = self
