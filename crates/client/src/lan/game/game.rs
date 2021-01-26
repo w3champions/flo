@@ -308,21 +308,15 @@ impl<'a> GameHandler<'a> {
           })
           .collect();
         if !targets.is_empty() {
-          if let Ok(result) = w3c::search(&targets[0]) {
-            self.send_chats_to_self(
-              self.info.slot_info.slot_player_id,
-              vec![result],
-            );
-          }
+          let target = String::from( &targets[0] );
+          self.send_stats_to_self(
+            self.info.slot_info.slot_player_id, target);
         }
       }
       cmd if cmd.starts_with("stats") => {
-        if let Ok(result) = w3c::search(&cmd["stats ".len()..]) {
-          self.send_chats_to_self(
-            self.info.slot_info.slot_player_id,
-            vec![result],
-          );
-        }
+        let target = String::from( &cmd["stats ".len()..] );
+        self.send_stats_to_self(
+          self.info.slot_info.slot_player_id, target);
       }
       cmd if cmd.starts_with("mute") => {
         let targets: Vec<(u8, &str, i32)> = self
@@ -509,6 +503,15 @@ impl<'a> GameHandler<'a> {
         vec![format!("Unknown command")],
       ),
     }
+  }
+
+  fn send_stats_to_self(&self, player_id: u8, target: String) {
+    let mut tx = self.w3gs_tx.clone();
+    tokio::spawn(async move {
+      if let Ok(result) = w3c::search(target.as_str()) {
+        send_chats_to_self(&mut tx, player_id, vec![result]).await
+      }
+    });
   }
 
   fn send_chats_to_self(&self, player_id: u8, messages: Vec<String>) {
