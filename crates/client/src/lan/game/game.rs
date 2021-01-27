@@ -212,8 +212,8 @@ impl<'a> GameHandler<'a> {
           "!mute/mutef <ID>: Mute a player.".to_string(),
           "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "!unmute/unmutef <ID>: Unmute a player.".to_string(),
-          "!stats: print first opponent statistics.".to_string(),
-          "!stats <ID>: print payer statistics.".to_string(),
+          "!stats: print opponent/opponents statistics.".to_string(),
+          "!stats <ID>: print payer statistics, or display a player list.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
@@ -333,7 +333,19 @@ impl<'a> GameHandler<'a> {
           if !targets.is_empty() {
             self.send_stats_to_self(
               self.info.slot_info.slot_player_id, targets);
+          } else {
+            let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+            for slot in &self.info.slot_info.player_infos {
+              msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+            }
+            self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
           }
+        } else {
+          let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+          for slot in &self.info.slot_info.player_infos {
+            msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+          }
+          self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
         }
       }
       cmd if cmd.starts_with("mute") => {
