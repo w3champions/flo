@@ -5,6 +5,7 @@ members = [
   "crates/util",
   "crates/w3gs",
   "crates/w3map",
+  "crates/w3c",
   "crates/blp",
   "crates/lan",
   "crates/log",

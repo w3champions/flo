@@ -1168,6 +1168,7 @@ dependencies = [
  "flo-task 0.1.0",
  "flo-types",
  "flo-util",
+ "flo-w3c",
  "flo-w3gs",
  "flo-w3map",
  "flo-w3storage",
@@ -1184,7 +1185,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
- "ureq",
 ]
 
 [[package]]
@@ -1457,6 +1457,16 @@ dependencies = [
  "pretty-hex 0.2.1",
  "thiserror",
  "tokio-util",
+]
+
+[[package]]
+name = "flo-w3c"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]

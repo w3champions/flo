@@ -22,6 +22,7 @@ flo-w3map = { path = "../w3map" }
 flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-task = { path = "../task" }
+flo-w3c = { path = "../w3c" }
 flo-state = "0.6.1"
 
 s2-grpc-utils = "0.2"
@@ -40,7 +41,6 @@ base64 = "0.12"
 lazy_static = "1.4"
 hash-ids = "0.2"
 rand = "0.8"
-ureq = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 dotenv = "0.15"

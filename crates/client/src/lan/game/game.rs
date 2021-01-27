@@ -4,7 +4,6 @@ use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
-use crate::lan::game::w3c;
 use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
@@ -13,6 +12,7 @@ use flo_w3gs::packet::*;
 use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::leave::LeaveAck;
+use flo_w3c::stats::get_stats;
 use std::collections::BTreeSet;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
@@ -526,7 +526,7 @@ impl<'a> GameHandler<'a> {
   fn send_stats_to_self(&self, player_id: u8, target: String) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
-      if let Ok(result) = w3c::get_stats(target.as_str()) {
+      if let Ok(result) = get_stats(target.as_str()) {
         send_chats_to_self(&mut tx, player_id, vec![result]).await
       }
     });
