@@ -526,7 +526,7 @@ impl<'a> GameHandler<'a> {
   fn send_stats_to_self(&self, player_id: u8, target: String) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
-      if let Ok(result) = w3c::search(target.as_str()) {
+      if let Ok(result) = w3c::get_stats(target.as_str()) {
         send_chats_to_self(&mut tx, player_id, vec![result]).await
       }
     });
