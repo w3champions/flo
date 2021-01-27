@@ -6,14 +6,17 @@ use crate::{
 use anyhow;
 use ureq;
 
+use once_cell::sync::Lazy;
+
 pub fn get_stats(target: &str, race: u32) -> anyhow::Result<String> {
-  let season = 5;
+  static SEASON: Lazy<u32> =
+    Lazy::new(|| { get_current_season().unwrap_or(5) });
   let mut league_info = String::new();
   let race_str = get_race_flo(race);
-  if let Some(player) = get_player(target, season)? {
+  if let Some(player) = get_player(target, *SEASON)? {
     let name = &player.split('#').collect::<Vec<&str>>()[0];
     let user = player.replace("#","%23");
-    let game_mode_uri = format!("https://statistic-service.w3champions.com/api/players/{}/game-mode-stats?season={}&gateWay=20", user, season);
+    let game_mode_uri = format!("https://statistic-service.w3champions.com/api/players/{}/game-mode-stats?season={}&gateWay=20", user, *SEASON);
     let game_mode_stats: Vec<GMStats> = ureq::get(&game_mode_uri).call()?.into_json::<Vec<GMStats>>()?;
     for gmstat in game_mode_stats {
       // for now displaying only solo games

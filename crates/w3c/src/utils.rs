@@ -31,7 +31,18 @@ pub fn get_league(l: u32) -> String {
                        , _ => "" })
 }
 
-pub fn get_player(target: &str, season: u16) -> anyhow::Result<Option<String>> {
+pub fn get_current_season() -> anyhow::Result<u32> {
+  let seasons = ureq::get("https://statistic-service.w3champions.com/api/ladder/seasons")
+                     .call()?.into_json::<Vec<Season>>()?;
+  let seasons_ids = seasons.iter().map(|s| s.id);
+  if let Some(last_season) = seasons_ids.max() {
+    Ok(last_season)
+  } else {
+    Ok(5) // some default value
+  }
+}
+
+pub fn get_player(target: &str, season: u32) -> anyhow::Result<Option<String>> {
   if target.contains('#') {
     Ok(Some(target.to_string()))
   }

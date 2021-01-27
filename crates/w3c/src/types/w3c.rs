@@ -1,6 +1,11 @@
 use serde::Deserialize;
 
 #[derive(Deserialize)]
+pub struct Season {
+  pub id: u32,
+}
+
+#[derive(Deserialize)]
 pub struct PlayerId {
   pub name: String,
   pub battleTag: String

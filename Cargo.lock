@@ -1464,6 +1464,7 @@ name = "flo-w3c"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "once_cell",
  "serde",
  "serde_json",
  "ureq",
