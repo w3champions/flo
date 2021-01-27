@@ -3,6 +3,23 @@ use crate::types::w3c::*;
 use anyhow;
 use ureq;
 
+pub fn get_race_flo(r : u32) -> String {
+  String::from(
+    match r { 0 => "H"
+            , 1 => "O"
+            , 2 => "NE"
+            , 3 => "UD"
+            , _ => "RND"})
+}
+
+pub fn flo_to_w3c_race(r: u32) -> u32 {
+  match r { 0 => 1
+          , 1 => 2
+          , 2 => 4
+          , 3 => 8
+          , _ => 0 }
+}
+
 pub fn get_league(l: u32) -> String {
   String::from(match l { 0 => "GrandMaster"
                        , 1 => "Master"

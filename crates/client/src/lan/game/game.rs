@@ -292,7 +292,7 @@ impl<'a> GameHandler<'a> {
       }
       "stats" => {
         let my_team = self.info.slot_info.my_slot.team;
-        let targets: Vec<&str> = self
+        let targets: Vec<(String, u32)> = self
           .info
           .slot_info
           .player_infos
@@ -304,35 +304,35 @@ impl<'a> GameHandler<'a> {
             if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
               return None;
             }
-            Some(slot.name.as_str())
+            Some(( slot.name.clone()
+                 , self.info.game.slots[slot.slot_index].settings.race as u32 ))
           })
           .collect();
         if !targets.is_empty() {
-          let target = String::from( targets[0] );
           self.send_stats_to_self(
-            self.info.slot_info.slot_player_id, target);
+            self.info.slot_info.slot_player_id, targets);
         }
       }
       cmd if cmd.starts_with("stats") => {
         let id = &cmd["stats ".len()..];
         if let Some(id) = id.parse::<u8>().ok() {
-          let targets: Vec<&str> = self
+          let targets: Vec<(String, u32)> = self
             .info
             .slot_info
             .player_infos
             .iter()
-            .filter_map(|info|
-              if info.slot_player_id == id {
-                Some( info.name.as_str() )
+            .filter_map(|slot|
+              if slot.slot_player_id == id {
+                Some(( slot.name.clone()
+                     , self.info.game.slots[slot.slot_index].settings.race as u32 ))
               } else {
                 None
               }
             )
             .collect();
           if !targets.is_empty() {
-            let target = String::from( targets[0] );
             self.send_stats_to_self(
-              self.info.slot_info.slot_player_id, target);
+              self.info.slot_info.slot_player_id, targets);
           }
         }
       }
@@ -523,11 +523,13 @@ impl<'a> GameHandler<'a> {
     }
   }
 
-  fn send_stats_to_self(&self, player_id: u8, target: String) {
+  fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
-      if let Ok(result) = get_stats(target.as_str()) {
-        send_chats_to_self(&mut tx, player_id, vec![result]).await
+      for (name, race) in &targets {
+        if let Ok(result) = get_stats(name.as_str(), *race) {
+          send_chats_to_self(&mut tx, player_id, vec![result]).await
+        }
       }
     });
   }
