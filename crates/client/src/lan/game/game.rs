@@ -212,8 +212,8 @@ impl<'a> GameHandler<'a> {
           "!mute/mutef <ID>: Mute a player.".to_string(),
           "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "!unmute/unmutef <ID>: Unmute a player.".to_string(),
-          "!stats: print opponent/opponents statistics.".to_string(),
-          "!stats <ID>: print payer statistics, or display a player list.".to_string(),
+          "!stats: Print opponent/opponents statistics.".to_string(),
+          "!stats <ID>: Print payer statistics, or display a player list.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
