@@ -202,22 +202,22 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
-      "help" => {
+      "flo" => {
         let messages = vec![
-          "!flo: print game information.".to_string(),
-          "!muteall: Mute all players.".to_string(),
-          "!muteopps: Mute all opponents.".to_string(),
-          "!unmuteall: Unmute all players.".to_string(),
-          "!mute/mutef: Mute your opponent (1v1), or display a player list.".to_string(),
-          "!mute/mutef <ID>: Mute a player.".to_string(),
-          "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
-          "!unmute/unmutef <ID>: Unmute a player.".to_string(),
-          "!stats: Print opponent/opponents statistics.".to_string(),
-          "!stats <ID>: Print payer statistics, or display a player list.".to_string(),
+          "-game: print game information.".to_string(),
+          "-muteall: Mute all players.".to_string(),
+          "-muteopps: Mute all opponents.".to_string(),
+          "-unmuteall: Unmute all players.".to_string(),
+          "-mute/mutef: Mute your opponent (1v1), or display a player list.".to_string(),
+          "-mute/mutef <ID>: Mute a player.".to_string(),
+          "-unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
+          "-unmute/unmutef <ID>: Unmute a player.".to_string(),
+          "-stats: Print opponent/opponents statistics.".to_string(),
+          "-stats <ID>: Print payer statistics, or display a player list.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
-      "flo" => {
+      "game" => {
         let mut messages = vec![
           format!(
             "Game: {} (#{})",
