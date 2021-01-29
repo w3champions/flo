@@ -1,4 +1,7 @@
-use crate::types::w3c::*;
+use crate::{
+  STATISTIC_SERVICE,
+  types::w3c::*
+};
 
 use anyhow;
 use ureq;
@@ -32,7 +35,8 @@ pub fn get_league(l: u32) -> String {
 }
 
 pub fn get_current_season() -> anyhow::Result<u32> {
-  let seasons = ureq::get("https://statistic-service.w3champions.com/api/ladder/seasons")
+  let seasons_uri = format!("{}/ladder/seasons", STATISTIC_SERVICE);
+  let seasons = ureq::get(&seasons_uri)
                      .call()?.into_json::<Vec<Season>>()?;
   let seasons_ids = seasons.iter().map(|s| s.id);
   if let Some(last_season) = seasons_ids.max() {
@@ -48,11 +52,10 @@ pub fn get_player(target: &str, season: u32) -> anyhow::Result<Option<String>> {
   }
   else {
     let search_uri =
-      format!("https://statistic-service.w3champions.com/api/ladder/search?gateWay=20&searchFor={}&season={}"
-             , target, season);
+      format!("{}/ladder/search?gateWay=20&searchFor={}&season={}", STATISTIC_SERVICE, target, season);
     let search: Vec<Search> = ureq::get(&search_uri).call()?.into_json::<Vec<Search>>()?;
     if !search.is_empty() {
-      // search for ToD will give toy Toddy at first, so we search for exact match
+      // search for ToD will give you Toddy at first, so we search for exact match
       for s in &search {
         for id in &s.player.playerIds {
           if target == id.name {

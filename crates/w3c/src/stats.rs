@@ -1,4 +1,5 @@
 use crate::{
+  STATISTIC_SERVICE,
   types::w3c::*,
   utils::*
 };
@@ -7,8 +8,6 @@ use anyhow;
 use ureq;
 
 use once_cell::sync::Lazy;
-
-static STATISTIC_SERVICE: &str = "https://statistic-service.w3champions.com/api";
 
 pub fn get_stats(target: &str, race: u32, solo: bool) -> anyhow::Result<String> {
   static SEASON: Lazy<u32> =
