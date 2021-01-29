@@ -64,7 +64,11 @@ pub fn get_player(target: &str, season: u32) -> anyhow::Result<Option<String>> {
         }
       }
       // if there is no exact match return first search result
-      Ok(Some(search[0].player.playerIds[0].battleTag.clone()))
+      if !search[0].player.playerIds.is_empty() {
+        Ok(Some(search[0].player.playerIds[0].battleTag.clone()))
+      } else {
+        Ok(None)
+      }
     } else {
       Ok(None)
     }
