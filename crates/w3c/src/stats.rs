@@ -31,15 +31,14 @@ pub fn get_stats(target: &str, race: u32, solo: bool) -> anyhow::Result<String> 
             String::from("Calibrating")
           } else {
             if gmstat.leagueOrder > 1 {
-              format!("{} {}", league_str, gmstat.division)
+              format!("{} {} Rank: {}", league_str, gmstat.division, gmstat.rank)
             } else {
-              format!("{}", league_str)
+              format!("{} Rank: {}", league_str, gmstat.rank)
             }
           };
-        league_info = format!("{} ({}): {} Rank: {} Games {}-{} Winrate: {}%, MMR: {}",
+        league_info = format!("{} ({}): {} Games {}-{} Winrate: {}%, MMR: {}",
           name, race_str
               , &league_division
-              , gmstat.rank
               , gmstat.wins
               , gmstat.losses
               , winrate
