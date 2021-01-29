@@ -290,49 +290,53 @@ impl<'a> GameHandler<'a> {
           vec![format!("All players un-muted.")],
         );
       }
-      "stats" => {
-        let my_team = self.info.slot_info.my_slot.team;
-        let targets: Vec<(String, u32)> = self
-          .info
-          .slot_info
-          .player_infos
-          .iter()
-          .filter_map(|slot| {
-            if slot.slot_player_id == self.info.slot_info.slot_player_id {
-              return None;
-            }
-            if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
-              return None;
-            }
-            Some(( slot.name.clone()
-                 , self.info.game.slots[slot.slot_index].settings.race as u32 ))
-          })
-          .collect();
-        if !targets.is_empty() {
-          self.send_stats_to_self(
-            self.info.slot_info.slot_player_id, targets);
-        }
-      }
       cmd if cmd.starts_with("stats") => {
-        let id = &cmd["stats ".len()..];
-        if let Some(id) = id.parse::<u8>().ok() {
-          let targets: Vec<(String, u32)> = self
-            .info
-            .slot_info
-            .player_infos
+        let cmd = cmd.trim_end();
+        let players = &self.info.slot_info.player_infos;
+        let solo = players.len() == 2;
+        if cmd == "stats" {
+          let my_team = self.info.slot_info.my_slot.team;
+          let targets: Vec<(String, u32)> = players
             .iter()
-            .filter_map(|slot|
-              if slot.slot_player_id == id {
-                Some(( slot.name.clone()
-                     , self.info.game.slots[slot.slot_index].settings.race as u32 ))
-              } else {
-                None
+            .filter_map(|slot| {
+              if slot.slot_player_id == self.info.slot_info.slot_player_id {
+                return None;
               }
-            )
+              if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
+                return None;
+              }
+              Some(( slot.name.clone()
+                  , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+            })
             .collect();
           if !targets.is_empty() {
             self.send_stats_to_self(
-              self.info.slot_info.slot_player_id, targets);
+              self.info.slot_info.slot_player_id, targets, solo);
+          }
+        } else {
+          let id = &cmd["stats ".len()..];
+          if let Some(id) = id.parse::<u8>().ok() {
+            let targets: Vec<(String, u32)> = players
+              .iter()
+              .filter_map(|slot|
+                if slot.slot_player_id == id {
+                  Some(( slot.name.clone()
+                       , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+                } else {
+                  None
+                }
+              )
+              .collect();
+            if !targets.is_empty() {
+              self.send_stats_to_self(
+                self.info.slot_info.slot_player_id, targets, solo);
+            } else {
+              let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+              for slot in &self.info.slot_info.player_infos {
+                msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+              }
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+            }
           } else {
             let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
             for slot in &self.info.slot_info.player_infos {
@@ -340,12 +344,6 @@ impl<'a> GameHandler<'a> {
             }
             self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
           }
-        } else {
-          let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
-          for slot in &self.info.slot_info.player_infos {
-            msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
-          }
-          self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
         }
       }
       cmd if cmd.starts_with("mute") => {
@@ -535,11 +533,11 @@ impl<'a> GameHandler<'a> {
     }
   }
 
-  fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>) {
+  fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>, solo: bool) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
       for (name, race) in &targets {
-        if let Ok(result) = get_stats(name.as_str(), *race) {
+        if let Ok(result) = get_stats(name.as_str(), *race, solo) {
           send_chats_to_self(&mut tx, player_id, vec![result]).await
         }
       }

@@ -65,3 +65,14 @@ pub struct GMStats {
   pub winrate: f64,
   pub wins: u32
 }
+
+#[derive(Deserialize)]
+pub struct Stats {
+  pub race: u32,
+  pub gateWay: u32,
+  pub id: String,
+  pub wins: u32,
+  pub losses: u32,
+  pub games: u32,
+  pub winrate: f64,
+}
