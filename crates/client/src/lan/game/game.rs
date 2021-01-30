@@ -12,6 +12,7 @@ use flo_w3gs::packet::*;
 use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::leave::LeaveAck;
+use flo_w3c::stats::get_stats;
 use std::collections::BTreeSet;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
@@ -201,20 +202,22 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: &str) {
     match cmd.trim_end() {
-      "help" => {
+      "flo" => {
         let messages = vec![
-          "!flo: print game information.".to_string(),
-          "!muteall: Mute all players.".to_string(),
-          "!muteopps: Mute all opponents.".to_string(),
-          "!unmuteall: Unmute all players.".to_string(),
-          "!mute/mutef: Mute your opponent (1v1), or display a player list.".to_string(),
-          "!mute/mutef <ID>: Mute a player.".to_string(),
-          "!unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
-          "!unmute/unmutef <ID>: Unmute a player.".to_string(),
+          "-game: print game information.".to_string(),
+          "-muteall: Mute all players.".to_string(),
+          "-muteopps: Mute all opponents.".to_string(),
+          "-unmuteall: Unmute all players.".to_string(),
+          "-mute/mutef: Mute your opponent (1v1), or display a player list.".to_string(),
+          "-mute/mutef <ID>: Mute a player.".to_string(),
+          "-unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
+          "-unmute/unmutef <ID>: Unmute a player.".to_string(),
+          "-stats: Print opponent/opponents statistics.".to_string(),
+          "-stats <ID>: Print payer statistics, or display a player list.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
-      "flo" => {
+      "game" => {
         let mut messages = vec![
           format!(
             "Game: {} (#{})",
@@ -238,13 +241,6 @@ impl<'a> GameHandler<'a> {
 
         self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
       }
-      "tick" => self.send_chats_to_self(
-        self.info.slot_info.slot_player_id,
-        vec![format!(
-          "tick_recv = {}, tick_ack = {}",
-          self.tick_recv, self.tick_ack
-        )],
-      ),
       "muteall" => {
         let targets: Vec<u8> = self
           .info
@@ -293,6 +289,62 @@ impl<'a> GameHandler<'a> {
           self.info.slot_info.slot_player_id,
           vec![format!("All players un-muted.")],
         );
+      }
+      cmd if cmd.starts_with("stats") => {
+        let cmd = cmd.trim_end();
+        let players = &self.info.slot_info.player_infos;
+        let solo = players.len() == 2;
+        if cmd == "stats" {
+          let my_team = self.info.slot_info.my_slot.team;
+          let targets: Vec<(String, u32)> = players
+            .iter()
+            .filter_map(|slot| {
+              if slot.slot_player_id == self.info.slot_info.slot_player_id {
+                return None;
+              }
+              if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
+                return None;
+              }
+              Some(( slot.name.clone()
+                  , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+            })
+            .collect();
+          if !targets.is_empty() {
+            self.send_stats_to_self(
+              self.info.slot_info.slot_player_id, targets, solo);
+          }
+        } else {
+          let id = &cmd["stats ".len()..];
+          if let Some(id) = id.parse::<u8>().ok() {
+            let targets: Vec<(String, u32)> = players
+              .iter()
+              .filter_map(|slot|
+                if slot.slot_player_id == id {
+                  Some(( slot.name.clone()
+                       , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+                } else {
+                  None
+                }
+              )
+              .collect();
+            if !targets.is_empty() {
+              self.send_stats_to_self(
+                self.info.slot_info.slot_player_id, targets, solo);
+            } else {
+              let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+              for slot in &self.info.slot_info.player_infos {
+                msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+              }
+              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+            }
+          } else {
+            let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+            for slot in &self.info.slot_info.player_infos {
+              msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+            }
+            self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+          }
+        }
       }
       cmd if cmd.starts_with("mute") => {
         let targets: Vec<(u8, &str, i32)> = self
@@ -479,6 +531,17 @@ impl<'a> GameHandler<'a> {
         vec![format!("Unknown command")],
       ),
     }
+  }
+
+  fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>, solo: bool) {
+    let mut tx = self.w3gs_tx.clone();
+    tokio::spawn(async move {
+      for (name, race) in &targets {
+        if let Ok(result) = get_stats(name.as_str(), *race, solo) {
+          send_chats_to_self(&mut tx, player_id, vec![result]).await
+        }
+      }
+    });
   }
 
   fn send_chats_to_self(&self, player_id: u8, messages: Vec<String>) {
