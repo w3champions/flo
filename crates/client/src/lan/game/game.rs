@@ -1,9 +1,10 @@
-use crate::controller::{ControllerClient, GetMuteList, MutePlayer, UnmutePlayer};
+use crate::{controller::{ControllerClient, GetMuteList, MutePlayer, UnmutePlayer}, lan};
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use crate::lan::game::blacklist;
 use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
@@ -73,16 +74,26 @@ impl<'a> GameHandler<'a> {
       vec![]
     };
     let mut muted_names = vec![];
+    let mut blacklisted = vec![];
     for p in &self.info.slot_info.player_infos {
       if mute_list.contains(&p.player_id) {
         muted_names.push(p.name.clone());
         self.muted_players.insert(p.slot_player_id);
+      }
+      if let Some(r) = blacklist::read(&p.name).unwrap_or(None) {
+        blacklisted.push(format!("{} for {}", p.name.clone(), r));
       }
     }
     if !muted_names.is_empty() {
       self.send_chats_to_self(
         self.info.slot_info.slot_player_id,
         vec![format!("Auto muted: {}", muted_names.join(", "))],
+      )
+    }
+    if !blacklisted.is_empty() {
+      self.send_chats_to_self(
+        self.info.slot_info.slot_player_id,
+        vec![format!("Blacklisted: {}", blacklisted.join(", "))],
       )
     }
 
@@ -290,6 +301,14 @@ impl<'a> GameHandler<'a> {
           vec![format!("All players un-muted.")],
         );
       }
+      "blacklisted" => {
+        if let Ok(b) = blacklist::blacklisted() {
+          self.send_chats_to_self(
+            self.info.slot_info.slot_player_id,
+            vec![b],
+          );
+        }
+      }
       cmd if cmd.starts_with("stats") => {
         let cmd = cmd.trim_end();
         let players = &self.info.slot_info.player_infos;
@@ -358,6 +377,73 @@ impl<'a> GameHandler<'a> {
                 msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
               }
               self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+            }
+          }
+        }
+      }
+      cmd if cmd.starts_with("blacklist") || cmd.starts_with("unblacklist") => {
+        let unblacklist = cmd.starts_with("unblacklist");
+        let cmd = cmd.trim_end();
+        let players = &self.info.slot_info.player_infos;
+        let id_or_name = if unblacklist {
+            &cmd["unblacklist ".len()..]
+          } else {
+            &cmd["blacklist ".len()..]
+          };
+        if id_or_name.is_empty() {
+          let mut msgs = vec![format!("Type `-blacklist <ID>` to blacklist:")];
+          for slot in &self.info.slot_info.player_infos {
+            msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+          }
+          self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+        } else {
+          if let Ok(id) = id_or_name.parse::<u8>() {
+            let targets: Vec<String> = players
+              .iter()
+              .filter_map(|slot|
+                if slot.slot_player_id == id {
+                  Some( slot.name.clone() )
+                } else {
+                  None
+                }
+              )
+              .collect();
+            if !targets.is_empty() {
+              if unblacklist {
+                if blacklist::unblacklist(targets[0].as_str()).is_ok() {
+                  self.send_chats_to_self(self.info.slot_info.slot_player_id
+                    , vec![format!("{} un-blacklisted", &targets[0])]);
+                }
+              } else {
+                if blacklist::blacklist(targets[0].as_str(), "reason").is_ok() {
+                  self.send_chats_to_self(self.info.slot_info.slot_player_id
+                    , vec![format!("{} blacklisted", &targets[0])]);
+                }
+              }
+            }
+          } else {
+            let targets: Vec<String> = players
+              .iter()
+              .filter_map(|slot|
+                if slot.name.to_lowercase().starts_with(&id_or_name.to_lowercase()) {
+                  Some( slot.name.clone() )
+                } else {
+                  None
+                }
+              )
+              .collect();
+            if !targets.is_empty() {
+              if unblacklist {
+                if blacklist::unblacklist(targets[0].as_str()).is_ok() {
+                  self.send_chats_to_self(self.info.slot_info.slot_player_id
+                    , vec![format!("{} un-blacklisted", &targets[0])]);
+                }
+              } else {
+                if blacklist::blacklist(targets[0].as_str(), "reason").is_ok() {
+                  self.send_chats_to_self(self.info.slot_info.slot_player_id
+                    , vec![format!("{} blacklisted", &targets[0])]);
+                }
+              }
             }
           }
         }

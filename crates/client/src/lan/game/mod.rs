@@ -1,3 +1,4 @@
+mod blacklist;
 mod game;
 mod lobby;
 mod proxy;
