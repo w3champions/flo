@@ -331,7 +331,7 @@ impl<'a> GameHandler<'a> {
               self.send_stats_to_self(
                 self.info.slot_info.slot_player_id, targets, solo);
             } else {
-              let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+              let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
                 msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
               }
@@ -353,7 +353,7 @@ impl<'a> GameHandler<'a> {
               self.send_stats_to_self(
                 self.info.slot_info.slot_player_id, targets, solo);
             } else {
-              let mut msgs = vec![format!("Type `!stats <ID>` to get stats for:")];
+              let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
                 msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
               }
@@ -403,7 +403,7 @@ impl<'a> GameHandler<'a> {
               }
             }
             _ => {
-              let mut msgs = vec![format!("Type `!mute or !mutef <ID>` to mute a player:")];
+              let mut msgs = vec![format!("Type `-mute or -mutef <ID>` to mute a player:")];
               for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
@@ -495,7 +495,7 @@ impl<'a> GameHandler<'a> {
               }
             }
             _ => {
-              let mut msgs = vec![format!("Type `!unmute <ID>` to unmute a player:")];
+              let mut msgs = vec![format!("Type `-unmute <ID>` to unmute a player:")];
               for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
