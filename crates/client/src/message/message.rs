@@ -33,6 +33,8 @@ pub enum IncomingMessage {
   GameStartRequest(PacketGameStartRequest),
   StartTestGame(StartTestGame),
   KillTestGame,
+  SetNodeAddrOverrides(SetNodeAddrOverrides),
+  ClearNodeAddrOverrides,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,6 +65,7 @@ pub enum OutgoingMessage {
   GameStartError(ErrorMessage),
   GameSlotClientStatusUpdate(ClientUpdateSlotClientStatus),
   GameStatusUpdate(GameStatusUpdate),
+  SetNodeAddrOverridesError(ErrorMessage),
 }
 
 impl FromStr for IncomingMessage {
@@ -163,6 +166,7 @@ pub struct GameSlotUpdate {
   pub player: Option<PlayerInfo>,
 }
 
+use crate::controller::SetNodeAddrOverrides;
 pub use crate::node::stream::SlotClientStatusUpdate as ClientUpdateSlotClientStatus;
 use flo_types::ping::PingStats;
 

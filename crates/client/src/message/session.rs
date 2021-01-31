@@ -2,7 +2,9 @@ use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
 };
 use super::{ConnectController, MessageEvent};
-use crate::controller::{ControllerClient, SendFrame};
+use crate::controller::{
+  ClearNodeAddrOverrides, ControllerClient, SendFrame, SetNodeAddrOverrides,
+};
 use crate::error::{Error, Result};
 use crate::message::MessageStream;
 use crate::platform::{
@@ -167,6 +169,28 @@ impl Worker {
       }
       IncomingMessage::KillTestGame => {
         self.platform.notify(KillTestGame).await?;
+      }
+      IncomingMessage::SetNodeAddrOverrides(req) => {
+        let res = self
+          .client
+          .send(SetNodeAddrOverrides {
+            overrides: req.overrides,
+          })
+          .await
+          .map_err(Error::from)
+          .and_then(|r| r);
+        if let Err(err) = res {
+          tracing::error!("set node addr override: {}", err);
+          reply_sender
+            .clone()
+            .send(OutgoingMessage::SetNodeAddrOverridesError(
+              ErrorMessage::new(err),
+            ))
+            .await?;
+        }
+      }
+      IncomingMessage::ClearNodeAddrOverrides => {
+        self.client.send(ClearNodeAddrOverrides).await??;
       }
     }
     Ok(())

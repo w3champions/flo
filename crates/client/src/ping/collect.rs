@@ -1,4 +1,4 @@
-use super::{PingError, SendPing, PACKETS};
+use super::{PingError, SendPing};
 use crate::error::*;
 use flo_net::time::StopWatch;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
@@ -10,6 +10,7 @@ use tokio::sync::mpsc::error::SendTimeoutError;
 use tokio::sync::mpsc::Sender;
 use tokio::time::delay_for;
 
+const PACKETS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(3);
 const INTERVAL: Duration = Duration::from_secs(60);
 const ACTIVE_PING_INTERVAL: Duration = Duration::from_secs(10);

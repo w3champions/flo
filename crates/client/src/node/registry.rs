@@ -12,6 +12,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 pub struct NodeRegistry {
   map: BTreeMap<i32, NodeInfo>,
+  addr_overrides: BTreeMap<i32, SocketAddr>,
   ping: Container<PingActor>,
 }
 
@@ -19,6 +20,7 @@ impl NodeRegistry {
   pub fn new() -> Self {
     Self {
       map: Default::default(),
+      addr_overrides: Default::default(),
       ping: PingActor::new().start(),
     }
   }
@@ -50,7 +52,13 @@ impl Handler<GetNode> for NodeRegistry {
     _: &mut Context<Self>,
     GetNode { node_id }: GetNode,
   ) -> <GetNode as Message>::Result {
-    self.map.get(&node_id).cloned()
+    self.map.get(&node_id).cloned().map(|mut info| {
+      if let Some(addr) = self.addr_overrides.get(&info.id) {
+        info.socket_addr = *addr;
+        tracing::debug!(node_id, "using override address: {:?}", addr);
+      }
+      info
+    })
   }
 }
 
@@ -107,7 +115,17 @@ impl Handler<UpdateNodes> for NodeRegistry {
       );
     }
 
-    let addresses: Vec<_> = self.map.values().map(|v| v.socket_addr).collect();
+    let addresses: Vec<_> = self
+      .map
+      .values()
+      .map(|v| {
+        self
+          .addr_overrides
+          .get(&v.id)
+          .cloned()
+          .unwrap_or_else(|| v.socket_addr)
+      })
+      .collect();
     self.ping.send(UpdateAddresses { addresses }).await?;
 
     Ok(())
@@ -190,10 +208,13 @@ impl Handler<GetNodePingMap> for NodeRegistry {
         .map
         .iter()
         .filter_map(|(id, node)| {
-          ping_map
-            .get(&node.socket_addr)
+          let addr = self
+            .addr_overrides
+            .get(id)
             .cloned()
-            .map(|stats| (*id, stats))
+            .unwrap_or_else(|| node.socket_addr.clone());
+
+          ping_map.get(&addr).cloned().map(|stats| (*id, stats))
         })
         .collect(),
     )
@@ -220,10 +241,12 @@ impl Handler<UpdateAddressesAndGetNodePingMap> for NodeRegistry {
         .map
         .iter()
         .filter_map(|(id, node)| {
-          ping_map
-            .get(&node.socket_addr)
+          let addr = self
+            .addr_overrides
+            .get(id)
             .cloned()
-            .map(|stats| (*id, stats))
+            .unwrap_or_else(|| node.socket_addr.clone());
+          ping_map.get(&addr).cloned().map(|stats| (*id, stats))
         })
         .collect(),
     )
@@ -303,6 +326,56 @@ impl Handler<RemoveNode> for NodeRegistry {
     } else {
       tracing::warn!(node_id, "removed node was not found");
     }
+  }
+}
+
+pub struct SetNodeAddrOverrides {
+  pub overrides: BTreeMap<i32, SocketAddr>,
+}
+
+impl Message for SetNodeAddrOverrides {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<SetNodeAddrOverrides> for NodeRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    SetNodeAddrOverrides { overrides }: SetNodeAddrOverrides,
+  ) -> <SetNodeAddrOverrides as Message>::Result {
+    let mut addresses: Vec<_> = self.map.values().map(|v| v.socket_addr).collect();
+    for (id, addr) in overrides.iter() {
+      if !addresses.contains(addr) {
+        tracing::debug!(node_id = *id, "addr override: {}", addr);
+        addresses.push(*addr);
+      }
+    }
+    self.addr_overrides = overrides;
+    self.ping.notify(UpdateAddresses { addresses }).await?;
+    Ok(())
+  }
+}
+
+pub struct ClearNodeAddrOverrides;
+
+impl Message for ClearNodeAddrOverrides {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<ClearNodeAddrOverrides> for NodeRegistry {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: ClearNodeAddrOverrides,
+  ) -> <SetNodeAddrOverrides as Message>::Result {
+    self.addr_overrides.clear();
+
+    let addresses: Vec<_> = self.map.values().map(|v| v.socket_addr).collect();
+    self.ping.notify(UpdateAddresses { addresses }).await?;
+
+    Ok(())
   }
 }
 
