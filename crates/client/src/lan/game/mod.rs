@@ -1,4 +1,6 @@
+#[cfg(feature = "blacklist")]
 mod blacklist;
+
 mod game;
 mod lobby;
 mod proxy;
