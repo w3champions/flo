@@ -15,7 +15,7 @@ use crate::message::ConnectController;
 use crate::message::{MessageEvent, Session};
 use crate::node::stream::NodeStreamEvent;
 use crate::node::{
-  GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
+  self, GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
 };
 use crate::platform::{GetClientConfig, Platform};
 use crate::types::PlayerSession;
@@ -26,6 +26,7 @@ use flo_net::packet::Frame;
 use flo_state::{
   async_trait, Actor, Addr, Container, Context, Handler, Message, RegistryRef, Service,
 };
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub struct ControllerClient {
@@ -534,6 +535,66 @@ impl Handler<UnmutePlayer> for ControllerClient {
           .encode_as_frame()?,
       )
       .await?;
+    Ok(())
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetNodeAddrOverrides {
+  pub overrides: Vec<SetNodeAddrOverride>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetNodeAddrOverride {
+  pub node_id: i32,
+  pub address: String,
+}
+
+impl Message for SetNodeAddrOverrides {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<SetNodeAddrOverrides> for ControllerClient {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    SetNodeAddrOverrides { overrides }: SetNodeAddrOverrides,
+  ) -> Result<()> {
+    let overrides = overrides
+      .into_iter()
+      .map(
+        |SetNodeAddrOverride {
+           node_id: id,
+           address: addr,
+         }| {
+          let addr = addr.parse().map_err(Error::InvalidNodeAddr)?;
+          Ok((id, addr))
+        },
+      )
+      .collect::<Result<Vec<_>, Error>>()?
+      .into_iter()
+      .collect();
+
+    self
+      .nodes
+      .send(node::SetNodeAddrOverrides { overrides })
+      .await??;
+
+    Ok(())
+  }
+}
+
+pub struct ClearNodeAddrOverrides;
+
+impl Message for ClearNodeAddrOverrides {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<ClearNodeAddrOverrides> for ControllerClient {
+  async fn handle(&mut self, _: &mut Context<Self>, _: ClearNodeAddrOverrides) -> Result<()> {
+    self.nodes.send(node::ClearNodeAddrOverrides).await??;
     Ok(())
   }
 }

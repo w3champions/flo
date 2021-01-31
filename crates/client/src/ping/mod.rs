@@ -15,8 +15,6 @@ use tokio::time::delay_for;
 
 mod collect;
 
-const PACKETS: usize = 3;
-
 pub struct PingActor {
   tx: mpsc::Sender<SendPing>,
   rx: Option<mpsc::Receiver<SendPing>>,
