@@ -404,10 +404,13 @@ impl<'a> GameHandler<'a> {
           let args_split: Vec<&str> = args.split_whitespace().collect();
           let id_or_name = args_split[0];
           let reason =
-            if let Some(some_reason) = args_split.iter().skip(1) {
-              some_reason.collect::<Vec<&str>>().join(" ")
+            if args_split.len() > 1 {
+              args_split.into_iter()
+                        .skip(1)
+                        .collect::<Vec<&str>>()
+                        .join(" ")
             } else {
-              "no reason"
+              "no reason".to_string()
             };
           if let Ok(id) = id_or_name.parse::<u8>() {
             let targets: Vec<String> = players
@@ -427,7 +430,7 @@ impl<'a> GameHandler<'a> {
                     , vec![format!("{} un-blacklisted", &targets[0])]);
                 }
               } else {
-                if blacklist::blacklist(targets[0].as_str(), reason).is_ok() {
+                if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
                   self.send_chats_to_self(self.info.slot_info.slot_player_id
                     , vec![format!("{} blacklisted", &targets[0])]);
                 }
@@ -451,7 +454,7 @@ impl<'a> GameHandler<'a> {
                     , vec![format!("{} un-blacklisted", &targets[0])]);
                 }
               } else {
-                if blacklist::blacklist(targets[0].as_str(), reason).is_ok() {
+                if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
                   self.send_chats_to_self(self.info.slot_info.slot_player_id
                     , vec![format!("{} blacklisted", &targets[0])]);
                 }
