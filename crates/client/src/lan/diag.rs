@@ -62,7 +62,6 @@ pub async fn run_test_lobby(
       game_setting_flags: GameSettingFlags::SPEED_FAST
         | GameSettingFlags::TERRAIN_DEFAULT
         | GameSettingFlags::OBS_ENABLED
-        | GameSettingFlags::OBS_REFEREES
         | GameSettingFlags::TEAMS_TOGETHER
         | GameSettingFlags::TEAMS_FIXED,
       unk_1: 0,
