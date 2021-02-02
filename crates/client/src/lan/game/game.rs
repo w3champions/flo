@@ -404,8 +404,8 @@ impl<'a> GameHandler<'a> {
           let args_split: Vec<&str> = args.split_whitespace().collect();
           let id_or_name = args_split[0];
           let reason =
-            if let Some(some_reason) = args_split.get(1) {
-              some_reason
+            if let Some(some_reason) = args_split.iter().skip(1) {
+              some_reason.collect::<Vec<&str>>().join(" ")
             } else {
               "no reason"
             };
