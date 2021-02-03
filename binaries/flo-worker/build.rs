@@ -22,7 +22,7 @@ PRODUCTVERSION {version2},0
       VALUE "FileDescription", "Flo Worker"
       VALUE "FileVersion", "{version}"
       VALUE "InternalName", "flo-worker"
-      VALUE "LegalCopyright", "Wc3Tools 2020-2021. All rights reserved."
+      VALUE "LegalCopyright", "Flo 2020-2021. All rights reserved."
       VALUE "ProductName", "Flo Worker"
       VALUE "OriginalFilename", "flo-worker.exe"
       VALUE "ProductVersion", "{version}"
