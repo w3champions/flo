@@ -6,8 +6,8 @@ use flo_grpc::game::*;
 const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
-  if players.is_empty() {
-    panic!("Need to sepcify at least one player");
+  if players.is_empty() && ob.is_none() {
+    panic!("Need to sepcify at least one player or observer");
   }
 
   let mut client = get_grpc_client().await;
@@ -20,13 +20,26 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let game_name = format!("GAME-{:x}", rand::random::<u32>());
   tracing::info!("game name = {}", game_name);
 
-  let player1_slot_settings = SlotSettings {
-    team: 0,
-    color: 1,
-    handicap: 100,
-    status: 2,
-    race: 4, // random
-    ..Default::default()
+  let (player1_slot_settings, player1_id)
+    = if players.len() > 0 {
+    (SlotSettings {
+      team: 0,
+      color: 1,
+      handicap: 100,
+      status: 2,
+      race: 4,
+      ..Default::default()
+    }, Some(players[0]))
+  } else {
+    (SlotSettings {
+      team: 0,
+      color: 1,
+      computer: 2,
+      handicap: 100,
+      status: 2,
+      race: 4,
+      ..Default::default()
+    }, None)
   };
 
   let (player2_slot_settings, player2_id)
@@ -53,7 +66,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
 
   let mut slots = vec![
     CreateGameSlot {
-      player_id: Some(players[0]),
+      player_id: player1_id,
       settings: Some(player1_slot_settings),
       ..Default::default()
     },
