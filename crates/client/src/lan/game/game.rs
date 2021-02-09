@@ -543,7 +543,7 @@ impl<'a> GameHandler<'a> {
         }
       }
       _ => {
-        static MAPS_COMMANDS: &[&str] = &["mute", "badping", "help", "zoom"];
+        static MAPS_COMMANDS: &[&str] = &["commands", "badping", "zoom", "deny", "workercount"];
         if !MAPS_COMMANDS.iter().any(|c| cmd.starts_with(c)) {
           self.send_chats_to_self(
             self.info.slot_info.slot_player_id,
