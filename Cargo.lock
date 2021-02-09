@@ -1019,10 +1019,11 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "embed-resource"
-version = "1.4.1"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3b2f39c0462f098c1ca4abc408f7482949bbe2ab19bca5a4419f91f69e5bccc"
+checksum = "0bd6a41d89e233bcd6978fe7333191a2054d518d105a1165ada1d2ebc445ce98"
 dependencies = [
+ "cc",
  "vswhom",
  "winreg",
 ]
@@ -1150,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1534,7 +1535,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "embed-resource",
