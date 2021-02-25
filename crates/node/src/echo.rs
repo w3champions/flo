@@ -1,7 +1,7 @@
 use crate::error::Result;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::UdpSocket;
-const ECHO_DATAGRAM_LEN: usize = 4;
+const ECHO_DATAGRAM_LEN: usize = 8;
 
 use flo_constants::NODE_ECHO_PORT;
 
