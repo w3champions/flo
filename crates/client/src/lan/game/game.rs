@@ -447,7 +447,7 @@ impl<'a> GameHandler<'a> {
           } else {
             self.send_chats_to_self(
               self.info.slot_info.slot_player_id,
-              vec![format!("Invalid syntax. Example: !mute 1")],
+              vec![format!("Invalid syntax. Example: -mute 1")],
             );
           }
         }
@@ -537,20 +537,12 @@ impl<'a> GameHandler<'a> {
           } else {
             self.send_chats_to_self(
               self.info.slot_info.slot_player_id,
-              vec![format!("Invalid syntax. Example: !unmute 1")],
+              vec![format!("Invalid syntax. Example: -unmute 1")],
             );
           }
         }
       }
-      _ => {
-        static MAPS_COMMANDS: &[&str] = &["commands", "badping", "zoom", "deny", "workercount"];
-        if !MAPS_COMMANDS.iter().any(|c| cmd.starts_with(c)) {
-          self.send_chats_to_self(
-            self.info.slot_info.slot_player_id,
-            vec![format!("Unknown command")],
-          );
-        }
-      }
+      _ => {}
     }
   }
 
