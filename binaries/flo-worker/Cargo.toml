@@ -19,4 +19,4 @@ anyhow = "1.0"
 winapi = { version = "0.3", features = ["processthreadsapi"] }
 
 [target.'cfg(windows)'.build-dependencies]
-embed-resource = "1.4"
+embed-resource = "1.5"

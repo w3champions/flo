@@ -542,10 +542,15 @@ impl<'a> GameHandler<'a> {
           }
         }
       }
-      _ => self.send_chats_to_self(
-        self.info.slot_info.slot_player_id,
-        vec![format!("Unknown command")],
-      ),
+      _ => {
+        static MAPS_COMMANDS: &[&str] = &["commands", "badping", "zoom", "deny", "workercount"];
+        if !MAPS_COMMANDS.iter().any(|c| cmd.starts_with(c)) {
+          self.send_chats_to_self(
+            self.info.slot_info.slot_player_id,
+            vec![format!("Unknown command")],
+          );
+        }
+      }
     }
   }
 
