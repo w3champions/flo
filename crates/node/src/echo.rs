@@ -14,7 +14,7 @@ pub async fn serve_echo() -> Result<()> {
 
   loop {
     if let Some((size, peer)) = socket.recv_from(&mut recv_buf).await.ok() {
-      if ALLOWED_ECHO_DATAGRAM_LEN.contains(&size) {
+      if !ALLOWED_ECHO_DATAGRAM_LEN.contains(&size) {
         continue;
       }
       socket.send_to(&recv_buf[..size], &peer).await.ok();
