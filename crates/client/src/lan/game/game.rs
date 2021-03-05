@@ -4,7 +4,6 @@ use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamHandle;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
-#[cfg(feature = "blacklist")] use crate::lan::game::blacklist;
 use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
 use flo_w3gs::chat::ChatFromHost;
@@ -17,6 +16,7 @@ use flo_w3c::stats::get_stats;
 use std::collections::BTreeSet;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
+#[cfg(feature = "blacklist")] use flo_w3c::blacklist;
 
 #[derive(Debug)]
 pub enum GameResult {

@@ -8,7 +8,7 @@ edition = "2018"
 default = ["ws"]
 ws = ["async-tungstenite"]
 worker = ["ws"]
-blacklist = ["sled"]
+blacklist = ["flo-w3c/blacklist"]
 
 [dependencies]
 flo-constants = { path = "../constants" }
@@ -42,7 +42,6 @@ base64 = "0.12"
 lazy_static = "1.4"
 hash-ids = "0.2"
 rand = "0.8"
-sled = { version = "0.34", optional = true }
 
 [dev-dependencies]
 dotenv = "0.15"
