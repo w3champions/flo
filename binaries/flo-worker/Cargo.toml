@@ -4,6 +4,10 @@ version = "0.7.0"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
+[features]
+default = []
+blacklist = ["flo-client/blacklist"]
+
 [dependencies]
 flo-client = { path = "../../crates/client", features = ["worker"] }
 flo-constants = { path = "../../crates/constants" }

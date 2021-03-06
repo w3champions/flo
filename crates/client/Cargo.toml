@@ -8,6 +8,7 @@ edition = "2018"
 default = ["ws"]
 ws = ["async-tungstenite"]
 worker = ["ws"]
+blacklist = ["flo-w3c/blacklist"]
 
 [dependencies]
 flo-constants = { path = "../constants" }
