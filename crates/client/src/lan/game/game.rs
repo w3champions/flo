@@ -193,8 +193,9 @@ impl<'a> GameHandler<'a> {
         match pkt.message {
           ChatMessage::Scoped { message, .. } => {
             if let Some(cmd) = parse_chat_command(message.as_bytes()) {
-              self.handle_chat_command(&cmd);
-              return Ok(());
+              if self.handle_chat_command(&cmd) {
+                return Ok(());
+              }
             }
           }
           _ => {}
@@ -213,7 +214,7 @@ impl<'a> GameHandler<'a> {
     Ok(())
   }
 
-  fn handle_chat_command(&mut self, cmd: &str) {
+  fn handle_chat_command(&mut self, cmd: &str) -> bool {
     match cmd.trim_end() {
       "flo" => {
         let messages = vec![
@@ -490,7 +491,7 @@ impl<'a> GameHandler<'a> {
                 self.info.slot_info.slot_player_id,
                 vec![format!("You have silenced all the players.")],
               );
-              return;
+              return true;
             }
             1 => {
               self.muted_players.insert(targets[0].0);
@@ -581,7 +582,7 @@ impl<'a> GameHandler<'a> {
                 self.info.slot_info.slot_player_id,
                 vec![format!("No player to unmute.")],
               );
-              return;
+              return true;
             }
             1 => {
               self.muted_players.remove(&targets[0].0);
@@ -643,8 +644,12 @@ impl<'a> GameHandler<'a> {
           }
         }
       }
-      _ => {}
+      _ => {
+        // unknown command treats like regular chat message
+        return false;
+      }
     }
+    true
   }
 
   fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>, solo: bool) {
