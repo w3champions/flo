@@ -15,6 +15,8 @@ pub enum Error {
   PlayerNotFoundInGame,
   #[error("player connection exists")]
   PlayerConnectionExists,
+  #[error("invalid player slot client status: {0:?}")]
+  InvalidPlayerSlotClientStatus(SlotClientStatus),
   #[error("invalid slot id")]
   InvalidSlotId,
   #[error("invalid secret")]

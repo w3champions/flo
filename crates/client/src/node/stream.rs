@@ -56,7 +56,7 @@ impl NodeStream {
 
     let frame = stream.recv_frame().await?;
 
-    let (player_id, initial_status) = flo_net::try_flo_packet! {
+    let (player_id, initial_status): (i32, NodeGameStatusSnapshot) = flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientConnectAccept => {
           let game_id = p.game_id;

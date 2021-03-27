@@ -1,5 +1,6 @@
 use crate::grpc::get_grpc_client;
 use crate::Result;
+use flo_controller::game::db::get;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
@@ -7,7 +8,7 @@ const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
-    panic!("Need to sepcify at least one player or observer");
+    panic!("Need to specify at least one player or observer");
   }
 
   let mut client = get_grpc_client().await;
@@ -20,48 +21,58 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let game_name = format!("GAME-{:x}", rand::random::<u32>());
   tracing::info!("game name = {}", game_name);
 
-  let (player1_slot_settings, player1_id)
-    = if players.len() > 0 {
-    (SlotSettings {
-      team: 0,
-      color: 1,
-      handicap: 100,
-      status: 2,
-      race: 4,
-      ..Default::default()
-    }, Some(players[0]))
+  let (player1_slot_settings, player1_id) = if players.len() > 0 {
+    (
+      SlotSettings {
+        team: 0,
+        color: 1,
+        handicap: 100,
+        status: 2,
+        race: 4,
+        ..Default::default()
+      },
+      Some(players[0]),
+    )
   } else {
-    (SlotSettings {
-      team: 0,
-      color: 1,
-      computer: 2,
-      handicap: 100,
-      status: 2,
-      race: 4,
-      ..Default::default()
-    }, None)
+    (
+      SlotSettings {
+        team: 0,
+        color: 1,
+        computer: 2,
+        handicap: 100,
+        status: 2,
+        race: 4,
+        ..Default::default()
+      },
+      None,
+    )
   };
 
-  let (player2_slot_settings, player2_id)
-    = if players.len() > 1 {
-    (SlotSettings {
-      team: 1,
-      color: 2,
-      handicap: 100,
-      status: 2,
-      race: 4,
-      ..Default::default()
-    }, Some(players[1]))
+  let (player2_slot_settings, player2_id) = if players.len() > 1 {
+    (
+      SlotSettings {
+        team: 1,
+        color: 2,
+        handicap: 100,
+        status: 2,
+        race: 4,
+        ..Default::default()
+      },
+      Some(players[1]),
+    )
   } else {
-    (SlotSettings {
-      team: 1,
-      color: 2,
-      computer: 2,
-      handicap: 100,
-      status: 2,
-      race: 4,
-      ..Default::default()
-    }, None)
+    (
+      SlotSettings {
+        team: 1,
+        color: 2,
+        computer: 2,
+        handicap: 100,
+        status: 2,
+        race: 4,
+        ..Default::default()
+      },
+      None,
+    )
   };
 
   let mut slots = vec![
@@ -74,7 +85,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
       player_id: player2_id,
       settings: Some(player2_slot_settings),
       ..Default::default()
-    }
+    },
   ];
 
   if let Some(id) = ob {
@@ -95,6 +106,51 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
     .create_game_as_bot(CreateGameAsBotRequest {
       name: game_name,
       map: Some(get_map_server()?),
+      node_id,
+      slots,
+      ..Default::default()
+    })
+    .await?;
+  Ok(res.into_inner().game.unwrap().id)
+}
+
+pub async fn create_2v2_game(players: Vec<i32>) -> Result<i32> {
+  if players.len() != 4 {
+    panic!("Need to specify 4 player ids");
+  }
+
+  let mut client = get_grpc_client().await;
+
+  let nodes = client.list_nodes(()).await?.into_inner().nodes;
+  let node_id = nodes.first().unwrap().id;
+
+  tracing::info!(node_id);
+
+  let game_name = format!("GAME-{:x}", rand::random::<u32>());
+  tracing::info!("game name = {}", game_name);
+
+  let slots = players
+    .into_iter()
+    .enumerate()
+    .map(|(i, player_id)| CreateGameSlot {
+      player_id: Some(player_id),
+      settings: Some(SlotSettings {
+        team: if i < 2 { 1 } else { 2 },
+        color: i as i32,
+        computer: 2,
+        handicap: 100,
+        status: 2,
+        race: 0,
+        ..Default::default()
+      }),
+      ..Default::default()
+    })
+    .collect();
+
+  let res = client
+    .create_game_as_bot(CreateGameAsBotRequest {
+      name: game_name,
+      map: Some(get_map()?),
       node_id,
       slots,
       ..Default::default()
@@ -124,7 +180,6 @@ pub fn get_map_server() -> Result<Map> {
   Ok(map)
 }
 
-#[allow(dead_code)]
 fn get_map() -> Result<Map> {
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;

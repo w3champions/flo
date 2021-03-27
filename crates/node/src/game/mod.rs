@@ -18,6 +18,7 @@ use crate::error::*;
 use crate::state::GlobalEvent;
 
 mod host;
+
 use crate::controller::ControllerServerHandle;
 use crate::game::peer::PeerHandle;
 use crate::state::event::GlobalEventSender;
@@ -98,7 +99,7 @@ impl GameSession {
                 Some(event) => event,
                 None => break,
               };
-              if let Err(err) = Self::handle_event(&handle, event).await {
+              if let Err(err) = Self::handle_event(&handle, event).instrument(tracing::info_span!("game", id = game_id)).await {
                 tracing::error!("handle events: {}", err);
               }
             }
@@ -106,7 +107,7 @@ impl GameSession {
         }
         tracing::debug!("exiting");
       }
-      .instrument(tracing::debug_span!("event_worker", game_id))
+        .instrument(tracing::debug_span!("event_worker", game_id))
     });
 
     Ok(sess)
@@ -164,6 +165,16 @@ impl GameSessionHandle {
       if slot.sender.as_ref().is_some() {
         return Err((stream, Error::PlayerConnectionExists));
       }
+
+      match slot.client_status {
+        SlotClientStatus::Pending => {}
+        SlotClientStatus::Connected => {}
+        SlotClientStatus::Joined => {}
+        other => {
+          return Err((stream, Error::InvalidPlayerSlotClientStatus(other)));
+        }
+      }
+
       let (stream, handle) = PeerStream::new(player_id, stream)?;
       slot.sender = Some(handle);
       stream
@@ -188,7 +199,7 @@ impl GameSessionHandle {
   ) -> Result<()> {
     let mut guard = self.0.lock().await;
 
-    tracing::debug!(
+    tracing::info!(
       player_id,
       "update player client status: {:?} => {:?}",
       source,

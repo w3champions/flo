@@ -295,7 +295,7 @@ impl State {
           .map_err(|_| Error::Cancelled)?;
         {
           let mut guard = self.shared.lock();
-          if let Some(_) = guard.get_player(player_id)?.tx.take() {
+          if let Some(_) = guard.get_player(player_id)?.close_tx() {
             let pkt = Packet::simple(PlayerLeft {
               player_id: slot_player_id,
               reason: LeaveReason::LeaveDisconnect,
@@ -337,7 +337,7 @@ impl State {
           let mut guard = self.shared.lock();
           let player = guard.get_player(player_id)?;
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
-          player.disconnect();
+          player.close_tx();
           guard.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
         }
         out_tx
@@ -394,6 +394,17 @@ impl State {
 
     if self.chat_banned_player_ids.contains(&player_id) && chat.is_in_game_chat() {
       return Ok(());
+    }
+
+    #[cfg(debug_assertions)]
+    {
+      use flo_w3gs::protocol::chat::ChatMessage;
+      if let ChatMessage::Scoped { ref message, .. } = chat.message {
+        if message.as_bytes().starts_with(b"drop") {
+          tracing::warn!(player_id, "drop player");
+          self.shared.lock().disconnect_player(player_id)?;
+        }
+      }
     }
 
     packet.header.type_id = PacketTypeId::ChatFromHost;
@@ -456,6 +467,18 @@ impl Shared {
     Ok(())
   }
 
+  fn disconnect_player(&mut self, player_id: i32) -> Result<()> {
+    let player = self.get_player(player_id)?;
+    let pkt = Packet::simple(PlayerLeft {
+      player_id: player.slot_player_id,
+      reason: LeaveReason::LeaveDisconnect,
+    })?;
+
+    player.close_tx();
+    self.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
+    Ok(())
+  }
+
   pub fn broadcast<T: broadcast::BroadcastTarget>(
     &mut self,
     packet: Packet,
@@ -488,7 +511,7 @@ impl Shared {
               player_id,
               "removing player: stream broken"
             );
-            self.get_player(player_id)?.tx.take();
+            self.disconnect_player(player_id)?;
           }
           PlayerSendError::ChannelFull => {
             tracing::info!(
@@ -496,7 +519,7 @@ impl Shared {
               player_id,
               "removing player: channel full"
             );
-            self.get_player(player_id)?.tx.take();
+            self.disconnect_player(player_id)?;
           }
           _ => {}
         }
@@ -543,7 +566,7 @@ impl PlayerDispatchInfo {
     }
   }
 
-  fn disconnect(&mut self) -> Option<Sender<Frame>> {
+  fn close_tx(&mut self) -> Option<Sender<Frame>> {
     self.tx.take()
   }
 
