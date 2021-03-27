@@ -9,8 +9,9 @@ use crate::game::state::registry::{AddGamePlayer, Remove, RemoveGamePlayer, Upda
 use crate::game::state::start::{StartGameCheckAsBot, StartGameCheckAsBotResult};
 use crate::node::messages::ListNode;
 use crate::player::state::ping::GetPlayersPingSnapshot;
-use crate::player::{PlayerSource, SourceState};
+use crate::player::{PlayerBanType, PlayerSource, SourceState};
 use crate::state::{ActorMapExt, ControllerStateRef};
+use chrono::{DateTime, Utc};
 use flo_grpc::controller::flo_controller_server::*;
 use flo_grpc::controller::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
@@ -509,6 +510,73 @@ impl FloController for FloControllerService {
 
   async fn reload(&self, _request: Request<()>) -> Result<Response<()>, Status> {
     self.state.reload().await?;
+    Ok(Response::new(()))
+  }
+
+  async fn list_player_bans(
+    &self,
+    request: Request<ListPlayerBansRequest>,
+  ) -> Result<Response<ListPlayerBansReply>, Status> {
+    let api_client_id = request.get_api_client_id();
+    let params = request.into_inner();
+    let res = self
+      .state
+      .db
+      .exec(move |conn| {
+        crate::player::db::list_ban(conn, api_client_id, params.query.as_deref(), params.next_id)
+      })
+      .await
+      .map_err(Error::from)?;
+    Ok(Response::new(ListPlayerBansReply {
+      player_bans: res.player_bans.pack().map_err(Status::internal)?,
+      next_id: res.next_id,
+    }))
+  }
+
+  async fn create_player_ban(
+    &self,
+    request: Request<CreatePlayerBanRequest>,
+  ) -> Result<Response<()>, Status> {
+    let api_client_id = request.get_api_client_id();
+    let params = request.into_inner();
+    let ban_expires_at = params
+      .ban_expires_at
+      .clone()
+      .map(|t| DateTime::<Utc>::unpack(t))
+      .transpose()
+      .map_err(Status::internal)?;
+    self
+      .state
+      .db
+      .exec(move |conn| {
+        crate::player::db::check_player_api_client_id(conn, api_client_id, params.player_id)?;
+        crate::player::db::create_ban(
+          conn,
+          params.player_id,
+          PlayerBanType::unpack_enum(params.ban_type()),
+          ban_expires_at,
+        )
+      })
+      .await
+      .map_err(Error::from)?;
+    Ok(Response::new(()))
+  }
+
+  async fn remove_player_ban(
+    &self,
+    request: Request<RemovePlayerBanRequest>,
+  ) -> Result<Response<()>, Status> {
+    let api_client_id = request.get_api_client_id();
+    let params = request.into_inner();
+    self
+      .state
+      .db
+      .exec(move |conn| {
+        crate::player::db::check_ban_api_client_id(conn, api_client_id, params.id)?;
+        crate::player::db::remove_ban(conn, params.id)
+      })
+      .await
+      .map_err(Error::from)?;
     Ok(Response::new(()))
   }
 }

@@ -1,6 +1,5 @@
 use crate::grpc::get_grpc_client;
 use crate::Result;
-use flo_controller::game::db::get;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 

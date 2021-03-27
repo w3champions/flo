@@ -84,6 +84,8 @@ pub enum Error {
   PlayerColorConflict,
   #[error("Invalid player team value")]
   PlayerTeamInvalid,
+  #[error("Player not belongs to the current API client")]
+  PlayerOwnerCheckFailed,
   #[error("Operation timeout: {0}")]
   Timeout(anyhow::Error),
   #[error("net: {0}")]

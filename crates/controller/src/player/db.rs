@@ -1,6 +1,6 @@
 use crate::db::DbConn;
 use crate::error::*;
-use crate::player::{Player, PlayerBanType, PlayerRef, PlayerSource, SourceState};
+use crate::player::{Player, PlayerBan, PlayerBanType, PlayerRef, PlayerSource, SourceState};
 use crate::schema::{player, player_ban, player_mute};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -157,7 +157,59 @@ pub fn get_mute_list_map(conn: &DbConn, player_ids: &[i32]) -> Result<BTreeMap<i
   Ok(map)
 }
 
-pub fn add_ban(
+pub struct ListPlayerBan {
+  pub player_bans: Vec<PlayerBan>,
+  pub next_id: Option<i32>,
+}
+
+pub fn list_ban(
+  conn: &DbConn,
+  api_client_id: i32,
+  query: Option<&str>,
+  next_id: Option<i32>,
+) -> Result<ListPlayerBan> {
+  const PAGE_SIZE: i64 = 100;
+  let mut q = player_ban::table
+    .inner_join(player::table)
+    .select(PlayerBan::COLUMNS)
+    .filter(player::api_client_id.eq(api_client_id))
+    .order(player_ban::id)
+    .limit(PAGE_SIZE + 1)
+    .into_boxed();
+
+  if let Some(v) = query {
+    q = q.filter(player::name.ilike(format!("%{}%", v)));
+  }
+
+  if let Some(id) = next_id {
+    q = q.filter(player_ban::id.ge(id));
+  }
+
+  let mut rows = q.load::<PlayerBan>(conn)?;
+  let next_id = if rows.len() > PAGE_SIZE as usize {
+    let id = rows.last().map(|row| row.id);
+    rows.truncate(PAGE_SIZE as usize);
+    id
+  } else {
+    None
+  };
+
+  Ok(ListPlayerBan {
+    player_bans: rows,
+    next_id,
+  })
+}
+
+pub fn get_ban(conn: &DbConn, id: i32) -> Result<PlayerBan> {
+  player_ban::table
+    .inner_join(player::table)
+    .select(PlayerBan::COLUMNS)
+    .filter(player_ban::id.eq(id))
+    .first(conn)
+    .map_err(Into::into)
+}
+
+pub fn create_ban(
   conn: &DbConn,
   player_id: i32,
   ban_type: PlayerBanType,
@@ -185,7 +237,7 @@ pub fn add_ban(
   Ok(())
 }
 
-pub fn remove_ban(conn: &DbConn, player_id: i32, ban_type: PlayerBanType) -> Result<()> {
+pub fn remove_ban_by_type(conn: &DbConn, player_id: i32, ban_type: PlayerBanType) -> Result<()> {
   diesel::delete(
     player_ban::table.filter(
       player_ban::player_id
@@ -195,6 +247,27 @@ pub fn remove_ban(conn: &DbConn, player_id: i32, ban_type: PlayerBanType) -> Res
   )
   .execute(conn)?;
 
+  Ok(())
+}
+
+pub fn remove_ban(conn: &DbConn, id: i32) -> Result<()> {
+  diesel::delete(player_ban::table.find(id)).execute(conn)?;
+  Ok(())
+}
+
+pub fn check_ban_api_client_id(conn: &DbConn, api_client_id: i32, id: i32) -> Result<()> {
+  let n = player_ban::table
+    .inner_join(player::table)
+    .filter(
+      player::api_client_id
+        .eq(api_client_id)
+        .and(player_ban::id.eq(id)),
+    )
+    .count()
+    .get_result::<i64>(conn)?;
+  if n == 0 {
+    return Err(Error::PlayerOwnerCheckFailed);
+  }
   Ok(())
 }
 
@@ -222,6 +295,21 @@ pub fn get_ban_list_map(
       .push(ban_type);
   }
   Ok(map)
+}
+
+pub fn check_player_api_client_id(conn: &DbConn, api_client_id: i32, player_id: i32) -> Result<()> {
+  let n = player::table
+    .filter(
+      player::id
+        .eq(player_id)
+        .and(player::api_client_id.eq(api_client_id)),
+    )
+    .count()
+    .get_result::<i64>(conn)?;
+  if n == 0 {
+    return Err(Error::PlayerOwnerCheckFailed);
+  }
+  Ok(())
 }
 
 #[derive(Debug, Insertable)]

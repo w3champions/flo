@@ -4,7 +4,7 @@ use s2_grpc_utils::result::Error as ProtoError;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
-use crate::schema::player;
+use crate::schema::{player, player_ban};
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
 #[s2_grpc(message_type = "flo_grpc::player::Player")]
@@ -104,4 +104,33 @@ pub struct BNetState {
 ))]
 pub enum PlayerBanType {
   Chat = 0,
+}
+
+#[derive(Debug, Queryable, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack)]
+#[s2_grpc(message_type = "flo_grpc::player::PlayerBan")]
+pub struct PlayerBan {
+  pub id: i32,
+  pub player: PlayerRef,
+  #[s2_grpc(proto_enum)]
+  pub ban_type: PlayerBanType,
+  pub ban_expires_at: Option<DateTime<Utc>>,
+  pub created_at: DateTime<Utc>,
+}
+
+pub(crate) type PlayerBanColumns = (
+  player_ban::id,
+  PlayerRefColumns,
+  player_ban::ban_type,
+  player_ban::ban_expires_at,
+  player_ban::created_at,
+);
+
+impl PlayerBan {
+  pub(crate) const COLUMNS: PlayerBanColumns = (
+    player_ban::id,
+    PlayerRef::COLUMNS,
+    player_ban::ban_type,
+    player_ban::ban_expires_at,
+    player_ban::created_at,
+  );
 }
