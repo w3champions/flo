@@ -97,7 +97,7 @@ impl Dispatcher {
 
   pub fn start(&mut self) {
     if let Some(tx) = self.start_tx.take() {
-      tracing::info!("game started.");
+      tracing::info!(game_id = self.game_id, "game started.");
       tx.send(()).ok();
     }
   }
@@ -122,9 +122,10 @@ impl Dispatcher {
           if let Some(msg) = next {
             match state.dispatch(msg, &mut action_tx, &mut out_tx).await {
               Ok(_) => {},
+              Err(Error::Cancelled) => {},
               Err(err) => {
                 tracing::error!("dispatch: {}", err);
-              }
+              },
             }
           } else {
             break;
