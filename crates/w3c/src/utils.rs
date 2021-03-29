@@ -26,11 +26,13 @@ pub fn flo_to_w3c_race(r: u32) -> u32 {
 pub fn get_league(l: u32) -> String {
   String::from(match l { 0 => "GrandMaster"
                        , 1 => "Master"
-                       , 2 => "Diamond"
-                       , 3 => "Platinum"
-                       , 4 => "Gold"
-                       , 5 => "Silver"
-                       , 6 => "Bronze"
+                       , 2 => "Adept"
+                       , 3 => "Diamond"
+                       , 4 => "Platinum"
+                       , 5 => "Gold"
+                       , 6 => "Silver"
+                       , 7 => "Bronze"
+                       , 8 => "Grass"
                        , _ => "" })
 }
 
@@ -42,7 +44,7 @@ pub fn get_current_season() -> anyhow::Result<u32> {
   if let Some(last_season) = seasons_ids.max() {
     Ok(last_season)
   } else {
-    Ok(5) // some default value
+    Ok(6) // some default value
   }
 }
 
