@@ -283,10 +283,18 @@ impl GameSessionHandle {
 
     match next_status {
       SlotClientStatus::Left => {
-        guard.check_game_end().await;
+        if !guard.check_game_end().await {
+          if guard.status == NodeGameStatus::Loading {
+            guard.check_game_all_loaded().await;
+          }
+        }
       }
       SlotClientStatus::Disconnected => {
-        guard.check_game_end().await;
+        if !guard.check_game_end().await {
+          if guard.status == NodeGameStatus::Loading {
+            guard.check_game_all_loaded().await;
+          }
+        }
       }
       SlotClientStatus::Pending => {}
       SlotClientStatus::Connected => {
@@ -498,7 +506,7 @@ struct SharedState {
 }
 
 impl State {
-  async fn check_game_end(&mut self) {
+  async fn check_game_end(&mut self) -> bool {
     if self.player_slots.values().all(|slot| {
       slot.client_status == SlotClientStatus::Left
         || slot.client_status == SlotClientStatus::Disconnected
@@ -510,6 +518,9 @@ impl State {
         .send(GlobalEvent::GameEnded(self.game_id))
         .await
         .ok();
+      true
+    } else {
+      false
     }
   }
 
@@ -526,10 +537,14 @@ impl State {
 
   async fn check_game_all_loaded(&mut self) {
     if self.status == NodeGameStatus::Loading
-      && self
-        .player_slots
-        .values()
-        .all(|slot| slot.client_status == SlotClientStatus::Loaded)
+      && self.player_slots.values().all(|slot| {
+        [
+          SlotClientStatus::Loaded,
+          SlotClientStatus::Disconnected,
+          SlotClientStatus::Left,
+        ]
+        .contains(&slot.client_status)
+      })
     {
       self.status = NodeGameStatus::Running;
       tracing::debug!("all loaded");

@@ -99,7 +99,7 @@ impl PingCollectActor {
     let mut values: Vec<_> = self.results.iter().cloned().filter_map(identity).collect();
     values.sort();
 
-    tracing::debug!("addr: {}, ping: {:?}", self.sock_addr, self.current);
+    tracing::trace!("addr: {}, ping: {:?}", self.sock_addr, self.current);
 
     PingFinished {
       min: values.first().cloned(),
@@ -124,7 +124,7 @@ impl PingCollectActor {
   }
 
   fn start_ping(&mut self, ctx: &mut Context<Self>) {
-    tracing::debug!(addr = self.sock_addr_string.as_str(), "start ping");
+    tracing::trace!(addr = self.sock_addr_string.as_str(), "start ping");
     self.results = [None; PACKETS];
     self.batch_id = self.batch_id.wrapping_add(1);
     self.current = None;
