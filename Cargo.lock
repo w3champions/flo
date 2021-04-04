@@ -269,15 +269,40 @@ dependencies = [
 [[package]]
 name = "bs-diesel-utils"
 version = "0.1.0"
+source = "git+https://github.com/BSpaceinc/bs-diesel-utils.git?rev=cb6a957915532085a19735886ba2884fcc57aeff#cb6a957915532085a19735886ba2884fcc57aeff"
+dependencies = [
+ "bigdecimal 0.1.2",
+ "bs-diesel-utils-codegen 0.1.0 (git+https://github.com/BSpaceinc/bs-diesel-utils.git?rev=cb6a957915532085a19735886ba2884fcc57aeff)",
+ "diesel",
+ "dotenv",
+ "futures 0.3.13",
+ "thiserror",
+ "tokio 0.2.25",
+]
+
+[[package]]
+name = "bs-diesel-utils"
+version = "0.1.0"
 source = "git+https://github.com/BSpaceinc/bs-diesel-utils.git#243f644d3bc5dda2387a46ece3b07fe7cfd49f02"
 dependencies = [
  "bigdecimal 0.1.2",
- "bs-diesel-utils-codegen",
+ "bs-diesel-utils-codegen 0.1.0 (git+https://github.com/BSpaceinc/bs-diesel-utils.git)",
  "diesel",
  "dotenv",
  "futures 0.3.13",
  "thiserror",
  "tokio 1.2.0",
+]
+
+[[package]]
+name = "bs-diesel-utils-codegen"
+version = "0.1.0"
+source = "git+https://github.com/BSpaceinc/bs-diesel-utils.git?rev=cb6a957915532085a19735886ba2884fcc57aeff#cb6a957915532085a19735886ba2884fcc57aeff"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1139,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1207,7 +1232,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "backoff",
- "bs-diesel-utils",
+ "bs-diesel-utils 0.1.0 (git+https://github.com/BSpaceinc/bs-diesel-utils.git?rev=cb6a957915532085a19735886ba2884fcc57aeff)",
  "chrono",
  "dashmap",
  "diesel",
@@ -1243,7 +1268,7 @@ dependencies = [
 name = "flo-controller-service"
 version = "0.1.0"
 dependencies = [
- "bs-diesel-utils",
+ "bs-diesel-utils 0.1.0 (git+https://github.com/BSpaceinc/bs-diesel-utils.git)",
  "dotenv",
  "flo-controller",
  "flo-log-subscriber",
@@ -1337,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "bytes 0.5.6",
  "dashmap",

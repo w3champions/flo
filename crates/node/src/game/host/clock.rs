@@ -18,6 +18,7 @@ pub struct ActionTickStream {
 
 impl ActionTickStream {
   pub const MIN_STEP: u16 = 15;
+  pub const MAX_STEP: u16 = 250;
 
   pub fn new(step: u16) -> Self {
     let step = std::cmp::max(Self::MIN_STEP, step);
@@ -32,9 +33,11 @@ impl ActionTickStream {
   }
 
   pub fn set_step(&mut self, value: u16) {
-    self.step = std::cmp::max(Self::MIN_STEP, value);
+    self.step = std::cmp::min(Self::MAX_STEP, std::cmp::max(Self::MIN_STEP, value));
     self.step_duration = Duration::from_millis(value as u64);
-    self.delay = delay_for(self.step_duration);
+    self
+      .delay
+      .reset((Instant::now() + self.step_duration).into());
   }
 
   pub fn step(&self) -> u16 {

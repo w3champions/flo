@@ -130,15 +130,15 @@ impl GameSession {
         guard.status = status;
         guard.broadcast_status_update(StatusUpdate::Full).await?;
         match status {
+          NodeGameStatus::Running => {
+            guard.host.start_dispatch();
+          }
           NodeGameStatus::Ended => {
             guard
               .g_event_sender
               .send(GlobalEvent::GameEnded(game_id))
               .await
               .ok();
-          }
-          NodeGameStatus::Running => {
-            guard.host.start_dispatch();
           }
           _ => {}
         }
@@ -311,7 +311,11 @@ impl GameSessionHandle {
           tracing::debug!(player_id, "rejoin");
         }
       }
-      SlotClientStatus::Loading => {}
+      SlotClientStatus::Loading => {
+        if let Some(v) = slot.sender.as_mut() {
+          v.start_ping().await;
+        }
+      }
       SlotClientStatus::Loaded => {
         if guard.status == NodeGameStatus::Loading {
           guard.check_game_all_loaded().await;
@@ -481,7 +485,6 @@ pub struct PlayerSlot {
   pub settings: GameSlotSettings,
   pub player: GamePlayer,
   pub client_status: SlotClientStatus,
-  pub disconnected_at_ms: Option<u32>,
   pub sender: Option<PeerHandle>,
 }
 
@@ -493,7 +496,6 @@ impl PlayerSlot {
       settings: slot.settings,
       player,
       client_status: slot.client_status,
-      disconnected_at_ms: None,
       sender: None,
     })
   }

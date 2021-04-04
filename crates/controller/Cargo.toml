@@ -17,7 +17,7 @@ flo-types = { path = "../types" }
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
-bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
+bs-diesel-utils = "0.1"
 s2-grpc-utils = "0.2"
 diesel = { version = "1.4", features = ["postgres", "chrono", "32-column-tables", "serde_json", "uuid", "r2d2", "numeric", "chrono"] }
 diesel_migrations = "1.4"

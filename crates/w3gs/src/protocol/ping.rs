@@ -10,7 +10,11 @@ use crate::protocol::packet::PacketPayload;
 pub struct PingFromHost(Ping);
 
 impl PingFromHost {
-  pub fn payload_since(since: Instant) -> Self {
+  pub fn with_payload(payload: u32) -> Self {
+    Self(Ping { payload })
+  }
+
+  pub fn with_payload_since(since: Instant) -> Self {
     Self(Ping::payload_since(since))
   }
 }
@@ -23,6 +27,10 @@ impl PacketPayload for PingFromHost {
 pub struct PongToHost(Ping);
 
 impl PongToHost {
+  pub fn payload(&self) -> u32 {
+    self.0.payload
+  }
+
   pub fn elapsed_millis(&self, since: Instant) -> u32 {
     let d = Instant::now().saturating_duration_since(since);
     (d.as_millis() as u32).saturating_sub(self.0.payload)

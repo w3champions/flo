@@ -36,6 +36,10 @@ pub enum Message {
     slot_player_id: u8,
     frame: Frame,
   },
+  UpdatePing {
+    player_id: i32,
+    ping: u32,
+  },
   PlayerConnect {
     player_id: i32,
     slot_player_id: u8,
@@ -138,7 +142,7 @@ impl Dispatcher {
   async fn tick(
     shared: Arc<Mutex<Shared>>,
     start_messages: Vec<String>,
-    start_rx: oneshot::Receiver<()>,
+    mut start_rx: oneshot::Receiver<()>,
     mut rx: Receiver<ActionMsg>,
     mut scope: SpawnScopeHandle,
   ) {
@@ -146,7 +150,14 @@ impl Dispatcher {
       let dropped = scope.left();
     }
 
-    if let Ok(_) = start_rx.await {
+    let started = {
+      tokio::select! {
+        res = &mut start_rx => res.is_ok(),
+        _ = &mut dropped => false,
+      }
+    };
+
+    if started {
       if !start_messages.is_empty() {
         let mut shared = shared.lock();
         for msg in start_messages {
@@ -165,6 +176,12 @@ impl Dispatcher {
             match msg {
               ActionMsg::PlayerAction(action) => {
                 tick_stream.add_player_action(action);
+              }
+              ActionMsg::SetStep(step) => {
+                tick_stream.set_step(step);
+                shared
+                  .lock()
+                  .broadcast_message(format!("Game step has been set to {}ms.", tick_stream.step()));
               }
             }
           }
@@ -185,12 +202,12 @@ impl Dispatcher {
 #[derive(Debug)]
 enum ActionMsg {
   PlayerAction(PlayerAction),
+  SetStep(u16),
 }
 
 #[derive(Debug)]
 struct State {
   game_id: i32,
-  sent_tick: u32,
   shared: Arc<Mutex<Shared>>,
   player_ack_map: BTreeMap<i32, usize>,
   game_player_id_lookup: BTreeMap<u8, i32>,
@@ -201,7 +218,6 @@ impl State {
   fn new(game_id: i32, slots: &[PlayerSlot]) -> Self {
     State {
       game_id,
-      sent_tick: 0,
       shared: Arc::new(Mutex::new(Shared::new(game_id, slots))),
       player_ack_map: slots
         .into_iter()
@@ -261,7 +277,7 @@ impl State {
           }
 
           let res = self
-            .dispatch_incoming_w3gs(player_id, slot_player_id, pkt, out_tx)
+            .dispatch_incoming_w3gs(player_id, slot_player_id, pkt, action_tx, out_tx)
             .await?;
           return Ok(res);
         }
@@ -269,9 +285,12 @@ impl State {
           self.dispatch_incoming_flo(player_id, frame, out_tx).await?;
         }
       },
+      Message::UpdatePing { player_id, ping } => {
+        self.shared.lock().get_player(player_id)?.set_ping(ping);
+      }
       Message::PlayerConnect { player_id, tx, .. } => {
         {
-          self.shared.lock().get_player(player_id)?.tx.replace(tx);
+          self.shared.lock().get_player(player_id)?.register_tx(tx);
         }
         out_tx
           .send(GameEvent::PlayerStatusChange(
@@ -315,6 +334,7 @@ impl State {
     player_id: i32,
     slot_player_id: u8,
     packet: Packet,
+    action_tx: &mut Sender<ActionMsg>,
     out_tx: &mut GameEventSender,
   ) -> Result<DispatchResult> {
     use flo_w3gs::protocol::constants::PacketTypeId;
@@ -351,7 +371,7 @@ impl State {
           .map_err(|_| Error::Cancelled)?;
       }
       PacketTypeId::ChatToHost => {
-        self.dispatch_chat(player_id, packet).await?;
+        self.dispatch_chat(player_id, packet, action_tx).await?;
       }
       PacketTypeId::OutgoingKeepAlive => {
         self.ack_tick(player_id);
@@ -388,7 +408,12 @@ impl State {
     Ok(())
   }
 
-  pub async fn dispatch_chat(&mut self, player_id: i32, mut packet: Packet) -> Result<()> {
+  pub async fn dispatch_chat(
+    &mut self,
+    player_id: i32,
+    mut packet: Packet,
+    action_tx: &mut Sender<ActionMsg>,
+  ) -> Result<()> {
     use flo_w3gs::protocol::constants::PacketTypeId;
 
     let chat: ChatToHost = packet.decode_simple()?;
@@ -397,13 +422,63 @@ impl State {
       return Ok(());
     }
 
-    #[cfg(debug_assertions)]
-    {
-      use flo_w3gs::protocol::chat::ChatMessage;
-      if let ChatMessage::Scoped { ref message, .. } = chat.message {
-        if message.as_bytes().starts_with(b"drop") {
-          tracing::warn!(player_id, "drop player");
-          self.shared.lock().disconnect_player(player_id)?;
+    use flo_w3gs::protocol::chat::ChatMessage;
+    if let ChatMessage::Scoped { ref message, .. } = chat.message {
+      let bytes = message.as_bytes();
+      if bytes.starts_with(b"!") || bytes.starts_with(b"-") {
+        let debug = cfg!(debug_assertions);
+        let cmd = String::from_utf8_lossy(&bytes[1..]);
+        let handled = match cmd.as_ref().trim() {
+          "drop" if debug => {
+            self
+              .shared
+              .lock()
+              .disconnect_player_and_broadcast(player_id)?;
+            true
+          }
+          "ping" => {
+            let mut lock = self.shared.lock();
+            let msgs: Vec<_> = lock
+              .map
+              .values()
+              .map(|v| {
+                format!(
+                  "{}: {}",
+                  v.player_name,
+                  match v.ping {
+                    Some(v) => format!("{}ms", v),
+                    None => "N/A".to_string(),
+                  }
+                )
+              })
+              .collect();
+            for msg in msgs {
+              lock.broadcast_message(msg);
+            }
+            true
+          }
+          other => {
+            if debug && other.starts_with("step ") {
+              match (&other[("step ".len())..]).parse::<u16>().ok() {
+                Some(step) => {
+                  action_tx.send(ActionMsg::SetStep(step)).await.is_ok();
+                }
+                None => {
+                  self
+                    .shared
+                    .lock()
+                    .private_message(player_id, "Invalid syntax, usage: !step 30");
+                }
+              }
+              true
+            } else {
+              false
+            }
+          }
+        };
+
+        if handled {
+          return Ok(());
         }
       }
     }
@@ -468,7 +543,7 @@ impl Shared {
     Ok(())
   }
 
-  fn disconnect_player(&mut self, player_id: i32) -> Result<()> {
+  fn disconnect_player_and_broadcast(&mut self, player_id: i32) -> Result<()> {
     let player = self.get_player(player_id)?;
     let pkt = Packet::simple(PlayerLeft {
       player_id: player.slot_player_id,
@@ -494,7 +569,7 @@ impl Shared {
           if !target.contains(*player_id) {
             return None;
           }
-          if info.connected() {
+          if info.tx_open() {
             info.send(frame.clone()).err().map(|err| (*player_id, err))
           } else {
             None
@@ -512,7 +587,7 @@ impl Shared {
               player_id,
               "removing player: stream broken"
             );
-            self.disconnect_player(player_id)?;
+            self.disconnect_player_and_broadcast(player_id)?;
           }
           PlayerSendError::ChannelFull => {
             tracing::info!(
@@ -520,7 +595,7 @@ impl Shared {
               player_id,
               "removing player: channel full"
             );
-            self.disconnect_player(player_id)?;
+            self.disconnect_player_and_broadcast(player_id)?;
           }
           _ => {}
         }
@@ -532,46 +607,52 @@ impl Shared {
 
   pub fn broadcast_message<T: AsRef<str> + Send + 'static>(&mut self, message: T) {
     self.map.iter_mut().for_each(|(_, info)| {
-      if info.connected() {
-        let payload = ChatFromHost::private_to_self(info.slot_player_id, message.as_ref());
-        let frame = match Packet::simple(payload) {
-          Ok(pkt) => w3gs_to_frame(pkt),
-          Err(err) => {
-            tracing::warn!("encode broadcast message packet: {}", err);
-            return;
-          }
-        };
-        info.send(frame).ok();
-      }
+      info.send_private_message(message.as_ref());
     });
+  }
+
+  pub fn private_message<T: AsRef<str> + Send + 'static>(&mut self, player_id: i32, message: T) {
+    if let Some(info) = self.map.get_mut(&player_id) {
+      info.send_private_message(message.as_ref());
+    }
   }
 }
 
 #[derive(Debug)]
 struct PlayerDispatchInfo {
+  player_name: String,
   ticks: usize,
-  pending_ack_packets: Vec<Packet>,
   tx: Option<Sender<Frame>>,
   ban_list: Vec<PlayerBanType>,
   slot_player_id: u8,
+  ping: Option<u32>,
 }
 
 impl PlayerDispatchInfo {
   fn new(slot: &PlayerSlot) -> Self {
     Self {
-      pending_ack_packets: vec![],
+      player_name: slot.player.name.clone(),
       ticks: 0,
       tx: None,
       ban_list: slot.player.ban_list.clone(),
       slot_player_id: (slot.id + 1) as _,
+      ping: None,
     }
+  }
+
+  fn set_ping(&mut self, value: u32) {
+    self.ping.replace(value);
+  }
+
+  fn register_tx(&mut self, tx: Sender<Frame>) {
+    self.tx.replace(tx);
   }
 
   fn close_tx(&mut self) -> Option<Sender<Frame>> {
     self.tx.take()
   }
 
-  fn connected(&self) -> bool {
+  fn tx_open(&self) -> bool {
     self.tx.is_some()
   }
 
@@ -588,6 +669,20 @@ impl PlayerDispatchInfo {
       }
     } else {
       Err(PlayerSendError::NotConnected(frame))
+    }
+  }
+
+  fn send_private_message(&mut self, msg: &str) {
+    if self.tx_open() {
+      let payload = ChatFromHost::private_to_self(self.slot_player_id, msg);
+      let frame = match Packet::simple(payload) {
+        Ok(pkt) => w3gs_to_frame(pkt),
+        Err(err) => {
+          tracing::warn!("encode broadcast message packet: {}", err);
+          return;
+        }
+      };
+      self.send(frame).ok();
     }
   }
 }

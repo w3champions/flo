@@ -14,6 +14,7 @@ use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
 use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
 use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
+use flo_w3gs::protocol::ping::PongToHost;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::stream::StreamExt;
@@ -211,6 +212,7 @@ impl State {
         &mut node_stream,
         &mut event_rx,
         &mut status_rx,
+        &mut w3gs_rx,
         slot_status_map,
       );
       tokio::pin!(load_screen);
@@ -315,6 +317,7 @@ impl State {
     node_stream: &mut NodeStreamHandle,
     event_rx: &mut Receiver<PlayerEvent>,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
+    w3gs_rx: &mut Receiver<Packet>,
     initial_status_map: HashMap<i32, SlotClientStatus>,
   ) -> Result<()> {
     let my_player_id = info.game.player_id;
@@ -362,6 +365,7 @@ impl State {
               match pkt.type_id() {
                 GameLoadedSelf::PACKET_TYPE_ID => {
                   tracing::debug!("self loaded: {}", my_slot_player_id);
+
                   stream.send(Packet::simple(PlayerLoaded {
                     player_id: my_slot_player_id
                   })?).await?;
@@ -373,6 +377,9 @@ impl State {
                   stream.send(Packet::simple(LeaveAck)?).await?;
                   stream.flush().await?;
                   break;
+                }
+                PongToHost::PACKET_TYPE_ID => {
+                  node_stream.send_w3gs(pkt).await?;
                 }
                 id => {
                   tracing::warn!("unexpected w3gs packet id: {:?}", id)
@@ -419,6 +426,13 @@ impl State {
               }
             },
             None => {},
+          }
+        }
+        next = w3gs_rx.recv() => {
+          if let Some(pkt) = next {
+            stream.send(pkt).await?;
+          } else {
+            return Err(Error::TaskCancelled(anyhow::format_err!("w3g tx dropped")))
           }
         }
       }

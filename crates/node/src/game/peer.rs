@@ -11,7 +11,7 @@ use crate::error::*;
 #[derive(Debug)]
 pub struct PeerStream {
   player_id: i32,
-  receiver: Receiver<Frame>,
+  receiver: Receiver<PeerCommand>,
   stream: FloStream,
   closed: bool,
 }
@@ -56,8 +56,11 @@ impl Stream for PeerStream {
 
     // outgoing
     match Pin::new(&mut self.receiver).poll_next(cx) {
-      Poll::Ready(Some(frame)) => {
-        return Poll::Ready(Some(Ok(PeerMessage::Outgoing(frame))));
+      Poll::Ready(Some(cmd)) => {
+        return Poll::Ready(Some(Ok(match cmd {
+          PeerCommand::Send(frame) => PeerMessage::Outgoing(frame),
+          PeerCommand::StartPing => PeerMessage::StartPing,
+        })));
       }
       _ => {}
     }
@@ -80,15 +83,35 @@ impl Stream for PeerStream {
 pub enum PeerMessage {
   Outgoing(Frame),
   Incoming(Frame),
+  StartPing,
 }
 
 #[derive(Debug)]
 pub struct PeerHandle {
-  sender: Sender<Frame>,
+  sender: Sender<PeerCommand>,
 }
 
 impl PeerHandle {
   pub async fn send_frame(&mut self, frame: Frame) -> Result<(), Frame> {
-    self.sender.send(frame).await.map_err(|err| err.0)
+    self
+      .sender
+      .send(PeerCommand::Send(frame))
+      .await
+      .map_err(|err| {
+        if let PeerCommand::Send(frame) = err.0 {
+          frame
+        } else {
+          unreachable!()
+        }
+      })
   }
+
+  pub async fn start_ping(&mut self) {
+    self.sender.send(PeerCommand::StartPing).await.ok();
+  }
+}
+
+enum PeerCommand {
+  Send(Frame),
+  StartPing,
 }

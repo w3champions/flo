@@ -95,7 +95,7 @@ impl<'a> LobbyHandler<'a> {
           }
         }
         _ = ping_interval.tick() => {
-          self.stream.send(Packet::simple(PingFromHost::payload_since(base_t))?).await?;
+          self.stream.send(Packet::simple(PingFromHost::with_payload_since(base_t))?).await?;
         }
         next = self.status_rx.recv() => {
           let next = if let Some(next) = next {

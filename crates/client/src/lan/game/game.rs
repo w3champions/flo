@@ -6,17 +6,19 @@ use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
 use flo_util::chat::parse_chat_command;
+#[cfg(feature = "blacklist")]
+use flo_w3c::blacklist;
+use flo_w3c::stats::get_stats;
 use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
 use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::leave::LeaveAck;
-use flo_w3c::stats::get_stats;
+use flo_w3gs::protocol::ping::PongToHost;
 use std::collections::BTreeSet;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
-#[cfg(feature = "blacklist")] use flo_w3c::blacklist;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -74,7 +76,8 @@ impl<'a> GameHandler<'a> {
       vec![]
     };
     let mut muted_names = vec![];
-    #[cfg(feature = "blacklist")] let mut blacklisted = vec![];
+    #[cfg(feature = "blacklist")]
+    let mut blacklisted = vec![];
     for p in &self.info.slot_info.player_infos {
       if mute_list.contains(&p.player_id) {
         muted_names.push(p.name.clone());
@@ -204,6 +207,7 @@ impl<'a> GameHandler<'a> {
       OutgoingKeepAlive::PACKET_TYPE_ID => self.tick_ack += 1,
       IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
+      PongToHost::PACKET_TYPE_ID => {}
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());
       }
@@ -307,10 +311,7 @@ impl<'a> GameHandler<'a> {
       #[cfg(feature = "blacklist")]
       "blacklisted" => {
         if let Ok(b) = blacklist::blacklisted() {
-          self.send_chats_to_self(
-            self.info.slot_info.slot_player_id,
-            vec![b],
-          );
+          self.send_chats_to_self(self.info.slot_info.slot_player_id, vec![b]);
         }
       }
       cmd if cmd.starts_with("stats") => {
@@ -328,57 +329,72 @@ impl<'a> GameHandler<'a> {
               if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
                 return None;
               }
-              Some(( slot.name.clone()
-                  , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+              Some((
+                slot.name.clone(),
+                self.info.game.slots[slot.slot_index].settings.race as u32,
+              ))
             })
             .collect();
           if !targets.is_empty() {
-            self.send_stats_to_self(
-              self.info.slot_info.slot_player_id, targets, solo);
+            self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
           }
         } else {
           let id_or_name = &cmd["stats ".len()..];
           if let Ok(id) = id_or_name.parse::<u8>() {
             let targets: Vec<(String, u32)> = players
               .iter()
-              .filter_map(|slot|
+              .filter_map(|slot| {
                 if slot.slot_player_id == id {
-                  Some(( slot.name.clone()
-                       , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+                  Some((
+                    slot.name.clone(),
+                    self.info.game.slots[slot.slot_index].settings.race as u32,
+                  ))
                 } else {
                   None
                 }
-              )
+              })
               .collect();
             if !targets.is_empty() {
-              self.send_stats_to_self(
-                self.info.slot_info.slot_player_id, targets, solo);
+              self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
             } else {
               let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
-                msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+                msgs.push(format!(
+                  " ID={} {}",
+                  slot.slot_player_id,
+                  slot.name.as_str()
+                ));
               }
               self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
             }
           } else {
             let targets: Vec<(String, u32)> = players
               .iter()
-              .filter_map(|slot|
-                if slot.name.to_lowercase().starts_with(&id_or_name.to_lowercase()) {
-                  Some(( slot.name.clone()
-                       , self.info.game.slots[slot.slot_index].settings.race as u32 ))
+              .filter_map(|slot| {
+                if slot
+                  .name
+                  .to_lowercase()
+                  .starts_with(&id_or_name.to_lowercase())
+                {
+                  Some((
+                    slot.name.clone(),
+                    self.info.game.slots[slot.slot_index].settings.race as u32,
+                  ))
                 } else {
                   None
                 }
-              )
+              })
               .collect();
             if !targets.is_empty() {
-              self.send_stats_to_self(
-                self.info.slot_info.slot_player_id, targets, solo);
+              self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
             } else {
               let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
-                msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+                msgs.push(format!(
+                  " ID={} {}",
+                  slot.slot_player_id,
+                  slot.name.as_str()
+                ));
               }
               self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
             }
@@ -391,73 +407,89 @@ impl<'a> GameHandler<'a> {
         let cmd = cmd.trim_end();
         let players = &self.info.slot_info.player_infos;
         let args = if unblacklist {
-            &cmd["unblacklist ".len()..]
-          } else {
-            &cmd["blacklist ".len()..]
-          };
+          &cmd["unblacklist ".len()..]
+        } else {
+          &cmd["blacklist ".len()..]
+        };
         if args.is_empty() {
           let mut msgs = vec![format!("Type `-blacklist <ID>` to blacklist:")];
           for slot in &self.info.slot_info.player_infos {
-            msgs.push(format!(" ID={} {}", slot.slot_player_id, slot.name.as_str()));
+            msgs.push(format!(
+              " ID={} {}",
+              slot.slot_player_id,
+              slot.name.as_str()
+            ));
           }
           self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
         } else {
           let args_split: Vec<&str> = args.split_whitespace().collect();
           let id_or_name = args_split[0];
-          let reason =
-            if args_split.len() > 1 {
-              args_split.into_iter()
-                        .skip(1)
-                        .collect::<Vec<&str>>()
-                        .join(" ")
-            } else {
-              "no reason".to_string()
-            };
+          let reason = if args_split.len() > 1 {
+            args_split
+              .into_iter()
+              .skip(1)
+              .collect::<Vec<&str>>()
+              .join(" ")
+          } else {
+            "no reason".to_string()
+          };
           if let Ok(id) = id_or_name.parse::<u8>() {
             let targets: Vec<String> = players
               .iter()
-              .filter_map(|slot|
+              .filter_map(|slot| {
                 if slot.slot_player_id == id {
-                  Some( slot.name.clone() )
+                  Some(slot.name.clone())
                 } else {
                   None
                 }
-              )
+              })
               .collect();
             if !targets.is_empty() {
               if unblacklist {
                 if blacklist::unblacklist(targets[0].as_str()).is_ok() {
-                  self.send_chats_to_self(self.info.slot_info.slot_player_id
-                    , vec![format!("{} un-blacklisted", &targets[0])]);
+                  self.send_chats_to_self(
+                    self.info.slot_info.slot_player_id,
+                    vec![format!("{} un-blacklisted", &targets[0])],
+                  );
                 }
               } else {
                 if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
-                  self.send_chats_to_self(self.info.slot_info.slot_player_id
-                    , vec![format!("{} blacklisted", &targets[0])]);
+                  self.send_chats_to_self(
+                    self.info.slot_info.slot_player_id,
+                    vec![format!("{} blacklisted", &targets[0])],
+                  );
                 }
               }
             }
           } else {
             let targets: Vec<String> = players
               .iter()
-              .filter_map(|slot|
-                if slot.name.to_lowercase().starts_with(&id_or_name.to_lowercase()) {
-                  Some( slot.name.clone() )
+              .filter_map(|slot| {
+                if slot
+                  .name
+                  .to_lowercase()
+                  .starts_with(&id_or_name.to_lowercase())
+                {
+                  Some(slot.name.clone())
                 } else {
                   None
                 }
-              )
+              })
               .collect();
             if !targets.is_empty() {
               if unblacklist {
                 if blacklist::unblacklist(targets[0].as_str()).is_ok() {
-                  self.send_chats_to_self(self.info.slot_info.slot_player_id
-                    , vec![format!("{} un-blacklisted", &targets[0])]);
+                  self.send_chats_to_self(
+                    self.info.slot_info.slot_player_id,
+                    vec![format!("{} un-blacklisted", &targets[0])],
+                  );
                 }
               } else {
                 if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
-                  self.send_chats_to_self(self.info.slot_info.slot_player_id
-                    , vec![format!("{} blacklisted", &targets[0])]);
+                  self.send_chats_to_self(
+                    self.info.slot_info.slot_player_id,
+                    vec![format!("{} blacklisted", &targets[0])],
+                  );
                 }
               }
             }

@@ -1,6 +1,7 @@
 mod broadcast;
 mod clock;
 mod dispatch;
+mod ping;
 
 use dispatch::{Dispatcher, Message};
 
@@ -146,6 +147,8 @@ impl GameHost {
       .await
       .map_err(|_| Error::Cancelled)?;
 
+    let mut ping_stream = ping::PingStream::new();
+
     loop {
       tokio::select! {
         next = stream.try_next() => {
@@ -153,13 +156,33 @@ impl GameHost {
             Some(msg) => {
               match msg {
                 PeerMessage::Incoming(frame) => {
-                  if dispatch_tx.send(Message::Incoming { player_id, slot_player_id, frame}).await.is_err() {
-                    tracing::debug!("dispatch rx gone");
-                    break;
+                  if ping::PingStream::is_pong_frame(&frame) {
+                    if let Some(v) = ping_stream.capture_pong(frame)? {
+                      tracing::debug!("pong: {}", v);
+                      if dispatch_tx.send(Message::UpdatePing {
+                        player_id: stream.player_id(),
+                        ping: v
+                      }).await.is_err() {
+                        tracing::debug!("dispatch rx gone");
+                        break;
+                      }
+                    }
+                  } else {
+                    if dispatch_tx.send(Message::Incoming { player_id, slot_player_id, frame}).await.is_err() {
+                      tracing::debug!("dispatch rx gone");
+                      break;
+                    }
                   }
                 },
                 PeerMessage::Outgoing(frame) => {
                   stream.get_mut().send_frame(frame).await?;
+                }
+                PeerMessage::StartPing => {
+                  if !ping_stream.started() {
+                    ping_stream.start();
+                  } else {
+                    tracing::warn!("ping start already started.");
+                  }
                 }
               }
             }
@@ -178,6 +201,19 @@ impl GameHost {
               tracing::debug!("sender gone");
               break;
             }
+          }
+        }
+        Some(next) = ping_stream.next() => {
+          use ping::Msg;
+          match next? {
+            Msg::Ping(frame) => {
+              tracing::debug!("ping");
+              stream.get_mut().send_frame(frame).await?;
+            },
+            Msg::Timeout => {
+              tracing::info!("ping timeout");
+              break;
+            },
           }
         }
       }
