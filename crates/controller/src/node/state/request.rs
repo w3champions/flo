@@ -129,7 +129,7 @@ impl Handler<Request> for NodeRequestActor {
     ctx
       .spawn({
         let addr = ctx.addr();
-        let mut frame_tx = self.frame_tx.clone();
+        let frame_tx = self.frame_tx.clone();
         async move {
           let timeout = sleep(REQUEST_TIMEOUT);
           let send = frame_tx.send(frame);
