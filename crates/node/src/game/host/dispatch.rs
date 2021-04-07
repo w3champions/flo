@@ -461,7 +461,7 @@ impl State {
             if debug && other.starts_with("step ") {
               match (&other[("step ".len())..]).parse::<u16>().ok() {
                 Some(step) => {
-                  action_tx.send(ActionMsg::SetStep(step)).await.is_ok();
+                  action_tx.send(ActionMsg::SetStep(step)).await.ok();
                 }
                 None => {
                   self
