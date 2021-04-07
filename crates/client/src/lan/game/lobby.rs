@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use tokio::sync::watch::Receiver;
-use tokio::time::{delay_for, interval};
+use tokio::time::{sleep, interval};
 
 use flo_util::binary::SockAddr;
 use flo_w3gs::net::W3GSStream;
@@ -97,21 +97,24 @@ impl<'a> LobbyHandler<'a> {
         _ = ping_interval.tick() => {
           self.stream.send(Packet::simple(PingFromHost::with_payload_since(base_t))?).await?;
         }
-        next = self.status_rx.recv() => {
-          let next = if let Some(next) = next {
-            next
-          } else {
-            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
-          };
-          match next {
-            Some(status) => {
-              join_state.status = Some(status);
-              if join_state.should_start() {
-                self.send_start().await?;
-                return Ok(LobbyAction::Start)
+        ch = self.status_rx.changed() => {
+          match ch {
+            Ok(_) => {
+              let next = self.status_rx.borrow().clone();
+              match next {
+                Some(status) => {
+                  join_state.status = Some(status);
+                  if join_state.should_start() {
+                    self.send_start().await?;
+                    return Ok(LobbyAction::Start)
+                  }
+                },
+                None => {},
               }
             },
-            None => {},
+            Err(_why) => {
+              return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
+            }
           }
         }
       }
@@ -124,7 +127,7 @@ impl<'a> LobbyHandler<'a> {
     }
     self.starting = true;
     self.stream.send(Packet::simple(CountDownStart)?).await?;
-    delay_for(Duration::from_secs(6)).await;
+    sleep(Duration::from_secs(6)).await;
     self.stream.send(Packet::simple(CountDownEnd)?).await?;
     Ok(())
   }

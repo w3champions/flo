@@ -1,4 +1,4 @@
-use bytes::buf::ext::Chain;
+use bytes::buf::Chain;
 use std::io::prelude::*;
 
 use flo_util::binary::*;
@@ -76,7 +76,7 @@ where
   if let Some(block) = blocks.next() {
     match block {
       Ok(mut block) => {
-        let mut buf = Chain::new(tail, block.data.clone());
+        let mut buf = tail.chain(block.data.clone());
         match extract_next_record(&mut block, &mut buf) {
           Ok(NextRecord::Record(rec)) => {
             match buf.peek_u8() {

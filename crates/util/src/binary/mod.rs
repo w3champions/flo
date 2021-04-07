@@ -90,7 +90,7 @@ impl BinDecode for CString {
       }
     }
 
-    let slice = buf.bytes();
+    let slice = buf.chunk();
 
     match get_cstring_slice(slice)? {
       // cstring found in current slice
@@ -109,7 +109,7 @@ impl BinDecode for CString {
             return Err(BinDecodeError::incomplete());
           }
 
-          let slice = buf.bytes();
+          let slice = buf.chunk();
           if let Some(s) = get_cstring_slice(slice)? {
             out.extend(&s[..(s.len() - 1)]);
             let len = s.len();
@@ -194,7 +194,6 @@ impl BinEncode for Bytes {
 
 #[test]
 fn test_ext_decode_cstring() {
-  use bytes::buf::BufExt;
 
   let cstr = "1234567890".as_bytes();
   // continuous buffer

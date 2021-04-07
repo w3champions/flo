@@ -5,7 +5,7 @@ use crate::node::UpdateNodes;
 use flo_state::mock::Mock;
 use flo_state::*;
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_controller_stream() {
@@ -35,7 +35,7 @@ async fn test_controller_stream() {
   //TODO: ControllerStream takes 6 arguments, platform and nodes Addr
   //let s = ControllerStream::new(parent.addr(), 1, "127.0.0.1", token).start();
 
-  delay_for(Duration::from_secs(1)).await;
+  sleep(Duration::from_secs(1)).await;
 
   parent.shutdown().await.unwrap();
 }

@@ -48,11 +48,13 @@ impl Incoming<'_> {
     Incoming { inner: listener }
   }
 
-  pub fn poll_accept(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<FloStream>> {
+  pub fn poll_accept(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<FloStream>> {
     let (socket, _addr) = ready!(self.inner.poll_accept(cx))?;
 
     socket.set_nodelay(true).ok();
-    socket.set_keepalive(None).ok();
+
+    //TODO: not supported atm by tokio
+    //socket.set_keepalive(None).ok();
 
     let stream = FloStream::new(socket);
 

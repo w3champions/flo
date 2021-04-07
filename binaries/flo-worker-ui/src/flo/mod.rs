@@ -10,7 +10,7 @@ use once_cell::sync::Lazy;
 static RT: Lazy<Mutex<Runtime>> = Lazy::new(|| Mutex::new(Runtime::new().unwrap()));
 
 async fn run_flo() -> Result<u16> {
-  let mut rt = RT.lock().await;
+  let rt = RT.lock().await;
   let client = rt.block_on(flo_client::start(Default::default()))?;
   let port = client.port();
   rt.spawn(client.serve());
@@ -18,7 +18,7 @@ async fn run_flo() -> Result<u16> {
 }
 
 async fn run_flo_worker(opt: Opt) -> Result<u16> {
-  let mut rt = RT.lock().await;
+  let rt = RT.lock().await;
   let client = rt.block_on(flo_client::start(StartConfig {
     token: opt.token,
     installation_path: opt.installation_path,

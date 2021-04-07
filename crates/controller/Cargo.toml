@@ -26,7 +26,8 @@ tonic = "0.3"
 jsonwebtoken = "7.2"
 lazy_static = "1.4"
 futures = "0.3"
-tokio = { version = "0.2", features = ["time", "sync", "stream", "macros", "blocking"] }
+tokio = { version = "1.0", features = ["time", "sync", "macros"] }
+tokio-stream = { version = "0.1", features = ["time"] }
 tracing = "0.1"
 tracing-futures = "0.2"
 parking_lot = "0.11"

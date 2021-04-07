@@ -55,7 +55,7 @@ impl Stream for PeerStream {
     }
 
     // outgoing
-    match Pin::new(&mut self.receiver).poll_next(cx) {
+    match Pin::new(&mut self.receiver).poll_recv(cx) {
       Poll::Ready(Some(cmd)) => {
         return Poll::Ready(Some(Ok(match cmd {
           PeerCommand::Send(frame) => PeerMessage::Outgoing(frame),

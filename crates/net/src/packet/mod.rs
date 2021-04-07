@@ -1,11 +1,10 @@
-use bytes::buf::BufExt;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tokio::time::error::Elapsed;
 pub use prost::Message;
 
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::{Error, Result};
-use tokio::time::Elapsed;
 
 pub trait FloPacket
 where

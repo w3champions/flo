@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -291,7 +291,7 @@ impl Actor for StartGameState {
     ctx.spawn({
       let addr = ctx.addr();
       async move {
-        delay_for(TIMEOUT).await;
+        sleep(TIMEOUT).await;
         addr.send(AckTimeout).await.ok();
       }
     });

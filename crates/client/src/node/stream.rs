@@ -26,14 +26,14 @@ pub struct NodeStream {
 
 impl NodeStream {
   pub async fn shutdown(mut self) {
-    self.shutdown_signal.notify();
+    self.shutdown_signal.notify_one();
     self.shutdown_complete_rx.take().unwrap().await.ok();
   }
 }
 
 impl Drop for NodeStream {
   fn drop(&mut self) {
-    self.shutdown_signal.notify();
+    self.shutdown_signal.notify_one();
   }
 }
 
@@ -123,7 +123,7 @@ impl NodeStream {
   async fn worker(
     state: Arc<State>,
     mut stream: FloStream,
-    mut w3gs_sender: Sender<W3GSPacket>,
+    w3gs_sender: Sender<W3GSPacket>,
     mut outgoing_receiver: Receiver<Frame>,
     initial_status: NodeGameStatusSnapshot,
     shutdown_signal: Arc<Notify>,

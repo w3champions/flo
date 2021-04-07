@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
-use tokio::time::{delay_for, delay_until, Instant};
+use tokio::time::{sleep, delay_until, Instant};
 use tracing_futures::Instrument;
 
 use flo_lan::{GameInfo, MdnsPublisher};
@@ -320,7 +320,7 @@ async fn run_lobby(
     }
   }
 
-  // delay_for(Duration::from_secs(100)).await;
+  // sleep(Duration::from_secs(100)).await;
 
   {
     use flo_w3gs::game::*;
@@ -329,7 +329,7 @@ async fn run_lobby(
       .await?;
     tracing::debug!("count down start sent");
 
-    delay_for(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     transport
       .send(Packet::with_simple_payload(CountDownEnd)?)

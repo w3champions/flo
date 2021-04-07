@@ -168,7 +168,7 @@ async fn handle_stream(
 }
 
 async fn handle_frame(state: &Arc<State>, frame: Frame) -> Result<()> {
-  let mut tx = state.frame_tx.clone();
+  let tx = &state.frame_tx;
   try_flo_packet! {
     frame => {
       pkt: PacketControllerCreateGame => {

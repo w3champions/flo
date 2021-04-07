@@ -7,8 +7,7 @@ const MAX_RECV_BUF: usize = 8;
 use flo_constants::NODE_ECHO_PORT;
 
 pub async fn serve_echo() -> Result<()> {
-  let mut socket =
-    UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, NODE_ECHO_PORT)).await?;
+  let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, NODE_ECHO_PORT)).await?;
 
   let mut recv_buf = [0_u8; MAX_RECV_BUF];
 

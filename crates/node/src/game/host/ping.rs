@@ -10,17 +10,17 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::Waker;
 use std::time::{Duration, Instant};
-use tokio::time::{delay_for, Delay};
+use tokio::time::{sleep, Sleep};
 
 pub struct PingStream {
   base_instant: Instant,
-  delay: Option<Delay>,
-  delay_reason: DelayReason,
+  delay: Option<Pin<Box<Sleep>>>,
+  delay_reason: SleepReason,
   waker: Option<Waker>,
 }
 
 #[derive(Clone, Copy)]
-enum DelayReason {
+enum SleepReason {
   Ping,
   PongTimeout,
 }
@@ -30,14 +30,14 @@ impl PingStream {
     Self {
       base_instant: Instant::now(),
       delay: None,
-      delay_reason: DelayReason::Ping,
+      delay_reason: SleepReason::Ping,
       waker: None,
     }
   }
 
   pub fn start(&mut self) {
-    self.delay_reason = DelayReason::Ping;
-    self.delay = delay_for(Duration::from_secs(0)).into();
+    self.delay_reason = SleepReason::Ping;
+    self.delay = Box::pin(sleep(Duration::from_secs(0))).into();
     self.waker.take().map(|w| w.wake());
   }
 
@@ -58,13 +58,15 @@ impl PingStream {
       return Ok(None);
     };
     if let Some(ref mut delay) = self.delay {
-      delay.reset((Instant::now() + GAME_PING_INTERVAL).into());
+      delay
+        .as_mut()
+        .reset((Instant::now() + GAME_PING_INTERVAL).into());
     } else {
       return Ok(None);
     }
     match self.delay_reason {
-      DelayReason::Ping => {}
-      DelayReason::PongTimeout => self.delay_reason = DelayReason::Ping,
+      SleepReason::Ping => {}
+      SleepReason::PongTimeout => self.delay_reason = SleepReason::Ping,
     };
     Ok(Some(d))
   }
@@ -85,8 +87,8 @@ impl Stream for PingStream {
   type Item = Result<Msg>;
 
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    if let Some(ref mut delay) = self.delay.as_mut() {
-      futures::ready!(Pin::new(delay).poll(cx));
+    if let Some(delay) = self.delay.as_mut() {
+      futures::ready!(delay.as_mut().poll(cx));
     } else {
       if self.waker.as_ref().map(|w| w.will_wake(cx.waker())) != Some(true) {
         self.waker = Some(cx.waker().clone());
@@ -95,19 +97,19 @@ impl Stream for PingStream {
     };
 
     let (msg, reason, duration) = match self.delay_reason {
-      DelayReason::Ping => (
+      SleepReason::Ping => (
         Msg::Ping(self.get_ping_frame()?),
-        DelayReason::PongTimeout,
+        SleepReason::PongTimeout,
         GAME_PING_TIMEOUT,
       ),
-      DelayReason::PongTimeout => (Msg::Timeout, DelayReason::Ping, GAME_PING_INTERVAL),
+      SleepReason::PongTimeout => (Msg::Timeout, SleepReason::Ping, GAME_PING_INTERVAL),
     };
 
     self.delay_reason = reason;
     self
       .delay
       .as_mut()
-      .map(|delay| delay.reset((Instant::now() + duration).into()))
+      .map(|delay| delay.as_mut().reset((Instant::now() + duration).into()))
       .unwrap();
 
     Poll::Ready(Some(Ok(msg)))

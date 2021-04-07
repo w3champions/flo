@@ -85,7 +85,7 @@ async fn serve_stream(
     tokio::select! {
       _ = scope.left() => {
         rx.close();
-        while let Some(msg) = rx.try_recv().ok() {
+        while let Some(msg) = rx.recv().await {
           stream.send(msg).await?;
         }
         stream.flush().await;
@@ -217,7 +217,7 @@ impl Worker {
     Ok(())
   }
 
-  async fn handle_reload_client_info(&self, mut sender: Sender<OutgoingMessage>) -> Result<()> {
+  async fn handle_reload_client_info(&self, sender: Sender<OutgoingMessage>) -> Result<()> {
     match self.platform.send(Reload).await? {
       Ok(_) => sender.send(self.get_client_info_message().await?),
       Err(e) => sender.send(OutgoingMessage::ReloadClientInfoError(ErrorMessage {
@@ -228,7 +228,7 @@ impl Worker {
     Ok(())
   }
 
-  async fn handle_map_list(&self, mut sender: Sender<OutgoingMessage>) -> Result<()> {
+  async fn handle_map_list(&self, sender: Sender<OutgoingMessage>) -> Result<()> {
     let value = self.platform.send(GetMapList).await?;
     match value {
       Ok(value) => {
@@ -247,7 +247,7 @@ impl Worker {
 
   async fn handle_get_map_detail(
     &self,
-    mut sender: Sender<OutgoingMessage>,
+    sender: Sender<OutgoingMessage>,
     MapPath { path }: MapPath,
   ) -> Result<()> {
     let detail = self.platform.send(GetMapDetail { path }).await?;

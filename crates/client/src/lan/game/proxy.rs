@@ -17,9 +17,9 @@ use flo_w3gs::protocol::packet::*;
 use flo_w3gs::protocol::ping::PongToHost;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::stream::StreamExt;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, watch};
+use tokio_stream::StreamExt;
 use tracing_futures::Instrument;
 
 pub struct LanProxy {
@@ -104,7 +104,7 @@ impl LanProxy {
   }
 
   pub async fn dispatch_game_status_change(&self, status: NodeGameStatus) {
-    self.status_tx.broadcast(Some(status)).ok();
+    self.status_tx.send(Some(status)).ok();
   }
 
   pub async fn dispatch_player_event(&mut self, evt: PlayerEvent) {
@@ -401,12 +401,13 @@ impl State {
           }
         }
         // node status ack
-        next = status_rx.recv() => {
-          let next = if let Some(next) = next {
-            next
-          } else {
-            return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
-          };
+        changed = status_rx.changed() => {
+          let next =
+            if changed.is_ok() {
+              status_rx.borrow().clone()
+            } else {
+              return Err(Error::TaskCancelled(anyhow::format_err!("game status tx dropped")))
+            };
           match next {
             Some(status) => {
               match status {

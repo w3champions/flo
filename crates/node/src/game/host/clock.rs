@@ -2,7 +2,7 @@ use futures::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
-use tokio::time::{delay_for, Delay};
+use tokio::time::{sleep, Sleep};
 
 use flo_w3gs::protocol::action::PlayerAction;
 use futures::task::{Context, Poll};
@@ -11,7 +11,7 @@ use futures::task::{Context, Poll};
 pub struct ActionTickStream {
   step: u16,
   step_duration: Duration,
-  delay: Delay,
+  delay: Pin<Box<Sleep>>,
   actions: Vec<PlayerAction>,
   last_instant: Instant,
 }
@@ -26,7 +26,7 @@ impl ActionTickStream {
     ActionTickStream {
       step,
       step_duration,
-      delay: delay_for(step_duration),
+      delay: Box::pin(sleep(step_duration)),
       actions: vec![],
       last_instant: Instant::now(),
     }
@@ -37,6 +37,7 @@ impl ActionTickStream {
     self.step_duration = Duration::from_millis(value as u64);
     self
       .delay
+      .as_mut()
       .reset((Instant::now() + self.step_duration).into());
   }
 
@@ -67,7 +68,7 @@ impl Stream for ActionTickStream {
     let delay = (tokio::time::Instant::now() - now).as_millis() as u16;
 
     let next = now + self.step_duration;
-    self.delay.reset(next);
+    self.delay.as_mut().reset(next);
 
     let tick = Tick {
       time_increment_ms: self.step + delay,

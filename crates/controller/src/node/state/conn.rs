@@ -21,7 +21,7 @@ use crate::player::PlayerBanType;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing_futures::Instrument;
 
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
@@ -92,7 +92,7 @@ impl NodeConnActor {
     tracing::error!(node_id = self.config.id, "reconnect: backoff: {:?}", delay);
     let addr = ctx.addr();
     ctx.spawn(async move {
-      delay_for(delay).await;
+      sleep(delay).await;
       addr.send(Connect).await.ok();
     });
   }
@@ -137,7 +137,7 @@ impl NodeConnActor {
     const IDLE_TIMEOUT_DURATION: Duration = Duration::from_secs(30);
     const PING_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
     let start_instant = Instant::now();
-    let mut keepalive_timer = delay_for(IDLE_TIMEOUT_DURATION);
+    let mut keepalive_timer = Box::pin(sleep(IDLE_TIMEOUT_DURATION));
     enum KeepAliveStatus {
       Idle,
       Pinged,
@@ -155,7 +155,7 @@ impl NodeConnActor {
                 break;
               }
               keepalive_status = KeepAliveStatus::Pinged;
-              keepalive_timer.reset((Instant::now() + PING_TIMEOUT_DURATION).into());
+              keepalive_timer.as_mut().reset((Instant::now() + PING_TIMEOUT_DURATION).into());
             },
             KeepAliveStatus::Pinged => {
               tracing::error!("ping timeout");
@@ -165,7 +165,7 @@ impl NodeConnActor {
           }
         }
         Some(frame) = rx.recv() => {
-          keepalive_timer.reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
+          keepalive_timer.as_mut().reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
           keepalive_status = KeepAliveStatus::Idle;
 
           if let Err(err) = stream.send_frame_timeout(frame).await {
@@ -177,7 +177,7 @@ impl NodeConnActor {
         res = stream.recv_frame() => {
           match res {
             Ok(frame) => {
-              keepalive_timer.reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
+              keepalive_timer.as_mut().reset((Instant::now() + IDLE_TIMEOUT_DURATION).into());
               keepalive_status = KeepAliveStatus::Idle;
 
               if frame.type_id == PacketTypeId::Pong {

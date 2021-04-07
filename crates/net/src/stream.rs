@@ -26,7 +26,9 @@ impl FloStream {
     let socket = TcpStream::connect(addr).await?;
 
     socket.set_nodelay(true).ok();
-    socket.set_keepalive(None).ok();
+
+    //TODO: not supported by current tokio
+    //socket.set_keepalive(None).ok();
 
     let transport = Framed::new(socket, FloFrameCodec::new());
     Ok(FloStream {
@@ -38,7 +40,8 @@ impl FloStream {
   pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
     let socket = TcpStream::connect(addr).await?;
 
-    socket.set_keepalive(Some(Duration::from_secs(30)))?;
+    // not supported by tokio atm
+    //socket.set_keepalive(Some(Duration::from_secs(30)))?;
 
     let transport = Framed::new(socket, FloFrameCodec::new());
     Ok(FloStream {
@@ -87,7 +90,7 @@ impl FloStream {
   where
     I: IntoIterator<Item = Frame>,
   {
-    let mut stream = tokio::stream::iter(iter.into_iter().map(Ok));
+    let mut stream = tokio_stream::iter(iter.into_iter().map(Ok));
     timeout(self.timeout, self.transport.send_all(&mut stream))
       .await
       .map_err(|_elapsed| Error::StreamTimeout)??;

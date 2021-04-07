@@ -40,7 +40,7 @@ fn main() {
   log::init(opt.debug);
 
   let res = std::panic::catch_unwind(|| -> Result<_> {
-    let mut rt = Runtime::new()?;
+    let rt = Runtime::new()?;
     let client = rt.block_on(flo_client::start(StartConfig {
       token: opt.token,
       installation_path: opt.installation_path,
@@ -56,7 +56,7 @@ fn main() {
   .and_then(std::convert::identity);
 
   match res {
-    Ok((port, mut rt)) => {
+    Ok((port, rt)) => {
       let msg = serde_json::to_string(&serde_json::json!({
         "version": flo_client::FLO_VERSION.to_string(),
         "port": port

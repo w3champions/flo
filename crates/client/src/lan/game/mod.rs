@@ -23,7 +23,7 @@ use proxy::LanProxy;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing_futures::Instrument;
 
 pub struct LanGame {
@@ -99,7 +99,7 @@ impl LanGame {
             _ = mdns_shutdown_notify.notified() => {}
           }
 
-          delay_for(Duration::from_secs(1)).await;
+          sleep(Duration::from_secs(1)).await;
 
           tracing::debug!("exiting")
         }
@@ -127,7 +127,7 @@ impl LanGame {
     ]
     .contains(&status)
     {
-      self.mdns_shutdown_notify.notify();
+      self.mdns_shutdown_notify.notify_one();
     }
     self.proxy.dispatch_game_status_change(status).await;
   }
