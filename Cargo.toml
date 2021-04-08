@@ -44,4 +44,5 @@ casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
 #flo-state = { path = "../flo-state" }
-bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git", rev = "cb6a957915532085a19735886ba2884fcc57aeff" }
+bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
+async-dnssd = { git = "https://github.com/fluxxu/rust-async-dnssd.git" }

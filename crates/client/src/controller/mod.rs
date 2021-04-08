@@ -23,9 +23,7 @@ use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_net::packet::FloPacket;
 use flo_net::packet::Frame;
-use flo_state::{
-  async_trait, Actor, Addr, Container, Context, Handler, Message, RegistryRef, Service,
-};
+use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner, RegistryRef, Service};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -34,7 +32,7 @@ pub struct ControllerClient {
   platform: Addr<Platform>,
   nodes: Addr<NodeRegistry>,
   lan: Addr<Lan>,
-  conn: Option<Container<ControllerStream>>,
+  conn: Option<Owner<ControllerStream>>,
   conn_id: u64,
   ws_conn: Option<Session>,
   current_session: Option<PlayerSession>,

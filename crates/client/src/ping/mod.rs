@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::ping::collect::{GetPingStats, PingCollectActor, PingReply, SetActive};
-use flo_state::{async_trait, Actor, Addr, Container, Context, Handler, Message};
+use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner};
 use flo_types::ping::PingStats;
 use flo_util::binary::Ipv4Addr;
 use futures::StreamExt;
@@ -18,7 +18,7 @@ mod collect;
 pub struct PingActor {
   tx: mpsc::Sender<SendPing>,
   rx: Option<mpsc::Receiver<SendPing>>,
-  map: BTreeMap<SocketAddr, Container<PingCollectActor>>,
+  map: BTreeMap<SocketAddr, Owner<PingCollectActor>>,
 }
 
 impl PingActor {

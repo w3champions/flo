@@ -8,12 +8,12 @@ edition = "2018"
 flo-util = { path = "../util" }
 flo-constants = { path = "../constants" }
 flo-w3gs = { path = "../w3gs" }
-flo-state = "0.6"
+flo-state = "1"
 
 bytes = "1.0"
 thiserror = "1"
 prost = "0.7"
-tokio = { version = "1.0", features = ["time", "net", "macros", "sync"] }
+tokio = { version = "1", features = ["time", "net", "macros", "sync"] }
 tokio-stream = { version = "0.1", features = ["time", "net"] }
 tokio-util = { version = "0.6", features = ["codec", "net"] }
 futures = "0.3"
@@ -21,4 +21,4 @@ tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
-prost-build = { version = "0.6" }
+prost-build = "0.7"

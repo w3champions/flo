@@ -12,7 +12,7 @@ use flo_net::proto::flo_common::*;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
 use flo_state::reply::FutureReply;
-use flo_state::{async_trait, Actor, Addr, Container, Context, Handler, Message};
+use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::collections::BTreeMap;
 
@@ -30,7 +30,7 @@ pub struct NodeConnActor {
   config: NodeConnConfig,
   reconnect_backoff: Option<ExponentialBackoff>,
   status: NodeConnStatus,
-  request_actor: Option<Container<NodeRequestActor>>,
+  request_actor: Option<Owner<NodeRequestActor>>,
   game_reg_addr: Addr<GameRegistry>,
 }
 

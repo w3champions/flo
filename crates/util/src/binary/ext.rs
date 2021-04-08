@@ -47,7 +47,7 @@ pub trait BinBufExt {
     T: BinDecode;
 }
 
-impl<T: Buf> BinBufExt for T
+impl<T> BinBufExt for T
 where
   T: Buf,
 {
@@ -61,11 +61,7 @@ where
 
   #[inline]
   fn peek_u8(&mut self) -> Option<u8> {
-    if self.has_remaining() {
-      Some( self.get_u8() )
-    } else {
-      None
-    }
+    self.chunk().get(0).cloned()
   }
 
   fn get_tag<TTag: AsRef<[u8]> + Debug>(&mut self, tag: TTag) -> Result<TTag, BinDecodeError> {

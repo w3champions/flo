@@ -36,7 +36,7 @@ pub enum Error {
   #[error("proto: {0}")]
   Proto(#[from] s2_grpc_utils::result::Error),
   #[error("http: {0}")]
-  Http(#[from] hyper::error::Error),
+  Http(#[from] hyper::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

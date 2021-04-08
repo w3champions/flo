@@ -1,7 +1,7 @@
 use crate::error::*;
 use crate::game::state::{GameActor, GameRegistry};
 use crate::game::GameStatus;
-use flo_state::{async_trait, Container, Context, Handler, Message};
+use flo_state::{async_trait, Context, Handler, Message, Owner};
 use std::collections::btree_map::Entry;
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl GameRegistry {
     }
     self.map.insert(
       id,
-      Container::new(GameActor {
+      Owner::new(GameActor {
         game_id: id,
         db: self.db.clone(),
         player_reg: self.players.clone(),
@@ -69,13 +69,13 @@ impl Message for Remove {
 #[async_trait]
 impl Handler<Remove> for GameRegistry {
   async fn handle(&mut self, ctx: &mut Context<Self>, Remove { game_id: id }: Remove) {
-    if let Some(container) = self.map.remove(&id) {
+    if let Some(owner) = self.map.remove(&id) {
       self.game_players_map.remove(&id);
       self.game_node_map.remove(&id);
 
       let addr = ctx.addr();
       ctx.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(3), container.shutdown()).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(3), owner.shutdown()).await {
           Ok(Ok(state)) => {
             let players = state.players;
             for player_id in players {

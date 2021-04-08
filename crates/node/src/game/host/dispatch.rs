@@ -418,10 +418,6 @@ impl State {
 
     let chat: ChatToHost = packet.decode_simple()?;
 
-    if self.chat_banned_player_ids.contains(&player_id) && chat.is_in_game_chat() {
-      return Ok(());
-    }
-
     use flo_w3gs::protocol::chat::ChatMessage;
     if let ChatMessage::Scoped { ref message, .. } = chat.message {
       let bytes = message.as_bytes();
@@ -481,6 +477,10 @@ impl State {
           return Ok(());
         }
       }
+    }
+
+    if self.chat_banned_player_ids.contains(&player_id) && chat.is_in_game_chat() {
+      return Ok(());
     }
 
     packet.header.type_id = PacketTypeId::ChatFromHost;

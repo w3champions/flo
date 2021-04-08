@@ -24,10 +24,10 @@ flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-task = { path = "../task" }
 flo-w3c = { path = "../w3c" }
-flo-state = "0.6.1"
+flo-state = "1"
 
 s2-grpc-utils = "0.2"
-tokio = { version = "1.0", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
+tokio = { version = "1", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
 tokio-stream = { version = "0.1", features = ["time", "net"] }
 async-tungstenite = { version = "0.11", features = ["tokio-runtime"], optional = true }
 tracing = "0.1"

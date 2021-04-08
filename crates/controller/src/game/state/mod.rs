@@ -35,7 +35,7 @@ pub struct GameRegistry {
   db: ExecutorRef,
   players: PlayerRegistryHandle,
   nodes: Addr<NodeRegistry>,
-  map: BTreeMap<i32, Container<GameActor>>,
+  map: BTreeMap<i32, Owner<GameActor>>,
   player_games_map: BTreeMap<i32, Vec<i32>>,
   game_players_map: BTreeMap<i32, Vec<i32>>,
   game_node_map: BTreeMap<i32, i32>,
@@ -75,7 +75,7 @@ impl GameRegistry {
 
       map.insert(
         game.id,
-        Container::new(GameActor {
+        Owner::new(GameActor {
           game_id: game.id,
           db: db.clone(),
           player_reg: player_packet_sender.clone(),
@@ -195,7 +195,7 @@ pub struct GameActor {
   pub host_player: i32,
   pub players: Vec<i32>,
   pub selected_node_id: Option<i32>,
-  pub start_state: Option<Container<StartGameState>>,
+  pub start_state: Option<Owner<StartGameState>>,
   pub player_tokens: HashMap<i32, [u8; 16]>,
   pub player_client_status_map: HashMap<i32, SlotClientStatus>,
 }

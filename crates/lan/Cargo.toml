@@ -13,12 +13,12 @@ flo-w3storage = { path = "../w3storage" }
 flo-w3replay = { path = "../w3replay" }
 flo-platform = { path = "../platform" }
 
-tokio = { version = "1.0", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync"] }
 tokio-stream = { version = "0.1", features = ["time"] }
 hostname = "^0.3"
 pretty-hex = "0.1"
 bytes = "1.0"
-prost = "0.6"
+prost = "0.7"
 base64 = "0.12"
 thiserror = "1"
 lazy_static = "1"
@@ -29,4 +29,4 @@ futures = "0.3"
 async-dnssd = "0.5.0-rc.1"
 
 [build-dependencies]
-prost-build = { version = "0.6" }
+prost-build = "0.7"

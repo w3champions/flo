@@ -10,13 +10,13 @@ flo-util = { path = "../util" }
 bitflags = "1"
 thiserror = "1"
 lazy_static = "1"
-prost = "0.6"
+prost = "0.7"
 futures = "0.3"
-tokio = { version = "1.0", features = ["net", "io-util"] }
+tokio = { version = "1", features = ["net", "io-util"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 tokio-util = { version = "0.6", features = ["codec", "net"] }
 rand = "0.8"
 crc32fast = "1.2"
 
 [build-dependencies]
-prost-build = { version = "0.6" }
+prost-build = "0.7"

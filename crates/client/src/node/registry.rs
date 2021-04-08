@@ -4,7 +4,7 @@ use crate::ping::{
 };
 use crate::StartConfig;
 use flo_net::proto::flo_connect::Node;
-use flo_state::{async_trait, Actor, Container, Context, Handler, Message, RegistryRef, Service};
+use flo_state::{async_trait, Actor, Context, Handler, Message, Owner, RegistryRef, Service};
 use flo_types::ping::PingStats;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -13,7 +13,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 pub struct NodeRegistry {
   map: BTreeMap<i32, NodeInfo>,
   addr_overrides: BTreeMap<i32, SocketAddr>,
-  ping: Container<PingActor>,
+  ping: Owner<PingActor>,
 }
 
 impl NodeRegistry {

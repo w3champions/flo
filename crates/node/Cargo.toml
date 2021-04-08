@@ -13,12 +13,12 @@ flo-constants = { path = "../constants" }
 flo-event = { path = "../event" }
 flo-log = { path = "../log" }
 flo-task = { path = "../task" }
-flo-state = "0.6.1"
+flo-state = "1"
 
 thiserror = "1.0"
 bytes = "1.0"
 futures = "0.3"
-tokio = { version = "1.0", features = ["time", "sync", "macros", "net"] }
+tokio = { version = "1", features = ["time", "sync", "macros", "net"] }
 tokio-stream = { version = "0.1", features = ["time", "net"] }
 tracing = "0.1"
 tracing-futures = "0.2"
@@ -26,7 +26,7 @@ parking_lot = "0.11"
 s2-grpc-utils = "0.2"
 lazy_static = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
-hyper = "0.13"
+hyper = "0.14"
 prometheus = "0.9"
 dashmap = "3.11"
 smallvec = "1.4"

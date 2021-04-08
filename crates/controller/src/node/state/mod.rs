@@ -10,7 +10,7 @@ use crate::state::{Data, GetActorEntry, Reload};
 use arc_swap::ArcSwap;
 use conn::NodeConnActor;
 use flo_state::{
-  async_trait, Actor, Addr, Container, Context, Deferred, Handler, Message, RegistryRef, Service,
+  async_trait, Actor, Addr, Context, Deferred, Handler, Message, Owner, RegistryRef, Service,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ pub struct NodeRegistry {
   db: ExecutorRef,
   game_reg_addr: Deferred<GameRegistry, Data>,
   player_reg_handle: PlayerRegistryHandle,
-  map: BTreeMap<i32, Container<NodeConnActor>>,
+  map: BTreeMap<i32, Owner<NodeConnActor>>,
   nodes_snapshot: ArcSwap<Vec<Node>>,
 }
 
