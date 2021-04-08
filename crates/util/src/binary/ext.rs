@@ -4,7 +4,7 @@ use std::fmt::Debug;
 pub trait BinBufExt {
   fn check_size(&mut self, size: usize) -> Result<(), BinDecodeError>;
 
-  fn peek_u8(&mut self) -> Option<u8>;
+  fn peek_u8(&self) -> Option<u8>;
 
   fn get_tag<T: AsRef<[u8]> + Debug>(&mut self, tag: T) -> Result<T, BinDecodeError>;
 
@@ -60,7 +60,7 @@ where
   }
 
   #[inline]
-  fn peek_u8(&mut self) -> Option<u8> {
+  fn peek_u8(&self) -> Option<u8> {
     self.chunk().get(0).cloned()
   }
 
