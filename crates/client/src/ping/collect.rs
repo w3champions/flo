@@ -367,7 +367,7 @@ async fn test_ping_collect() {
   flo_log_subscriber::init_env_override("DEBUG");
   let notify = Arc::new(Notify::new());
 
-  let mut socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
+  let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
   let (tx, mut rx) = mpsc::channel(1);
   let sock_addr = SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 3552));
 
@@ -388,7 +388,7 @@ async fn test_ping_collect() {
         tokio::select! {
           next = rx.recv() => {
             if n > 10 {
-              notify.notify();
+              notify.notify_one();
             }
             let data = next.unwrap();
             socket.send_to(&data.data, sock_addr).await.unwrap();

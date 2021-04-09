@@ -3,7 +3,6 @@ use crate::controller::{ControllerClient, SendWs};
 use crate::error::Result;
 use crate::node::UpdateNodes;
 use flo_state::mock::Mock;
-use flo_state::*;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -11,7 +10,7 @@ use tokio::time::sleep;
 async fn test_controller_stream() {
   dotenv::dotenv().unwrap();
   flo_log_subscriber::init_env_override("DEBUG");
-  let token = flo_controller::player::token::create_player_token(1).unwrap();
+  let _token = flo_controller::player::token::create_player_token(1).unwrap();
 
   async fn mock_handle_event(msg: ControllerEvent) {
     tracing::debug!("mock: ControllerStreamEvent: {:?}", msg);

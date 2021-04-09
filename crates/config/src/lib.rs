@@ -6,7 +6,7 @@ pub mod error;
 
 use error::*;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
   pub local_port: u16,
   pub user_data_path: Option<PathBuf>,
