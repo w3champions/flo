@@ -23,5 +23,5 @@ pub const NODE_HTTP_PORT_OFFSET: u16 = NODE_HTTP_PORT - NODE_ECHO_PORT;
 pub const MIN_FLO_VERSION: version::Version = Version {
   major: 0,
   minor: 8,
-  patch: 0,
+  patch: 1,
 };
