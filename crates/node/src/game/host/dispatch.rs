@@ -693,6 +693,8 @@ enum PlayerSendError {
   ChannelFull,
 }
 
+// Action(PlayerAction) and Lagged are not used
+#[allow(dead_code)]
 #[derive(Debug)]
 enum DispatchResult {
   Continue,
