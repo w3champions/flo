@@ -49,7 +49,6 @@ impl<'a> GameHandler<'a> {
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
-
     client: &'a mut Addr<ControllerClient>,
   ) -> Self {
     GameHandler {
@@ -67,7 +66,7 @@ impl<'a> GameHandler<'a> {
     }
   }
 
-  pub async fn run(&mut self) -> Result<GameResult> {
+  pub async fn run(&mut self, deferred_packets: Vec<Packet>) -> Result<GameResult> {
     let mut loop_state = GameLoopState::new(&self.info);
 
     let mute_list = if let Ok(v) = self.client.send(GetMuteList).await {
@@ -100,6 +99,11 @@ impl<'a> GameHandler<'a> {
         self.info.slot_info.slot_player_id,
         vec![format!("Blacklisted: {}", blacklisted.join(", "))],
       )
+    }
+
+    for pkt in deferred_packets {
+      tracing::warn!("deferred packet: {:?}", pkt.type_id());
+      self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
     }
 
     loop {

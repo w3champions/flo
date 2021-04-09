@@ -10,6 +10,7 @@ use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
 use flo_task::{SpawnScope, SpawnScopeHandle};
 use flo_w3gs::net::{W3GSListener, W3GSStream};
+use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
 use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
 use flo_w3gs::protocol::packet::Packet;
@@ -204,6 +205,8 @@ impl State {
       None => return Ok(()),
     };
 
+    let mut deferred_packets = vec![];
+
     // Load Screen
     {
       let load_screen = self.handle_load_screen(
@@ -214,6 +217,7 @@ impl State {
         &mut status_rx,
         &mut w3gs_rx,
         slot_status_map,
+        &mut deferred_packets,
       );
       tokio::pin!(load_screen);
 
@@ -244,7 +248,7 @@ impl State {
       _ = &mut dropped => {
         return Ok(())
       }
-      res = game_handler.run() => {
+      res = game_handler.run(deferred_packets) => {
         match res {
           Ok(res) => {
             tracing::debug!("game ended: {:?}", res);
@@ -319,6 +323,7 @@ impl State {
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
     w3gs_rx: &mut Receiver<Packet>,
     initial_status_map: HashMap<i32, SlotClientStatus>,
+    deferred_packets: &mut Vec<Packet>,
   ) -> Result<()> {
     let my_player_id = info.game.player_id;
     let my_slot_player_id = info.slot_info.slot_player_id;
@@ -431,7 +436,11 @@ impl State {
         }
         next = w3gs_rx.recv() => {
           if let Some(pkt) = next {
-            stream.send(pkt).await?;
+            if pkt.type_id() == PacketTypeId::PingFromHost {
+              stream.send(pkt).await?;
+            } else {
+              deferred_packets.push(pkt);
+            }
           } else {
             return Err(Error::TaskCancelled(anyhow::format_err!("w3g tx dropped")))
           }
