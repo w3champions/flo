@@ -56,7 +56,7 @@ fn test_frame_to_w3gs() {
   let len_bytes = 6_u16.to_le_bytes();
 
   assert_eq!(
-    buf.bytes(),
+    buf.chunk(),
     &[0xF7_u8, len_bytes[0], len_bytes[1], 0x14, 1, 2, 3, 4, 5] as &[_]
   )
 }

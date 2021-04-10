@@ -402,7 +402,6 @@ pub struct EndTimer {
 
 #[test]
 fn test_record() {
-  use bytes::buf::ext::Chain;
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();
   buf.get_tag(crate::constants::SIGNATURE).unwrap();
@@ -414,7 +413,7 @@ fn test_record() {
   let mut tail = empty.clone();
   for (_i, block) in blocks.enumerate() {
     let mut block = block.unwrap();
-    let mut buf = Chain::new(tail, block.data.clone());
+    let mut buf = tail.chain(block.data.clone());
     loop {
       let pos = buf.remaining();
 
