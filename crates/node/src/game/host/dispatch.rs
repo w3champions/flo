@@ -165,7 +165,11 @@ impl Dispatcher {
         }
       }
 
-      let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
+      let mut tick_stream = ActionTickStream::new(
+        crate::constants::ENV_GAME_STEP_MS
+          .clone()
+          .unwrap_or(crate::constants::GAME_DEFAULT_STEP_MS),
+      );
 
       loop {
         tokio::select! {

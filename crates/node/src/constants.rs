@@ -1,4 +1,13 @@
+use lazy_static::lazy_static;
 use std::time::Duration;
+
+lazy_static! {
+  pub static ref ENV_GAME_STEP_MS: Option<u16> = {
+    std::env::var("FLO_GAME_STEP_MS")
+      .ok()
+      .and_then(|v| v.parse().ok())
+  };
+}
 
 pub const PEER_COMMAND_CHANNEL_SIZE: usize = 3;
 pub const PEER_W3GS_CHANNEL_SIZE: usize = 250;
