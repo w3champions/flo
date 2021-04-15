@@ -238,9 +238,20 @@ fn test_storage() {
 #[test]
 fn test_fs_map() {
   let p = ClientPlatformInfo::from_env().unwrap();
-  let s = W3Storage::new(&p).unwrap();
+  let mut s = W3Storage::new(&p).unwrap();
+  let crate_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+  s.add_override(
+    "map",
+    crate_dir
+      .parent()
+      .unwrap()
+      .parent()
+      .unwrap()
+      .join("deps\\wc3-samples"),
+  )
+  .unwrap();
   assert!(s
-    .resolve_file("maps\\W3Champions\\v5\\w3c_1v1_terenasstand_lv_anon.w3x")
+    .resolve_file("map\\(2)ConcealedHill.w3x")
     .unwrap()
     .is_some());
 }

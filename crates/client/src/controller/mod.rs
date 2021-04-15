@@ -400,7 +400,7 @@ impl Handler<LanEvent> for ControllerClient {
             );
           }
         }
-        NodeStreamEvent::GameInitialStatus(data) => {
+        NodeStreamEvent::GameStatusSnapshot(data) => {
           let game_id = data.game_id;
           tracing::debug!(game_id, "GameInitialStatus: {:?}", data.game_status);
           if let Err(err) = self

@@ -126,6 +126,7 @@ fn test_inspect_computers() {
 }
 
 #[test]
+#[ignore]
 fn test_inspect_time() {
   use std::collections::BTreeMap;
   // let path = flo_util::sample_path!("replay", "spike.w3g");

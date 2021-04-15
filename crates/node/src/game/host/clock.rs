@@ -6,14 +6,17 @@ use tokio::time::{sleep, Sleep};
 
 use flo_w3gs::protocol::action::PlayerAction;
 use futures::task::{Context, Poll};
+use std::task::Waker;
 
 #[derive(Debug)]
 pub struct ActionTickStream {
+  paused: bool,
   step: u16,
   step_duration: Duration,
   delay: Pin<Box<Sleep>>,
   actions: Vec<PlayerAction>,
   last_instant: Instant,
+  resume_waker: Option<Waker>,
 }
 
 impl ActionTickStream {
@@ -24,11 +27,13 @@ impl ActionTickStream {
     let step = std::cmp::max(Self::MIN_STEP, step);
     let step_duration = Duration::from_millis(step as u64);
     ActionTickStream {
+      paused: false,
       step,
       step_duration,
       delay: Box::pin(sleep(step_duration)),
       actions: vec![],
       last_instant: Instant::now(),
+      resume_waker: None,
     }
   }
 
@@ -45,8 +50,26 @@ impl ActionTickStream {
     self.step
   }
 
-  pub fn add_player_action(&mut self, action: PlayerAction) {
+  pub fn add_action(&mut self, action: PlayerAction) {
     self.actions.push(action)
+  }
+
+  pub fn replace_actions(&mut self, actions: Vec<PlayerAction>) {
+    self.actions = actions;
+  }
+
+  pub fn pause(&mut self) {
+    self.paused = true;
+    self.delay.as_mut().reset(Instant::now().into());
+  }
+
+  pub fn resume(&mut self) {
+    self.paused = false;
+    self
+      .delay
+      .as_mut()
+      .reset((Instant::now() + self.step_duration).into());
+    self.resume_waker.take().map(|w| w.wake());
   }
 }
 
@@ -60,6 +83,13 @@ impl Stream for ActionTickStream {
   type Item = Tick;
 
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    if self.paused {
+      if self.resume_waker.as_ref().map(|w| w.will_wake(cx.waker())) != Some(true) {
+        self.resume_waker.replace(cx.waker().clone());
+      }
+      return Poll::Pending;
+    }
+
     // Wait for the delay to be done
     futures::ready!(Pin::new(&mut self.delay).poll(cx));
 

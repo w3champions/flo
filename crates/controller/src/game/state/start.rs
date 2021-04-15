@@ -13,7 +13,7 @@ use tokio::sync::oneshot;
 
 use tokio::time::sleep;
 
-const TIMEOUT: Duration = Duration::from_secs(5);
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct StartGameCheck {
   pub player_id: i32,
@@ -101,6 +101,11 @@ impl GameActor {
         .broadcast(self.players.clone(), frame)
         .await?;
 
+      tracing::error!(
+        game_id = self.game_id,
+        "start game failed: version check failed"
+      );
+
       return Ok(Err(pkt));
     }
 
@@ -164,6 +169,8 @@ impl GameActor {
             }
           }
         };
+
+        tracing::error!(game_id = self.game_id, "start game failed: {}", pkt.message);
 
         return Ok(Err(pkt));
       }
@@ -413,7 +420,13 @@ impl Handler<StartGamePlayerAckInner> for StartGameState {
     _: &mut Context<Self>,
     StartGamePlayerAckInner { player_id, packet }: StartGamePlayerAckInner,
   ) -> <StartGamePlayerAckInner as Message>::Result {
-    tracing::debug!(player_id, "ack");
+    tracing::info!(
+      game_id = self.game_id,
+      player_id,
+      "start game ack: version = {}, map sha1 = {:02X?}",
+      packet.war3_version,
+      packet.map_sha1
+    );
     self.ack_player_and_check(player_id, packet).await
   }
 }

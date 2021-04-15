@@ -34,7 +34,7 @@ pub struct LagPlayer {
 }
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
-pub struct StopLag(LagPlayer);
+pub struct StopLag(pub LagPlayer);
 
 impl PacketPayload for StopLag {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::StopLag;

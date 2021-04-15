@@ -404,7 +404,6 @@ pub struct EndTimer {
 fn test_record() {
   let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
   let mut buf = bytes.as_slice();
-  buf.get_tag(crate::constants::SIGNATURE).unwrap();
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
   let mut rec_count = 0;

@@ -1,69 +1,207 @@
 use crate::controller::ControllerClient;
 use crate::error::*;
+use crate::lan::game::LanGameInfo;
 use crate::lan::LanEvent;
 use crate::types::GameStatusUpdate;
 use crate::types::SlotClientStatus;
+use backoff::backoff::Backoff;
+use backoff::{self, ExponentialBackoff};
 use flo_net::packet::*;
 use flo_net::proto::flo_node as proto;
 use flo_net::stream::FloStream;
-use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
+use flo_net::w3gs::{W3GSAckQueue, W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
 use flo_state::Addr;
 use flo_types::node::NodeGameStatusSnapshot;
-use flo_w3gs::packet::Packet as W3GSPacket;
-use flo_w3gs::protocol::packet::Packet;
+use flo_util::chat::parse_chat_command;
+use flo_w3gs::action::IncomingAction;
+use flo_w3gs::protocol::chat::{ChatFromHost, ChatToHost};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::{oneshot, Notify};
+use tokio::sync::Notify;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
 pub struct NodeStream {
-  state: Arc<State>,
-  shutdown_signal: Arc<Notify>,
-  shutdown_complete_rx: Option<oneshot::Receiver<()>>,
+  tx: NodeStreamSender,
+  ct: CancellationToken,
+  shutdown_notify: Arc<Notify>,
 }
 
 impl NodeStream {
-  pub async fn shutdown(mut self) {
-    self.shutdown_signal.notify_one();
-    self.shutdown_complete_rx.take().unwrap().await.ok();
+  pub async fn shutdown(self) {
+    self.ct.cancel();
+    self.shutdown_notify.notified().await;
   }
 }
 
 impl Drop for NodeStream {
   fn drop(&mut self) {
-    self.shutdown_signal.notify_one();
+    self.ct.cancel();
   }
 }
 
 impl NodeStream {
   pub async fn connect(
+    game: &LanGameInfo,
     addr: SocketAddr,
     token: NodeConnectToken,
     client: Addr<ControllerClient>,
-    w3gs_sender: Sender<W3GSPacket>,
+    game_tx: Sender<W3GSPacket>,
   ) -> Result<Self> {
-    let shutdown_signal = Arc::new(Notify::new());
-    let mut stream = FloStream::connect_no_delay(addr).await?;
+    let ct = CancellationToken::new();
+    let shutdown_notify = Arc::new(Notify::new());
+    let (tx, rx) = channel(10);
+
+    let session = Session {
+      game_id: game.game.game_id,
+      player_id: game.game.player_id,
+      slot_player_id: game.slot_info.slot_player_id,
+      addr,
+      token,
+      client,
+      game_tx,
+      rx,
+      shutdown_notify: shutdown_notify.clone(),
+      ct: ct.clone(),
+      ack_q: W3GSAckQueue::new(),
+      tick: 0,
+      ack: 0,
+      time: 0,
+    };
+
+    tokio::spawn(
+      session
+        .run()
+        .instrument(tracing::debug_span!("worker", game_id = game.game.game_id)),
+    );
+
+    Ok(Self {
+      tx: NodeStreamSender { tx },
+      ct,
+      shutdown_notify,
+    })
+  }
+
+  pub fn sender(&self) -> NodeStreamSender {
+    self.tx.clone()
+  }
+}
+
+struct Session {
+  game_id: i32,
+  player_id: i32,
+  slot_player_id: u8,
+  addr: SocketAddr,
+  token: NodeConnectToken,
+  client: Addr<ControllerClient>,
+  game_tx: Sender<W3GSPacket>,
+  rx: Receiver<WorkerMsg>,
+  shutdown_notify: Arc<Notify>,
+  ct: CancellationToken,
+  ack_q: W3GSAckQueue,
+  tick: u32,
+  time: u32,
+  ack: u32,
+}
+
+impl Session {
+  async fn run(mut self) {
+    let mut reconnect_backoff = ExponentialBackoff {
+      initial_interval: Duration::from_secs(1),
+      max_interval: Duration::from_secs(5),
+      max_elapsed_time: Some(Duration::from_secs(60)),
+      ..Default::default()
+    };
+    let ct = self.ct.clone();
+
+    loop {
+      let conn: Connection = {
+        loop {
+          tokio::select! {
+            _ = ct.cancelled() => {
+              return;
+            },
+            res = self.connect() => {
+              match res {
+                Ok(conn) => {
+                  break conn;
+                }
+                Err(err) => {
+                  tracing::error!("connect node: {}", err);
+                  match err {
+                    Error::NodeConnectionRejected(_, _) => {
+                      self.notify_disconnected().await;
+                      return
+                    },
+                    _ => {
+                      if let Some(delay) = reconnect_backoff.next_backoff() {
+                        sleep(delay).await;
+                      } else {
+                        tracing::error!("connect node: timeout");
+                        self.notify_disconnected().await;
+                        return
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+
+      reconnect_backoff.reset();
+      tracing::debug!("node connected.");
+
+      match conn.run(&mut self).await {
+        Ok(res) => match res {
+          ConnectionRunResult::Cancelled | ConnectionRunResult::GameDisconnected => {
+            self.notify_disconnected().await;
+            return;
+          }
+          ConnectionRunResult::NodeDisconnected => {
+            reconnect_backoff.reset();
+            tracing::error!("node disconnected");
+            tracing::error!("reconnecting...");
+            self
+              .send_private_message("Reconnecting to the server...")
+              .await
+              .ok();
+          }
+        },
+        Err(err) => {
+          tracing::error!("unexpected node conn error: {}", err);
+          self.notify_disconnected().await;
+          return;
+        }
+      }
+    }
+  }
+
+  async fn connect(&self) -> Result<Connection> {
+    let mut stream = FloStream::connect_no_delay(self.addr).await?;
 
     stream
       .send(proto::PacketClientConnect {
         version: Some(crate::version::FLO_VERSION.into()),
-        token: token.to_vec(),
+        token: self.token.to_vec(),
       })
       .await?;
 
     let frame = stream.recv_frame().await?;
 
-    let (player_id, initial_status): (i32, NodeGameStatusSnapshot) = flo_net::try_flo_packet! {
+    let (player_id, status_snapshot): (i32, NodeGameStatusSnapshot) = flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientConnectAccept => {
           let game_id = p.game_id;
           let player_id = p.player_id;
           tracing::debug!(
             game_id,
-            player_id = player_id,
+            player_id,
             "node connected: version = {:?}, game_status = {:?}",
             p.version,
             p.game_status,
@@ -77,156 +215,205 @@ impl NodeStream {
       }
     };
 
-    let (outgoing_sender, outgoing_receiver) = channel(10);
-
-    let state = Arc::new(State {
-      game_id: initial_status.game_id,
-      player_id,
-      outgoing_sender,
-      client,
-    });
-
-    let (shutdown_complete_tx, shutdown_complete_rx) = oneshot::channel();
-
-    tokio::spawn({
-      Self::worker(
-        state.clone(),
-        stream,
-        w3gs_sender,
-        outgoing_receiver,
-        initial_status,
-        shutdown_signal.clone(),
-        shutdown_complete_tx,
-      )
-      .instrument(tracing::debug_span!(
-        "worker",
-        game_id = state.game_id,
-        player_id
-      ))
-    });
-
-    Ok(Self {
-      shutdown_signal: shutdown_signal.clone(),
-      shutdown_complete_rx: Some(shutdown_complete_rx),
-      state,
-    })
-  }
-
-  pub fn handle(&self) -> NodeStreamHandle {
-    NodeStreamHandle {
-      game_id: self.state.game_id,
-      player_id: self.state.player_id,
-      tx: self.state.outgoing_sender.clone(),
+    if !self.ack_q.pending_ack_queue().is_empty() {
+      let frames = self
+        .ack_q
+        .pending_ack_queue()
+        .iter()
+        .cloned()
+        .map(|(meta, packet)| Frame::from_w3gs(meta, packet));
+      stream.send_frames(frames).await?;
     }
-  }
 
-  async fn worker(
-    state: Arc<State>,
-    mut stream: FloStream,
-    w3gs_sender: Sender<W3GSPacket>,
-    mut outgoing_receiver: Receiver<Frame>,
-    initial_status: NodeGameStatusSnapshot,
-    shutdown_signal: Arc<Notify>,
-    shutdown_complete: oneshot::Sender<()>,
-  ) {
-    let client = state.client.clone();
+    let game_id = status_snapshot.game_id;
 
-    if client
+    if self
+      .client
       .notify(LanEvent::NodeStreamEvent {
-        game_id: state.game_id,
-        inner: NodeStreamEvent::GameInitialStatus(initial_status),
+        game_id: self.game_id,
+        inner: NodeStreamEvent::GameStatusSnapshot(status_snapshot),
       })
       .await
       .is_err()
     {
-      tracing::debug!("worker exiting: controller client gone");
-      return;
+      return Err(Error::TaskCancelled(anyhow::format_err!(
+        "controller connection gone"
+      )));
     }
 
+    Ok(Connection {
+      game_id,
+      player_id,
+      stream,
+    })
+  }
+
+  async fn send_private_message<T: AsRef<str>>(&self, msg: T) -> Result<()> {
+    if self.tick > 0 {
+      self
+        .game_tx
+        .send(W3GSPacket::simple(ChatFromHost::private_to_self(
+          self.slot_player_id,
+          msg.as_ref(),
+        ))?)
+        .await
+        .map_err(|_| Error::TaskCancelled(anyhow::format_err!("game not running")))?;
+    }
+    Ok(())
+  }
+
+  async fn notify_disconnected(&self) {
+    self
+      .client
+      .notify(LanEvent::NodeStreamEvent {
+        game_id: self.game_id,
+        inner: NodeStreamEvent::Disconnected,
+      })
+      .await
+      .ok();
+  }
+}
+
+struct Connection {
+  game_id: i32,
+  player_id: i32,
+  stream: FloStream,
+}
+
+impl Connection {
+  async fn run(mut self, session: &mut Session) -> Result<ConnectionRunResult> {
     loop {
       tokio::select! {
-        _ = shutdown_signal.notified() => {
-          tracing::debug!("shutdown signal received");
-          break;
+        // cancel
+        _ = session.ct.cancelled() => {
+          drop(self.stream);
+          session.shutdown_notify.notify_one();
+          return Ok(ConnectionRunResult::Cancelled)
         }
+
         // packet from node
-        next = stream.recv_frame() => {
+        next = self.stream.recv_frame() => {
           match next {
             Ok(frame) => {
               match frame.type_id {
                 PacketTypeId::W3GS => {
-                  let pkt = frame_to_w3gs(frame).expect("packet id checked");
-                  if let Err(_) = w3gs_sender.send(pkt).await {
+                  let (meta, pkt) = frame.try_into_w3gs()?;
+
+                  if pkt.type_id() == W3GSPacketTypeId::IncomingAction {
+                    let time = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
+                    session.tick += 1;
+                    session.time += time as u32;
+                  }
+
+                  if !session.ack_q.ack_received(meta.sid()) {
+                    tracing::debug!(
+                      "discard resend: {}, {:?}, {:?}",
+                      meta.sid(),
+                      meta.ack_sid(),
+                      pkt.type_id()
+                    );
+                    continue;
+                  }
+                  if let Some(ack_sid) = meta.ack_sid() {
+                    session.ack_q.ack_sent(ack_sid);
+                  }
+                  if let Err(_) = session.game_tx.send(pkt).await {
                     tracing::debug!("w3gs receiver gone");
-                    break;
+                    return Ok(ConnectionRunResult::GameDisconnected);
                   }
                 }
                 _ => {
-                  if let Err(err) = Self::handle_node_frame(state.game_id, &client, frame).await {
+                  if let Err(err) = self.handle_node_frame(session, frame).await {
                     tracing::debug!("handle node frame: {}", err);
-                    break;
+                    return Ok(ConnectionRunResult::NodeDisconnected)
                   }
                 }
               }
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::debug!("stream closed");
-              client.notify(LanEvent::NodeStreamEvent {
-                game_id: state.game_id,
-                inner: NodeStreamEvent::Disconnected
-              }).await.ok();
-              break;
+              return Ok(ConnectionRunResult::NodeDisconnected)
             },
             Err(err) => {
               tracing::error!("stream recv: {}", err);
-              client.notify(LanEvent::NodeStreamEvent {
-                game_id: state.game_id,
-                inner: NodeStreamEvent::Disconnected
-              }).await.ok();
-              break;
+              return Ok(ConnectionRunResult::NodeDisconnected)
             }
           }
         }
-        // outgoing packets
-        next = outgoing_receiver.recv() => {
+
+        // worker msgs
+        next = session.rx.recv() => {
           match next {
-            Some(frame) => {
-              if let Err(err) = stream.send_frame(frame).await {
+            Some(msg) => {
+              let frame = match msg {
+                WorkerMsg::StatusUpdate(status) => {
+                  let mut pkt =
+                    flo_net::proto::flo_node::PacketClientUpdateSlotClientStatusRequest::default();
+                  pkt.set_status(status.into_proto_enum());
+                  pkt.encode_as_frame()?
+                },
+                WorkerMsg::W3GS(pkt) => {
+                  if pkt.type_id() == W3GSPacketTypeId::ChatToHost {
+                    let pkt: ChatToHost = pkt.decode_simple()?;
+                    if let Some(cmd) = pkt.chat_message().and_then(|v| parse_chat_command(v)) {
+                      match cmd.name() {
+                        "conn" => {
+                          session.game_tx.send(W3GSPacket::simple(ChatFromHost::private_to_self(
+                            pkt.from_player,
+                            format!(
+                              "local: last_ack_received = {:?}, len = {}",
+                              session.ack_q.last_ack_received(),
+                              session.ack_q.pending_ack_len()
+                            )
+                          ))?).await.ok();
+                        },
+                        _ => {},
+                      }
+                    }
+                  }
+
+                  let sid = session.ack_q.gen_next_send_sid();
+                  let ack_id = session.ack_q.take_ack_received();
+                  let meta = W3GSMetadata::new(pkt.type_id(), sid, ack_id);
+
+                  if pkt.type_id() == W3GSPacketTypeId::OutgoingKeepAlive {
+                    session.ack += 1;
+                  }
+
+                  // tracing::debug!(
+                  //   "send#{} tick = {}, time = {}, ack = {}",
+                  //   meta.sid(),
+                  //   session.tick,
+                  //   session.time,
+                  //   session.ack,
+                  // );
+
+                  session.ack_q.push_send(meta.clone(), pkt.clone());
+                  Frame::from_w3gs(meta, pkt)
+                },
+              };
+              if let Err(err) = self.stream.send_frame(frame).await {
                 tracing::error!("stream send: {}", err);
-                client.notify(LanEvent::NodeStreamEvent {
-                  game_id: state.game_id,
-                  inner: NodeStreamEvent::Disconnected
-                }).await.ok();
-                break;
+                return Ok(ConnectionRunResult::NodeDisconnected)
               }
             },
             None => {
-              tracing::debug!("outgoing sender gone");
-              break;
+              return Ok(ConnectionRunResult::Cancelled);
             }
           }
         }
       }
     }
-    tracing::debug!("flushing...");
-    outgoing_receiver.close();
-    while let Some(frame) = outgoing_receiver.recv().await {
-      stream.send_frame_timeout(frame).await.ok();
-    }
-    stream.flush().await.ok();
-    shutdown_complete.send(()).ok();
-    tracing::debug!("exiting...");
   }
 
-  async fn handle_node_frame(
-    game_id: i32,
-    client: &Addr<ControllerClient>,
-    frame: Frame,
-  ) -> Result<()> {
+  async fn handle_node_frame(&mut self, session: &mut Session, frame: Frame) -> Result<()> {
+    let client = &session.client;
+    let game_id = self.game_id;
+
     flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientUpdateSlotClientStatus => {
-          tracing::debug!(game_id = p.game_id, player_id = p.player_id, "update slot client status: {:?}", p.status());
+          tracing::debug!(game_id, player_id = p.player_id, "update slot client status: {:?}", p.status());
           flo_log::result_ok!(
             "send NodeStreamEvent::SlotClientStatusUpdate",
             client.notify(LanEvent::NodeStreamEvent {
@@ -262,39 +449,32 @@ impl NodeStream {
 }
 
 #[derive(Debug, Clone)]
-pub struct NodeStreamHandle {
-  game_id: i32,
-  player_id: i32,
-  tx: Sender<Frame>,
+pub struct NodeStreamSender {
+  tx: Sender<WorkerMsg>,
 }
 
-impl NodeStreamHandle {
+impl NodeStreamSender {
   pub async fn report_slot_status(&mut self, status: SlotClientStatus) -> Result<()> {
-    self
-      .tx
-      .send({
-        let mut pkt =
-          flo_net::proto::flo_node::PacketClientUpdateSlotClientStatusRequest::default();
-        pkt.set_status(status.into_proto_enum());
-        pkt.encode_as_frame()?
-      })
-      .await
-      .ok();
+    self.tx.send(WorkerMsg::StatusUpdate(status)).await.ok();
     Ok(())
   }
 
   #[inline]
-  pub async fn send_w3gs(&mut self, pkt: Packet) -> Result<()> {
-    self.tx.send(w3gs_to_frame(pkt)).await.ok();
+  pub async fn send_w3gs(&mut self, pkt: W3GSPacket) -> Result<()> {
+    self.tx.send(WorkerMsg::W3GS(pkt)).await.ok();
     Ok(())
   }
 }
 
-struct State {
-  outgoing_sender: Sender<Frame>,
-  client: Addr<ControllerClient>,
-  game_id: i32,
-  player_id: i32,
+enum ConnectionRunResult {
+  Cancelled,
+  GameDisconnected,
+  NodeDisconnected,
+}
+
+enum WorkerMsg {
+  StatusUpdate(SlotClientStatus),
+  W3GS(W3GSPacket),
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
@@ -318,7 +498,7 @@ impl NodeConnectToken {
 #[derive(Debug)]
 pub enum NodeStreamEvent {
   SlotClientStatusUpdate(SlotClientStatusUpdate),
-  GameInitialStatus(NodeGameStatusSnapshot),
+  GameStatusSnapshot(NodeGameStatusSnapshot),
   GameStatusUpdate(GameStatusUpdate),
   Disconnected,
   // Reconnected,

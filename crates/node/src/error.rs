@@ -1,4 +1,4 @@
-use crate::game::SlotClientStatus;
+use crate::game::{AckError, SlotClientStatus};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -7,6 +7,8 @@ pub enum Error {
   Cancelled,
   #[error("game exists")]
   GameExists,
+  #[error("game desync: {0:?}")]
+  GameDesync(#[from] AckError),
   #[error("game has no player")]
   NoPlayer,
   #[error("player busy: {0}")]
@@ -15,6 +17,10 @@ pub enum Error {
   PlayerNotFoundInGame,
   #[error("player connection exists")]
   PlayerConnectionExists,
+  #[error("player channel broken")]
+  PlayerChannelBroken,
+  #[error("player already left")]
+  PlayerAlreadyLeft,
   #[error("invalid player slot client status: {0:?}")]
   InvalidPlayerSlotClientStatus(SlotClientStatus),
   #[error("invalid slot id")]

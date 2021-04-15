@@ -1,11 +1,11 @@
 use crate::controller::{ControllerClient, GetMuteList, MutePlayer, UnmutePlayer};
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
-use crate::node::stream::NodeStreamHandle;
+use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
-use flo_util::chat::parse_chat_command;
+use flo_util::chat::{parse_chat_command, ChatCommand};
 #[cfg(feature = "blacklist")]
 use flo_w3c::blacklist;
 use flo_w3c::stats::get_stats;
@@ -14,6 +14,7 @@ use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
 use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
+use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PongToHost;
 use std::collections::BTreeSet;
@@ -30,13 +31,11 @@ pub struct GameHandler<'a> {
   info: &'a LanGameInfo,
   node: &'a NodeInfo,
   w3gs_stream: &'a mut W3GSStream,
-  node_stream: &'a mut NodeStreamHandle,
+  node_stream: &'a mut NodeStreamSender,
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_tx: &'a mut Sender<Packet>,
   w3gs_rx: &'a mut Receiver<Packet>,
   client: &'a mut Addr<ControllerClient>,
-  tick_recv: u32,
-  tick_ack: u32,
   muted_players: BTreeSet<u8>,
 }
 
@@ -45,7 +44,7 @@ impl<'a> GameHandler<'a> {
     info: &'a LanGameInfo,
     node: &'a NodeInfo,
     stream: &'a mut W3GSStream,
-    node_stream: &'a mut NodeStreamHandle,
+    node_stream: &'a mut NodeStreamSender,
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
@@ -60,8 +59,6 @@ impl<'a> GameHandler<'a> {
       w3gs_tx,
       w3gs_rx,
       client,
-      tick_recv: 0,
-      tick_ack: 0,
       muted_players: BTreeSet::new(),
     }
   }
@@ -160,9 +157,7 @@ impl<'a> GameHandler<'a> {
   async fn handle_incoming_w3gs(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
     match pkt.type_id() {
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
-      IncomingAction::PACKET_TYPE_ID => {
-        self.tick_recv += 1;
-      }
+      IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
       ChatFromHost::PACKET_TYPE_ID => {
         if !self.muted_players.is_empty() {
@@ -178,7 +173,7 @@ impl<'a> GameHandler<'a> {
           }
         }
       }
-      _ => {}
+      _other => {}
     }
 
     self.w3gs_stream.send(pkt).await?;
@@ -201,7 +196,7 @@ impl<'a> GameHandler<'a> {
         match pkt.message {
           ChatMessage::Scoped { message, .. } => {
             if let Some(cmd) = parse_chat_command(message.as_bytes()) {
-              if self.handle_chat_command(&cmd) {
+              if self.handle_chat_command(cmd) {
                 return Ok(());
               }
             }
@@ -209,9 +204,10 @@ impl<'a> GameHandler<'a> {
           _ => {}
         }
       }
-      OutgoingKeepAlive::PACKET_TYPE_ID => self.tick_ack += 1,
+      OutgoingKeepAlive::PACKET_TYPE_ID => {}
       IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
+      PacketTypeId::DropReq | PacketTypeId::LeaveReq => {}
       PongToHost::PACKET_TYPE_ID => {}
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());
@@ -223,8 +219,8 @@ impl<'a> GameHandler<'a> {
     Ok(())
   }
 
-  fn handle_chat_command(&mut self, cmd: &str) -> bool {
-    match cmd.trim_end() {
+  fn handle_chat_command(&mut self, cmd: ChatCommand) -> bool {
+    match cmd.raw() {
       "flo" => {
         let messages = vec![
           "-game: print game information.".to_string(),

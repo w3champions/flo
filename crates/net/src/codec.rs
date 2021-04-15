@@ -1,10 +1,11 @@
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
 use flo_util::binary::BinDecode;
 
 use crate::error::Error;
 use crate::packet::{Frame, FramePayload, Header, PacketTypeId};
+use crate::w3gs::W3GSMetadata;
 
 const MAX_PAYLOAD_LEN: usize = 4096;
 
@@ -36,13 +37,12 @@ impl Decoder for FloFrameCodec {
             return Err(Error::PayloadTooLarge);
           }
 
-          if header.type_id.has_subtype() && payload_len < 1 {
-            return Err(Error::PayloadTooSmall);
-          }
-
           if src.remaining() >= payload_len {
             // payload received
-            Ok(Some(Self::frame(header.type_id, src.split_to(payload_len))))
+            Ok(Some(Self::frame(
+              header.type_id,
+              src.split_to(payload_len).freeze(),
+            )?))
           } else {
             // wait payload
             src.reserve(payload_len);
@@ -64,7 +64,7 @@ impl Decoder for FloFrameCodec {
         if src.remaining() >= payload_len {
           let header = header.take().expect("header");
           let payload = src.split_to(payload_len);
-          let frame = Self::frame(header.type_id, payload);
+          let frame = Self::frame(header.type_id, payload.freeze())?;
           self.decode_state = DecoderState::DecodingHeader;
           Ok(Some(frame))
         } else {
@@ -96,15 +96,15 @@ impl Encoder<Frame> for FloFrameCodec {
 
 impl FloFrameCodec {
   #[inline]
-  fn frame(type_id: PacketTypeId, mut payload: BytesMut) -> Frame {
-    Frame {
+  fn frame(type_id: PacketTypeId, mut payload: Bytes) -> Result<Frame, Error> {
+    Ok(Frame {
       type_id,
-      payload: if type_id.has_subtype() {
-        let subtype = payload.get_u8();
-        FramePayload::SubTypeBytes(subtype, payload.freeze())
+      payload: if type_id == PacketTypeId::W3GS {
+        let metadata = W3GSMetadata::decode(&mut payload)?;
+        FramePayload::W3GS { metadata, payload }
       } else {
-        FramePayload::Bytes(payload.freeze())
+        FramePayload::Bytes(payload)
       },
-    }
+    })
   }
 }

@@ -18,13 +18,14 @@ use crate::error::*;
 use crate::state::GlobalEvent;
 
 mod host;
+pub use host::AckError;
 
 use crate::controller::ControllerServerHandle;
-use crate::game::peer::PeerHandle;
+use crate::game::player_stream::PlayerStreamHandle;
 use crate::state::event::GlobalEventSender;
 use host::GameHost;
 
-mod peer;
+mod player_stream;
 
 #[derive(Debug)]
 pub enum GameEvent {
@@ -54,7 +55,7 @@ impl GameSession {
   ) -> Result<Self> {
     let scope = SpawnScope::new();
     let game_id = game.id;
-    let (tx, mut rx) = GameEvent::channel(3);
+    let (tx, mut rx) = GameEvent::channel(32);
     let slots: Vec<_> = Vec::<GameSlot>::unpack(game.slots)?
       .into_iter()
       .filter_map(PlayerSlot::from_game_slot)
@@ -131,7 +132,7 @@ impl GameSession {
         guard.broadcast_status_update(StatusUpdate::Full).await?;
         match status {
           NodeGameStatus::Running => {
-            guard.host.start_dispatch();
+            guard.host.start();
           }
           NodeGameStatus::Ended => {
             guard
@@ -156,38 +157,42 @@ impl GameSessionHandle {
     &self,
     player_id: i32,
     stream: FloStream,
-  ) -> Result<(), (FloStream, Error)> {
-    use peer::PeerStream;
+  ) -> Result<(), (Option<FloStream>, Error)> {
+    use player_stream::PlayerStream;
 
     let mut guard = self.0.lock().await;
+    {
+      let slot = if let Some(v) = guard.player_slots.get_mut(&player_id) {
+        v
+      } else {
+        return Err((stream.into(), Error::PlayerNotFoundInGame));
+      };
 
-    let peer_stream = if let Some(slot) = guard.player_slots.get_mut(&player_id) {
       if slot.sender.as_ref().is_some() {
-        return Err((stream, Error::PlayerConnectionExists));
+        return Err((stream.into(), Error::PlayerConnectionExists));
       }
 
       match slot.client_status {
-        SlotClientStatus::Pending => {}
-        SlotClientStatus::Connected => {}
-        SlotClientStatus::Joined => {}
+        SlotClientStatus::Pending
+        | SlotClientStatus::Connected
+        | SlotClientStatus::Disconnected => {}
         other => {
-          return Err((stream, Error::InvalidPlayerSlotClientStatus(other)));
+          return Err((stream.into(), Error::InvalidPlayerSlotClientStatus(other)));
         }
-      }
-
-      let (stream, handle) = PeerStream::new(player_id, stream)?;
-      slot.sender = Some(handle);
-      stream
-    } else {
-      return Err((stream, Error::PlayerNotFoundInGame));
+      };
     };
+
+    let stream = PlayerStream::new(player_id, stream);
     let snapshot = guard.get_status_snapshot();
-    guard
+    let sender = guard
       .host
-      .add_peer_stream(snapshot, peer_stream)
+      .register_player_stream(stream, snapshot)
       .await
-      .map_err(|err| (err.into(), Error::Cancelled))?;
-    crate::metrics::CONNECTED_PLAYERS.inc();
+      .map_err(|err| (None, err))?;
+    guard
+      .player_slots
+      .get_mut(&player_id)
+      .map(|slot| slot.sender.replace(sender));
     Ok(())
   }
 
@@ -237,7 +242,7 @@ impl GameSessionHandle {
           // send full status
           if let Some(frame) = send_all {
             if let Some(handle) = slot.sender.as_mut() {
-              if let Err(_) = handle.send_frame(frame).await {
+              if let Err(_) = handle.send(frame).await {
                 return Err(Error::Cancelled);
               }
             }
@@ -311,11 +316,7 @@ impl GameSessionHandle {
           tracing::debug!(player_id, "rejoin");
         }
       }
-      SlotClientStatus::Loading => {
-        if let Some(v) = slot.sender.as_mut() {
-          v.start_ping().await;
-        }
-      }
+      SlotClientStatus::Loading => {}
       SlotClientStatus::Loaded => {
         if guard.status == NodeGameStatus::Loading {
           guard.check_game_all_loaded().await;
@@ -462,7 +463,7 @@ impl State {
       .values_mut()
       .filter_map(|slot| {
         if let Some(tx) = slot.sender.as_mut() {
-          Some(tx.send_frame(frame.clone()).map(|_| ()))
+          Some(tx.send(frame.clone()).map(|_| ()))
         } else {
           None
         }
@@ -485,7 +486,7 @@ pub struct PlayerSlot {
   pub settings: GameSlotSettings,
   pub player: GamePlayer,
   pub client_status: SlotClientStatus,
-  pub sender: Option<PeerHandle>,
+  pub sender: Option<PlayerStreamHandle>,
 }
 
 impl PlayerSlot {

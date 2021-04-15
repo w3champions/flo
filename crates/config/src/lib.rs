@@ -86,15 +86,3 @@ impl ClientConfig {
     }
   }
 }
-
-#[test]
-fn test_client() {
-  let config: ClientConfig = toml::from_str(
-    r#"user_data_path = "C:\\Users\\fluxx\\OneDrive\\Documents\\Warcraft III"
-installation_path = "C:\\Program Files (x86)\\Warcraft III""#,
-  )
-  .unwrap();
-  dbg!(&config);
-
-  dbg!(toml::to_string_pretty(&config).unwrap());
-}

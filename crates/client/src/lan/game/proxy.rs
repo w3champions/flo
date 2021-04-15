@@ -4,7 +4,7 @@ use crate::lan::game::game::GameHandler;
 use crate::lan::game::lobby::{LobbyAction, LobbyHandler};
 use crate::lan::game::LanGameInfo;
 use crate::lan::LanEvent;
-use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamHandle};
+use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamSender};
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
@@ -15,13 +15,17 @@ use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
 use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
 use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
-use flo_w3gs::protocol::ping::PongToHost;
+use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, watch};
+use tokio::time::interval;
 use tokio_stream::StreamExt;
 use tracing_futures::Instrument;
+
+const LOAD_SCREEN_PING_INTERVAL: Duration = Duration::from_secs(15);
 
 pub struct LanProxy {
   _scope: SpawnScope,
@@ -43,11 +47,13 @@ impl LanProxy {
     let port = listener.port();
     let (status_tx, status_rx) = watch::channel(None);
     let (event_tx, event_rx) = channel(10);
-    let (w3gs_tx, w3gs_rx) = channel(3);
+    let (w3gs_tx, w3gs_rx) = channel(32);
+    let game_id = info.game.game_id;
 
     tracing::debug!("connecting to node: {}", node.client_socket_addr());
 
     let node_stream = NodeStream::connect(
+      &info,
       node.client_socket_addr(),
       token,
       client.clone(),
@@ -57,10 +63,9 @@ impl LanProxy {
 
     tracing::debug!("listening on port {}", port);
 
-    let game_id = info.game.game_id;
     let state = Arc::new(State {
       info,
-      stream: node_stream.handle(),
+      stream: node_stream.sender(),
       game_status_rx: status_rx,
     });
 
@@ -124,7 +129,7 @@ impl LanProxy {
 #[derive(Debug)]
 struct State {
   info: LanGameInfo,
-  stream: NodeStreamHandle,
+  stream: NodeStreamSender,
   game_status_rx: watch::Receiver<Option<NodeGameStatus>>,
 }
 
@@ -306,7 +311,7 @@ impl State {
   async fn handle_lobby_stream(
     &self,
     stream: &mut W3GSStream,
-    node_stream: &mut NodeStreamHandle,
+    node_stream: &mut NodeStreamSender,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
   ) -> Result<LobbyAction> {
     let mut lobby_handler = LobbyHandler::new(&self.info, stream, Some(node_stream), status_rx);
@@ -318,7 +323,7 @@ impl State {
     &self,
     info: &LanGameInfo,
     stream: &mut W3GSStream,
-    node_stream: &mut NodeStreamHandle,
+    node_stream: &mut NodeStreamSender,
     event_rx: &mut Receiver<PlayerEvent>,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
     w3gs_rx: &mut Receiver<Packet>,
@@ -360,8 +365,14 @@ impl State {
       }
     }
 
+    let mut ping_interval = interval(LOAD_SCREEN_PING_INTERVAL);
+    let base_t = Instant::now();
+
     loop {
       tokio::select! {
+        _ = ping_interval.tick() => {
+          stream.send(Packet::simple(PingFromHost::with_payload_since(base_t))?).await?;
+        }
         // war3 packets
         res = stream.recv() => {
           match res? {
@@ -383,9 +394,7 @@ impl State {
                   stream.flush().await?;
                   break;
                 }
-                PongToHost::PACKET_TYPE_ID => {
-                  node_stream.send_w3gs(pkt).await?;
-                }
+                PongToHost::PACKET_TYPE_ID => {}
                 id => {
                   tracing::warn!("unexpected w3gs packet id: {:?}", id)
                 }

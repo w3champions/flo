@@ -1,9 +1,7 @@
 use futures::stream::StreamExt;
-use tokio::sync::mpsc::{Receiver, Sender};
 
 use flo_constants::NODE_CLIENT_PORT;
 use flo_net::listener::FloListener;
-use flo_net::packet::Frame;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
 
@@ -55,24 +53,25 @@ pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
           }
         };
 
-        if let Err((mut stream, err)) = session
+        if let Err((stream, err)) = session
           .register_player_stream(claim.player_id, stream)
           .await
         {
-          tracing::debug!(
+          tracing::error!(
             game_id = claim.game_id,
             player_id = claim.player_id,
             "register player stream: {}",
             err
           );
-          stream
-            .send(PacketClientConnectReject {
-              reason: ClientConnectRejectReason::Unknown.into(),
-              message: format!("Register: {}", err),
-            })
-            .await
-            .ok();
-          return;
+          if let Some(mut stream) = stream {
+            stream
+              .send(PacketClientConnectReject {
+                reason: ClientConnectRejectReason::Unknown.into(),
+                message: format!("Register: {}", err),
+              })
+              .await
+              .ok();
+          }
         }
       });
     }
@@ -107,14 +106,4 @@ async fn handshake(state: &GlobalState, stream: &mut FloStream) -> Result<Claim>
 pub struct Claim {
   game_id: i32,
   player_id: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct PlayerSender {
-  sender: Sender<Frame>,
-}
-
-#[derive(Debug)]
-pub struct PlayerReceiver {
-  receiver: Receiver<Frame>,
 }

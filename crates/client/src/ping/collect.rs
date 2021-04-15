@@ -357,6 +357,7 @@ impl Handler<SetActive> for PingCollectActor {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_ping_collect() {
   use std::net::Ipv4Addr;
   use std::sync::Arc;
@@ -364,7 +365,6 @@ async fn test_ping_collect() {
   use tokio::sync::mpsc;
   use tokio::sync::Notify;
 
-  flo_log_subscriber::init_env_override("DEBUG");
   let notify = Arc::new(Notify::new());
 
   let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await.unwrap();
