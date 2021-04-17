@@ -13,7 +13,7 @@ use tokio::sync::oneshot;
 
 use tokio::time::sleep;
 
-const TIMEOUT: Duration = Duration::from_secs(5);
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct StartGameCheck {
   pub player_id: i32,
