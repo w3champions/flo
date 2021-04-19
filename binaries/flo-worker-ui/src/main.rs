@@ -43,7 +43,7 @@ pub fn main() {
     opt.installation_path = Some(user_data_path);
   }
   if let Some(controller_host) = opt_from_args.controller_host {
-    opt.token = Some(controller_host);
+    opt.controller_host = Some(controller_host);
   }
 
   log::init(opt.debug);

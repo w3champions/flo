@@ -323,7 +323,15 @@ impl State {
         let resend_frames = player.get_resend_frames();
         let msg = format!("Reconnected to the server: {}", player.player_name());
         guard.broadcast_message(msg);
-        (SlotClientStatus::Loaded, delay, resend_frames)
+        (
+          if guard.sync.tick() > 0 {
+            SlotClientStatus::Loaded
+          } else {
+            SlotClientStatus::Connected
+          },
+          delay,
+          resend_frames,
+        )
       } else {
         (SlotClientStatus::Connected, delay, None)
       }
