@@ -1,6 +1,6 @@
 #[tokio::main]
 async fn main() {
-  flo_log_subscriber::init_env_override("flo=debug,flo_lan=debug");
+  flo_log_subscriber::init_env_override("debug");
 
   let task = flo_client::start(Default::default()).await.unwrap();
   let join = tokio::spawn(task.serve());

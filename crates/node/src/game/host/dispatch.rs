@@ -604,9 +604,8 @@ impl State {
     player_id: i32,
     cmd: ChatCommand<'_>,
   ) -> Result<bool> {
-    let debug = cfg!(debug_assertions);
     match cmd.name() {
-      "drop" if debug => {
+      "drop" => {
         let shared = self.shared.clone();
         let ct = self.ct.clone();
         tokio::spawn(async move {
@@ -718,7 +717,7 @@ impl State {
           lock.private_message(player_id, msg);
         }
       }
-      "step" if debug => match cmd.parse_arguments::<(u16,)>().ok() {
+      "step" => match cmd.parse_arguments::<(u16,)>().ok() {
         Some((step,)) => {
           action_tx.send(ActionMsg::SetStep(step)).await.ok();
         }
