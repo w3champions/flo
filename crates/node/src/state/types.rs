@@ -1,7 +1,5 @@
 use uuid::Uuid;
 
-use crate::client::PlayerSender;
-
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub struct PlayerToken([u8; 16]);
 
@@ -29,11 +27,4 @@ impl PlayerToken {
 pub struct RegisteredPlayer {
   pub player_id: i32,
   pub game_id: i32,
-}
-
-#[derive(Debug)]
-pub struct ConnectedPlayer {
-  pub token: PlayerToken,
-  pub game_id: i32,
-  pub sender: PlayerSender,
 }

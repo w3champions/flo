@@ -60,6 +60,13 @@ impl PacketPayload for IncomingAction {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::IncomingAction;
 }
 
+impl IncomingAction {
+  #[inline]
+  pub fn peek_time_increment_ms(mut data: &[u8]) -> Result<u16> {
+    u16::decode(&mut data).map_err(Into::into)
+  }
+}
+
 impl PacketPayloadEncode for IncomingAction {
   fn encode(&self, buf: &mut BytesMut) {
     self.0.encode(buf)
@@ -128,6 +135,13 @@ impl Iterator for IncomingAction2ChunksIter {
 impl TimeSlot {
   // https://github.com/Josko/aura-bot/blob/1e5df425fd325e9b0e6aa8fa5eed35f0c61f3114/src/game.cpp#L963
   const MAX_ACTION_DATA_LEN: usize = 1452;
+
+  pub fn peek_time_increment_ms(mut bytes: &[u8]) -> Option<u16> {
+    if bytes.len() < size_of::<u16>() {
+      return None;
+    }
+    Some(bytes.get_u16_le())
+  }
 
   /// Splits self to a iterator which yields items with
   /// action data length < `Self::MAX_ACTION_DATA_LEN`

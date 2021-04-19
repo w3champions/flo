@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use tokio::sync::watch::Receiver;
-use tokio::time::{sleep, interval};
+use tokio::time::{interval, sleep};
 
 use flo_util::binary::SockAddr;
 use flo_w3gs::net::W3GSStream;
@@ -16,7 +16,7 @@ use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMe
 
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
-use crate::node::stream::NodeStreamHandle;
+use crate::node::stream::NodeStreamSender;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_w3gs::protocol::constants::ProtoBufMessageTypeId;
 
@@ -32,7 +32,7 @@ pub enum LobbyAction {
 pub struct LobbyHandler<'a> {
   info: &'a LanGameInfo,
   stream: &'a mut W3GSStream,
-  node_stream: Option<&'a mut NodeStreamHandle>,
+  node_stream: Option<&'a mut NodeStreamSender>,
   status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
   starting: bool,
 }
@@ -41,7 +41,7 @@ impl<'a> LobbyHandler<'a> {
   pub fn new(
     info: &'a LanGameInfo,
     stream: &'a mut W3GSStream,
-    node_stream: Option<&'a mut NodeStreamHandle>,
+    node_stream: Option<&'a mut NodeStreamSender>,
     status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
   ) -> Self {
     LobbyHandler {

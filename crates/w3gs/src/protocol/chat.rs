@@ -22,6 +22,13 @@ impl ChatToHost {
     }
   }
 
+  pub fn chat_message(&self) -> Option<&[u8]> {
+    match self.message {
+      ChatMessage::Scoped { ref message, .. } => Some(message.as_bytes()),
+      _ => None,
+    }
+  }
+
   pub fn lobby(from: u8, to: &[u8], message: impl IntoCStringLossy) -> Self {
     ChatToHost {
       to_players_len: to.len() as u8,

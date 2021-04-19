@@ -289,8 +289,6 @@ pub struct PingUpdate {
 async fn test_ping() {
   use tokio::time::sleep;
 
-  flo_log_subscriber::init_env_override("DEBUG");
-
   let addresses: Vec<SocketAddr> = (&[
     "127.0.0.1",
     "139.162.28.191",

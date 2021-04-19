@@ -1139,10 +1139,11 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
+ "backoff",
  "base64 0.12.3",
  "dotenv",
  "flo-config",
@@ -1173,6 +1174,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-futures",
 ]
@@ -1323,6 +1325,7 @@ dependencies = [
 name = "flo-net"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "bytes 1.0.1",
  "flo-constants",
  "flo-state",
@@ -1341,7 +1344,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.1.3"
+version = "0.2.0"
 dependencies = [
  "bytes 1.0.1",
  "dashmap",
@@ -1357,13 +1360,17 @@ dependencies = [
  "futures 0.3.13",
  "hyper",
  "lazy_static",
+ "once_cell",
  "parking_lot",
  "prometheus",
+ "rand 0.8.3",
  "s2-grpc-utils",
+ "slab",
  "smallvec",
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "tracing-futures",
  "uuid 0.8.2",
@@ -1439,6 +1446,7 @@ dependencies = [
  "bytes 1.0.1",
  "enumflags2",
  "flo-codegen",
+ "impl-trait-for-tuples",
  "lazy_static",
  "pretty-hex 0.2.1",
  "thiserror",
@@ -1522,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -2278,6 +2286,17 @@ dependencies = [
  "png",
  "scoped_threadpool",
  "tiff",
+]
+
+[[package]]
+name = "impl-trait-for-tuples"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5dacb10c5b3bb92d46ba347505a9041e676bb20ad220101326bffb0c93031ee"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3963,9 +3982,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "134af885d758d645f0f0505c9a8b3f9bf8a348fd822e112ab5248138348f1722"
+checksum = "83f0c8e7c0addab50b663055baf787d0af7f413a46e6e7fb9559a4e4db7137a5"
 dependencies = [
  "autocfg",
  "bytes 1.0.1",
@@ -4013,6 +4032,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite",
+ "slab",
  "tokio",
 ]
 

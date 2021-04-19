@@ -9,7 +9,7 @@ edition = "2018"
 flo-client = { path = "../../crates/client", features = ["worker"] }
 flo-constants = { path = "../../crates/constants" }
 structopt = { version = "0.3", default-features = false }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "signal"] }
+tokio = { version = "1.5", features = ["rt", "rt-multi-thread", "signal"] }
 tracing-subscriber = "0.2"
 tracing-appender = "0.1"
 tracing = "0.1"

@@ -1,9 +1,7 @@
 use crate::constants::{GAME_PING_INTERVAL, GAME_PING_TIMEOUT};
 use crate::error::*;
-use flo_net::packet::{Frame, PacketTypeId};
-use flo_net::w3gs::{frame_to_w3gs, w3gs_to_frame};
-use flo_w3gs::packet::{Packet, PacketPayload};
-use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
+use flo_net::packet::{FloPacket, Frame};
+use flo_net::proto::flo_common::{PacketPing, PacketPong};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use std::future::Future;
@@ -45,14 +43,9 @@ impl PingStream {
     self.delay.is_some()
   }
 
-  pub fn is_pong_frame(frame: &Frame) -> bool {
-    frame.type_id == PacketTypeId::W3GS
-      && frame.payload.subtype_id() == Some(PongToHost::PACKET_TYPE_ID.into())
-  }
-
   pub fn capture_pong(&mut self, frame: Frame) -> Result<Option<u32>> {
-    let pong: PongToHost = frame_to_w3gs(frame)?.decode_simple()?;
-    let d = if let Some(v) = self.now().checked_sub(pong.payload()) {
+    let pong: PacketPong = frame.decode()?;
+    let d = if let Some(v) = self.now().checked_sub(pong.ms) {
       v
     } else {
       return Ok(None);
@@ -78,8 +71,8 @@ impl PingStream {
   }
 
   fn get_ping_frame(&self) -> Result<Frame> {
-    let pkt = Packet::simple(PingFromHost::with_payload(self.now()))?;
-    Ok(w3gs_to_frame(pkt))
+    let frame = PacketPing { ms: self.now() }.encode_as_frame()?;
+    Ok(frame)
   }
 }
 

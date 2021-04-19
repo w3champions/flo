@@ -59,7 +59,7 @@ pub trait PacketProtoBufMessage: Message + Default {
   const MESSAGE_TYPE_ID: ProtoBufMessageTypeId;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Packet {
   pub header: Header,
   pub payload: Bytes,
@@ -180,7 +180,7 @@ impl Packet {
   }
 }
 
-#[derive(Debug, BinDecode, BinEncode)]
+#[derive(Debug, BinDecode, BinEncode, Clone)]
 pub struct Header {
   #[bin(eq = 0xF7)]
   _sig: u8,

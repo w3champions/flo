@@ -1,10 +1,12 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio::time::error::Elapsed;
 pub use prost::Message;
+use tokio::time::error::Elapsed;
 
+use flo_util::binary::{BinDecode, BinEncode};
 use flo_util::{BinDecode, BinEncode};
 
 use crate::error::{Error, Result};
+use crate::w3gs::{W3GSMetadata, W3GSPacketTypeId};
 
 pub trait FloPacket
 where
@@ -38,42 +40,34 @@ pub struct Frame {
 #[derive(Debug, Clone)]
 pub enum FramePayload {
   Bytes(Bytes),
-  SubTypeBytes(u8, Bytes),
+  W3GS {
+    metadata: W3GSMetadata,
+    payload: Bytes,
+  },
 }
 
 impl FramePayload {
   pub fn len(&self) -> usize {
     match *self {
       FramePayload::Bytes(ref bytes) => bytes.len(),
-      FramePayload::SubTypeBytes(_, ref bytes) => 1 + bytes.len(),
+      FramePayload::W3GS {
+        ref metadata,
+        ref payload,
+      } => metadata.len() + payload.len(),
     }
   }
 
-  pub fn subtype_id(&self) -> Option<u8> {
+  pub fn w3gs_type_id(&self) -> Option<W3GSPacketTypeId> {
     match *self {
       FramePayload::Bytes(_) => None,
-      FramePayload::SubTypeBytes(id, _) => Some(id),
+      FramePayload::W3GS { ref metadata, .. } => Some(metadata.type_id()),
     }
   }
 
-  pub fn into_subtype(self) -> Option<(u8, Bytes)> {
-    match self {
-      FramePayload::Bytes(_) => None,
-      FramePayload::SubTypeBytes(id, bytes) => Some((id, bytes)),
-    }
-  }
-
-  pub fn bytes(&self) -> &[u8] {
+  pub fn w3gs_sid(&self) -> Option<u32> {
     match *self {
-      FramePayload::Bytes(ref bytes) => bytes.as_ref(),
-      FramePayload::SubTypeBytes(_, ref bytes) => bytes.as_ref(),
-    }
-  }
-
-  pub fn into_bytes(self) -> Bytes {
-    match self {
-      FramePayload::Bytes(bytes) => bytes,
-      FramePayload::SubTypeBytes(_, bytes) => bytes,
+      FramePayload::Bytes(_) => None,
+      FramePayload::W3GS { ref metadata, .. } => Some(metadata.sid()),
     }
   }
 }
@@ -92,15 +86,14 @@ impl Frame {
 
     match self.payload {
       FramePayload::Bytes(bytes) => T::decode(bytes).map_err(Into::into),
-      FramePayload::SubTypeBytes(sub_type, bytes) => {
-        let head = &[sub_type] as &[_];
-        T::decode(head.chain(bytes)).map_err(Into::into)
+      FramePayload::W3GS { metadata, payload } => {
+        let head: &[u8] = &[metadata.type_id().into()];
+        T::decode(head.chain(payload)).map_err(Into::into)
       }
     }
   }
 
   pub fn encode(&self, dst: &mut BytesMut) {
-    use flo_util::binary::{BinDecode, BinEncode};
     dst.reserve(Header::MIN_SIZE + self.payload.len());
     self.type_id.encode(dst);
     (self.payload.len() as u16).encode(dst);
@@ -108,9 +101,12 @@ impl Frame {
       FramePayload::Bytes(ref bytes) => {
         dst.put(bytes.as_ref());
       }
-      FramePayload::SubTypeBytes(subtype, ref bytes) => {
-        dst.put_u8(subtype);
-        dst.put(bytes.as_ref());
+      FramePayload::W3GS {
+        ref metadata,
+        ref payload,
+      } => {
+        metadata.encode(dst);
+        dst.put(payload.as_ref());
       }
     }
   }
@@ -119,18 +115,6 @@ impl Frame {
 /// Decodes packet by type id
 /// If no branch matches, returns Err(...)
 ///
-/// ```no_run
-/// flo_net::try_flo_packet! {
-///   frame => {
-///     p = PacketClientDisconnect => {
-///       LobbyEvent::Disconnect(S2ProtoUnpack::unpack(p.reason)?)
-///     },
-///     p = PacketGameInfo => {
-///       LobbyEvent::GameInfo(p.game.extract()?)
-///     },
-///   }
-/// };
-/// ```
 #[macro_export]
 macro_rules! try_flo_packet {
   (
@@ -146,7 +130,7 @@ macro_rules! try_flo_packet {
           let $binding = <$packet_type as $crate::packet::Message>::decode(
             match $frame.payload {
               $crate::packet::FramePayload::Bytes(bytes) => bytes,
-              $crate::packet::FramePayload::SubTypeBytes(_, bytes) => bytes,
+              _ => unreachable!(),
             }
           ).map_err($crate::error::Error::from)?;
           $block
@@ -283,15 +267,6 @@ pub enum PacketTypeId {
   #[bin(value = 0xF7)]
   W3GS,
   UnknownValue(u8),
-}
-
-impl PacketTypeId {
-  pub fn has_subtype(&self) -> bool {
-    match *self {
-      PacketTypeId::W3GS => true,
-      _ => false,
-    }
-  }
 }
 
 macro_rules! packet_type {
