@@ -180,6 +180,7 @@ impl PlayerDispatchInfo {
 
   pub fn set_block(&mut self, delay: Duration) -> Result<()> {
     if let Some(tx) = self.tx.as_ref() {
+      self.lag_duration_ms = delay.as_millis() as _;
       tx.set_block(delay)?;
     }
     Ok(())

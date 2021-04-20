@@ -228,7 +228,7 @@ impl GameSessionHandle {
     if source == SlotClientStatusUpdateSource::Node {
       match next_status {
         // clean up sender
-        SlotClientStatus::Disconnected => {
+        SlotClientStatus::Disconnected | SlotClientStatus::Left => {
           if let Some(v) = slot.sender.take() {
             tracing::debug!(player_id, "remove stream: {}", v.stream_id());
           }

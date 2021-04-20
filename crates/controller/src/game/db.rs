@@ -700,7 +700,11 @@ pub fn get_player_active_slots(conn: &DbConn, player_id: i32) -> Result<Vec<Play
     .select((game_used_slot::game_id, UsedSlotInfo::columns()))
     .filter(game::status.eq(any(GameStatus::active_variants())))
     .filter(game_used_slot::player_id.eq(player_id))
-    .filter(game_used_slot::client_status.ne(SlotClientStatus::Left))
+    .filter(
+      game_used_slot::client_status.ne(all(
+        &[SlotClientStatus::Disconnected, SlotClientStatus::Left] as &[_],
+      )),
+    )
     .order(game_used_slot::created_at)
     .load(conn)?;
   Ok(rows)

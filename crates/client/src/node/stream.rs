@@ -72,6 +72,7 @@ impl NodeStream {
       tick: 0,
       ack: 0,
       time: 0,
+      last_connected_at: None,
     };
 
     tokio::spawn(
@@ -108,6 +109,7 @@ struct Session {
   tick: u32,
   time: u32,
   ack: u32,
+  last_connected_at: Option<Instant>,
 }
 
 impl Session {
@@ -122,7 +124,22 @@ impl Session {
 
     loop {
       let conn: Connection = {
+        if self
+          .last_connected_at
+          .map(|v| Instant::now() - v > Connection::MIN_DURATION)
+          .unwrap_or(false)
+        {
+          reconnect_backoff.reset();
+        }
+
         loop {
+          if self.last_connected_at.is_some() {
+            self
+              .send_private_message("Reconnecting to the server...")
+              .await
+              .ok();
+          }
+
           tokio::select! {
             _ = ct.cancelled() => {
               return;
@@ -136,12 +153,13 @@ impl Session {
                   tracing::error!("connect node: {}", err);
                   use flo_net::proto::flo_node::ClientConnectRejectReason;
                   match err {
-                    Error::NodeConnectionRejected(reason, _) if reason == ClientConnectRejectReason::InvalidToken => {
+                    Error::NodeConnectionRejected(reason, _) if reason != ClientConnectRejectReason::Multi => {
                       self.notify_disconnected().await;
                       return
                     },
                     _ => {
                       if let Some(delay) = reconnect_backoff.next_backoff() {
+                        tracing::error!("connect node error: {:?}", err);
                         sleep(delay).await;
                       } else {
                         tracing::error!("connect node: timeout");
@@ -157,7 +175,7 @@ impl Session {
         }
       };
 
-      reconnect_backoff.reset();
+      self.last_connected_at.replace(Instant::now());
       tracing::debug!("node connected.");
 
       match conn.run(&mut self).await {
@@ -167,13 +185,11 @@ impl Session {
             return;
           }
           ConnectionRunResult::NodeDisconnected => {
-            reconnect_backoff.reset();
             tracing::error!("node disconnected");
             tracing::error!("reconnecting...");
-            self
-              .send_private_message("Reconnecting to the server...")
-              .await
-              .ok();
+            if let Some(delay) = reconnect_backoff.next_backoff() {
+              sleep(delay).await;
+            }
           }
         },
         Err(err) => {
@@ -284,6 +300,7 @@ struct Connection {
 }
 
 impl Connection {
+  const MIN_DURATION: Duration = Duration::from_secs(30);
   const HOST_PING_TIMEOUT: Duration = Duration::from_secs(3);
 
   fn reset_timeout(t: Pin<&mut Sleep>) {

@@ -13,7 +13,6 @@ pub type GlobalEventSender = Sender<GlobalEvent>;
 pub enum GlobalEvent {
   // A game has ended, remove the session from global state
   GameEnded(i32),
-  // Shutdown,
 }
 
 impl FloEvent for GlobalEvent {
@@ -35,7 +34,7 @@ pub async fn handle_global_events(
       GlobalEvent::GameEnded(game_id) => {
         tracing::debug!(game_id, "game ended: {}", game_id);
         ctx.state.end_game(game_id);
-      } // GlobalEvent::Shutdown => {}
+      }
     }
   }
   Ok(())

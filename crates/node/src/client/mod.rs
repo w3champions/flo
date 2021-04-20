@@ -66,11 +66,11 @@ pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
           if let Some(mut stream) = stream {
             stream
               .send(PacketClientConnectReject {
-                reason: if let Error::PlayerConnectionExists = err {
-                  ClientConnectRejectReason::Multi.into()
-                } else {
-                  ClientConnectRejectReason::Unknown.into()
-                },
+                reason: match err {
+                  Error::PlayerConnectionExists => ClientConnectRejectReason::Multi,
+                  _ => ClientConnectRejectReason::Unknown,
+                }
+                .into(),
                 message: format!("Register: {}", err),
               })
               .await
