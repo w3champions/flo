@@ -1,9 +1,10 @@
-use futures::lock::Mutex;
-use futures::FutureExt;
-use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use futures::lock::Mutex;
+use futures::FutureExt;
+use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use tokio::sync::mpsc::Sender;
 use tracing_futures::Instrument;
 
@@ -13,19 +14,16 @@ use flo_net::proto::flo_node as proto;
 use flo_net::stream::FloStream;
 use flo_task::SpawnScope;
 pub use flo_types::node::*;
+use host::stream::PlayerStreamHandle;
+pub use host::AckError;
+use host::GameHost;
 
+use crate::controller::ControllerServerHandle;
 use crate::error::*;
+use crate::state::event::GlobalEventSender;
 use crate::state::GlobalEvent;
 
 mod host;
-pub use host::AckError;
-
-use crate::controller::ControllerServerHandle;
-use crate::game::player_stream::PlayerStreamHandle;
-use crate::state::event::GlobalEventSender;
-use host::GameHost;
-
-mod player_stream;
 
 #[derive(Debug)]
 pub enum GameEvent {
@@ -158,7 +156,7 @@ impl GameSessionHandle {
     player_id: i32,
     stream: FloStream,
   ) -> Result<(), (Option<FloStream>, Error)> {
-    use player_stream::PlayerStream;
+    use host::stream::PlayerStream;
 
     let mut guard = self.0.lock().await;
     {
@@ -168,7 +166,7 @@ impl GameSessionHandle {
         return Err((stream.into(), Error::PlayerNotFoundInGame));
       };
 
-      if slot.sender.as_ref().is_some() {
+      if slot.sender.is_some() {
         return Err((stream.into(), Error::PlayerConnectionExists));
       }
 
@@ -231,8 +229,8 @@ impl GameSessionHandle {
       match next_status {
         // clean up sender
         SlotClientStatus::Disconnected => {
-          if let Some(_) = slot.sender.take() {
-            tracing::debug!(player_id, "remove peer stream");
+          if let Some(v) = slot.sender.take() {
+            tracing::debug!(player_id, "remove stream: {}", v.stream_id());
           }
           if slot.client_status == SlotClientStatus::Left {
             return Ok(());

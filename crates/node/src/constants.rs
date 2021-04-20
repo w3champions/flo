@@ -14,8 +14,8 @@ pub const CONTROLLER_SENDER_BUF_SIZE: usize = 10;
 pub const GAME_DISPATCH_BUF_SIZE: usize = 256;
 pub const GAME_PLAYER_LAGGING_THRESHOLD_MS: u32 = 1000;
 pub const GAME_DEFAULT_STEP_MS: u16 = 20;
-pub const GAME_PING_INTERVAL: Duration = Duration::from_secs(5);
-pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(10);
+pub const GAME_PING_INTERVAL: Duration = Duration::from_secs(1);
+pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[cfg(not(debug_assertions))]
 pub const GAME_DELAY_RANGE: [Duration; 2] = [Duration::from_millis(25), Duration::from_millis(100)];

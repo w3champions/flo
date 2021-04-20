@@ -1,19 +1,12 @@
-use futures::future::abortable;
-use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Notify;
-use tokio::time::sleep;
-use tokio_stream::StreamExt;
-
 use flo_net::connect;
 use flo_net::listener::FloListener;
 use flo_net::packet::FloPacket;
 use flo_net::packet::OptionalFieldExt;
 use flo_net::proto;
 use flo_net::stream::FloStream;
-use flo_net::time::StopWatch;
+use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
+use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::error::*;
 use crate::state::{ActorMapExt, ControllerStateRef};
@@ -29,7 +22,9 @@ use crate::game::SlotSettings;
 use crate::node::messages::ListNode;
 use crate::player::state::conn::{Connect, Disconnect};
 use crate::player::state::ping::{GetPlayersPingSnapshot, UpdatePing};
+use flo_net::ping::{PingMsg, PingStream};
 use flo_types::ping::PingStats;
+use futures::{StreamExt, TryStreamExt};
 pub use sender::{PlayerReceiver, PlayerSender, PlayerSenderMessage};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
@@ -96,29 +91,21 @@ async fn handle_stream(
 
   send_initial_state(state.clone(), &mut stream, sender).await?;
 
-  let stop_watch = StopWatch::new();
-  let ping_timeout_notify = Arc::new(Notify::new());
-  let mut ping_timeout_abort = None;
+  let mut ping = PingStream::interval(PING_INTERVAL, PING_TIMEOUT);
+  ping.start();
 
-  let mut next_ping = Box::pin(sleep(PING_INTERVAL));
   loop {
     tokio::select! {
-      _ = &mut next_ping => {
-        let notify = ping_timeout_notify.clone();
-
-        stream.send(proto::flo_common::PacketPing {
-          ms: stop_watch.elapsed_ms()
-        }).await?;
-        let (set_ping_timeout, abort) = abortable(async move {
-          sleep(PING_TIMEOUT).await;
-          notify.notify_one();
-        });
-        ping_timeout_abort = Some(abort);
-        tokio::spawn(set_ping_timeout);
-      }
-      _ = ping_timeout_notify.notified() => {
-          tracing::debug!("heartbeat timeout");
-          break;
+      Some(msg) = ping.next() => {
+        match msg {
+          PingMsg::Ping(frame) => {
+            stream.send_frame(frame).await?;
+          },
+          PingMsg::Timeout => {
+            tracing::debug!("heartbeat timeout");
+            break;
+          },
+        }
       }
       next = receiver.recv() => {
         if let Some(msg) = next {
@@ -145,18 +132,14 @@ async fn handle_stream(
         }
       }
       incoming = stream.recv_frame() => {
-        if let Some(abort) = ping_timeout_abort.take() {
-          abort.abort();
-        }
-
         let frame = incoming?;
+        if frame.type_id == PingStream::PONG_TYPE_ID {
+          ping.capture_pong(frame);
+          continue;
+        }
 
         flo_net::try_flo_packet! {
           frame => {
-            packet: proto::flo_common::PacketPong => {
-              //TODO: save ping and display on UI
-              // tracing::debug!("pong, latency = {}", stop_watch.elapsed_ms().saturating_sub(packet.ms));
-            }
             packet: proto::flo_connect::PacketGameSlotUpdateRequest => {
               handle_game_slot_update_request(state.clone(), player_id, packet).await?;
             }
@@ -188,9 +171,6 @@ async fn handle_stream(
         }
       }
     }
-    next_ping
-      .as_mut()
-      .reset(tokio::time::Instant::now() + PING_INTERVAL);
   }
 
   Ok(())

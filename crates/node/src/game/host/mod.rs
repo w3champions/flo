@@ -1,21 +1,20 @@
+use s2_grpc_utils::S2ProtoEnum;
+
+use dispatch::Dispatcher;
+use flo_net::packet::*;
+pub use sync::AckError;
+
+use crate::error::*;
+use crate::game::host::stream::{PlayerStream, PlayerStreamHandle};
+use crate::game::{GameEventSender, NodeGameStatusSnapshot, PlayerSlot};
+
 mod broadcast;
 mod clock;
 mod delay;
 mod dispatch;
-mod ping;
 mod player;
+pub mod stream;
 mod sync;
-pub use sync::AckError;
-
-use dispatch::Dispatcher;
-
-use s2_grpc_utils::S2ProtoEnum;
-
-use flo_net::packet::*;
-
-use crate::error::*;
-use crate::game::player_stream::{PlayerStream, PlayerStreamHandle};
-use crate::game::{GameEventSender, NodeGameStatusSnapshot, PlayerSlot};
 
 #[derive(Debug)]
 pub struct GameHost {

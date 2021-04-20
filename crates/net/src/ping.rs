@@ -1,7 +1,4 @@
-use crate::constants::{GAME_PING_INTERVAL, GAME_PING_TIMEOUT};
-use crate::error::*;
-use flo_net::packet::{FloPacket, Frame};
-use flo_net::proto::flo_common::{PacketPing, PacketPong};
+use crate::packet::{Frame, FramePayload, PacketTypeId};
 use futures::stream::Stream;
 use futures::task::{Context, Poll};
 use std::future::Future;
@@ -15,6 +12,8 @@ pub struct PingStream {
   delay: Option<Pin<Box<Sleep>>>,
   delay_reason: SleepReason,
   waker: Option<Waker>,
+  interval: Duration,
+  timeout: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -24,12 +23,17 @@ enum SleepReason {
 }
 
 impl PingStream {
-  pub fn new() -> Self {
+  pub const PING_TYPE_ID: PacketTypeId = PacketTypeId::Ping;
+  pub const PONG_TYPE_ID: PacketTypeId = PacketTypeId::Pong;
+
+  pub fn interval(interval: Duration, timeout: Duration) -> Self {
     Self {
       base_instant: Instant::now(),
       delay: None,
       delay_reason: SleepReason::Ping,
       waker: None,
+      interval,
+      timeout,
     }
   }
 
@@ -39,29 +43,46 @@ impl PingStream {
     self.waker.take().map(|w| w.wake());
   }
 
+  pub fn stop(&mut self) {
+    self.delay_reason = SleepReason::Ping;
+    self.delay.take();
+  }
+
   pub fn started(&self) -> bool {
     self.delay.is_some()
   }
 
-  pub fn capture_pong(&mut self, frame: Frame) -> Result<Option<u32>> {
-    let pong: PacketPong = frame.decode()?;
-    let d = if let Some(v) = self.now().checked_sub(pong.ms) {
+  pub fn capture_pong(&mut self, frame: Frame) -> Option<u32> {
+    let payload = match frame.payload {
+      FramePayload::Bytes(ref bytes) => {
+        if let Some(slice) = bytes.get(0..4) {
+          let mut bytes = [0; 4];
+          bytes.copy_from_slice(slice);
+          u32::from_be_bytes(bytes)
+        } else {
+          return None;
+        }
+      }
+      FramePayload::W3GS { .. } => return None,
+    };
+
+    let d = if let Some(v) = self.now().checked_sub(payload) {
       v
     } else {
-      return Ok(None);
+      return None;
     };
     if let Some(ref mut delay) = self.delay {
       delay
         .as_mut()
-        .reset((Instant::now() + GAME_PING_INTERVAL).into());
+        .reset((Instant::now() + self.interval).into());
     } else {
-      return Ok(None);
+      return None;
     }
     match self.delay_reason {
       SleepReason::Ping => {}
       SleepReason::PongTimeout => self.delay_reason = SleepReason::Ping,
     };
-    Ok(Some(d))
+    Some(d)
   }
 
   fn now(&self) -> u32 {
@@ -70,14 +91,13 @@ impl PingStream {
       .as_millis() as u32
   }
 
-  fn get_ping_frame(&self) -> Result<Frame> {
-    let frame = PacketPing { ms: self.now() }.encode_as_frame()?;
-    Ok(frame)
+  fn get_ping_frame(&self) -> Frame {
+    Frame::new(Self::PING_TYPE_ID, self.now().to_be_bytes())
   }
 }
 
 impl Stream for PingStream {
-  type Item = Result<Msg>;
+  type Item = PingMsg;
 
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     if let Some(delay) = self.delay.as_mut() {
@@ -91,11 +111,11 @@ impl Stream for PingStream {
 
     let (msg, reason, duration) = match self.delay_reason {
       SleepReason::Ping => (
-        Msg::Ping(self.get_ping_frame()?),
+        PingMsg::Ping(self.get_ping_frame()),
         SleepReason::PongTimeout,
-        GAME_PING_TIMEOUT,
+        self.timeout,
       ),
-      SleepReason::PongTimeout => (Msg::Timeout, SleepReason::Ping, GAME_PING_INTERVAL),
+      SleepReason::PongTimeout => (PingMsg::Timeout, SleepReason::Ping, self.interval),
     };
 
     self.delay_reason = reason;
@@ -105,11 +125,11 @@ impl Stream for PingStream {
       .map(|delay| delay.as_mut().reset((Instant::now() + duration).into()))
       .unwrap();
 
-    Poll::Ready(Some(Ok(msg)))
+    Poll::Ready(Some(msg))
   }
 }
 
-pub enum Msg {
+pub enum PingMsg {
   Ping(Frame),
   Timeout,
 }

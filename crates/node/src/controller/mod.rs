@@ -7,8 +7,7 @@ use tracing_futures::Instrument;
 
 use flo_constants::NODE_CONTROLLER_PORT;
 use flo_net::listener::FloListener;
-use flo_net::packet::{FloPacket, Frame};
-use flo_net::proto::flo_common::*;
+use flo_net::packet::Frame;
 use flo_net::proto::flo_node::*;
 use flo_net::stream::FloStream;
 use flo_net::try_flo_packet;
@@ -16,6 +15,7 @@ use flo_task::{SpawnScope, SpawnScopeHandle};
 
 use crate::error::*;
 use crate::state::GlobalStateRef;
+use flo_net::ping::PingStream;
 
 #[derive(Debug)]
 pub struct ControllerServer {
@@ -167,8 +167,14 @@ async fn handle_stream(
   Ok(())
 }
 
-async fn handle_frame(state: &Arc<State>, frame: Frame) -> Result<()> {
+async fn handle_frame(state: &Arc<State>, mut frame: Frame) -> Result<()> {
   let tx = &state.frame_tx;
+  if frame.type_id == PingStream::PING_TYPE_ID {
+    frame.type_id = PingStream::PONG_TYPE_ID;
+    tx.send(frame).await.ok();
+    return Ok(());
+  }
+
   try_flo_packet! {
     frame => {
       pkt: PacketControllerCreateGame => {
@@ -178,11 +184,6 @@ async fn handle_frame(state: &Arc<State>, frame: Frame) -> Result<()> {
       pkt: PacketControllerUpdateSlotStatus => {
         let frame = state.g_state.handle_controller_update_slot_client_status(pkt).await?;
         flo_log::result_ok!("update slot status", tx.send(frame).await);
-      }
-      pkt: PacketPing => {
-        flo_log::result_ok!("ping", tx.send(PacketPong {
-          ms: pkt.ms
-        }.encode_as_frame()?).await);
       }
     }
   }

@@ -5,13 +5,14 @@ use super::player::{PlayerDispatchInfo, PlayerSendError};
 use super::sync::SyncMap;
 use crate::error::*;
 use crate::game::host::clock::Tick;
+use crate::game::host::stream::{PlayerStream, PlayerStreamCmd, PlayerStreamHandle};
 use crate::game::host::sync::PlayerDesync;
-use crate::game::player_stream::{PlayerStream, PlayerStreamCmd, PlayerStreamHandle};
 use crate::game::{
   GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
   SlotClientStatusUpdateSource,
 };
 use flo_net::packet::{Frame, PacketTypeId};
+use flo_net::ping::{PingMsg, PingStream};
 use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket};
 use flo_util::chat::{parse_chat_command, ChatCommand};
 use flo_w3gs::action::{IncomingAction, OutgoingKeepAlive};
@@ -30,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::{oneshot, Notify};
+use tokio::sync::{oneshot, watch, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
@@ -74,10 +75,11 @@ impl Dispatcher {
   pub fn new(game_id: i32, slots: &[PlayerSlot], out_tx: GameEventSender) -> Self {
     let ct = CancellationToken::new();
     let start_notify = Arc::new(Notify::new());
+    let (status_tx, status_rx) = watch::channel(DispatchStatus::Pending);
     let (cmd_tx, cmd_rx) = channel(10);
     let (action_tx, action_rx) = channel(10);
 
-    let state = State::new(game_id, slots, action_tx.clone(), ct.clone());
+    let state = State::new(game_id, slots, status_rx, action_tx.clone(), ct.clone());
 
     let mut start_messages = vec![];
     if !state.chat_banned_player_ids.is_empty() {
@@ -89,6 +91,7 @@ impl Dispatcher {
         state.shared.clone(),
         start_messages,
         start_notify.clone(),
+        status_tx,
         action_rx,
         ct.clone(),
       )
@@ -147,7 +150,7 @@ impl Dispatcher {
           }
         }
         Some(cmd) = rx.recv() => {
-          match state.dispatch_cmd(cmd, &peer_tx, &mut out_tx).await {
+          match state.dispatch_cmd(cmd, &peer_tx, &mut action_tx, &mut out_tx).await {
             Ok(_) => {},
             Err(Error::Cancelled) => {},
             Err(err) => {
@@ -163,6 +166,7 @@ impl Dispatcher {
     shared: Arc<Mutex<Shared>>,
     start_messages: Vec<String>,
     start_notify: Arc<Notify>,
+    status_tx: watch::Sender<DispatchStatus>,
     mut rx: Receiver<ActionMsg>,
     ct: CancellationToken,
   ) {
@@ -174,6 +178,9 @@ impl Dispatcher {
     };
 
     if started {
+      shared.lock().set_started();
+      status_tx.send(DispatchStatus::Running).ok();
+
       if !start_messages.is_empty() {
         let mut shared = shared.lock();
         for msg in start_messages {
@@ -199,12 +206,21 @@ impl Dispatcher {
                   .lock()
                   .broadcast_message(format!("Game step has been set to {}ms.", tick_stream.step()));
               },
-              ActionMsg::PauseClock => {
-                tick_stream.pause();
+              ActionMsg::CheckStopLag => {
+                if tick_stream.is_paused() {
+                  match shared.lock().check_stop_lag() {
+                    Ok(true) => {
+                      tick_stream.resume();
+                      status_tx.send(DispatchStatus::Running).ok();
+                      tracing::info!("all lagging player dropped or resumed");
+                    },
+                    Err(err) => {
+                      tracing::error!("check_stop_lag: {}", err);
+                    },
+                    _ => {}
+                  }
+                }
               },
-              ActionMsg::ResumeClock => {
-                tick_stream.resume();
-              }
             }
           }
           Some(tick) = tick_stream.next() => {
@@ -213,6 +229,7 @@ impl Dispatcher {
               Ok(DispatchResult::Lag(tick)) => {
                 tick_stream.replace_actions(tick.actions);
                 tick_stream.pause();
+                status_tx.send(DispatchStatus::Paused).ok();
               }
               Err(err) => {
                 tracing::error!("dispatch action tick: {}", err);
@@ -230,8 +247,7 @@ impl Dispatcher {
 enum ActionMsg {
   PlayerAction(PlayerAction),
   SetStep(u16),
-  PauseClock,
-  ResumeClock,
+  CheckStopLag,
 }
 
 #[derive(Debug)]
@@ -239,6 +255,7 @@ struct State {
   game_id: i32,
   ct: CancellationToken,
   shared: Arc<Mutex<Shared>>,
+  status_rx: watch::Receiver<DispatchStatus>,
   game_player_id_lookup: BTreeMap<u8, i32>,
   player_name_lookup: BTreeMap<i32, String>,
   chat_banned_player_ids: Vec<i32>,
@@ -249,6 +266,7 @@ impl State {
   fn new(
     game_id: i32,
     slots: &[PlayerSlot],
+    status_rx: watch::Receiver<DispatchStatus>,
     _action_tx: Sender<ActionMsg>,
     ct: CancellationToken,
   ) -> Self {
@@ -256,6 +274,7 @@ impl State {
       game_id,
       ct,
       shared: Arc::new(Mutex::new(Shared::new(game_id, slots))),
+      status_rx,
       game_player_id_lookup: slots
         .into_iter()
         .map(|slot| ((slot.id + 1) as u8, slot.player.player_id))
@@ -282,12 +301,17 @@ impl State {
     &mut self,
     cmd: Cmd,
     peer_tx: &Sender<PeerMsg>,
+    action_tx: &mut Sender<ActionMsg>,
     out_tx: &mut GameEventSender,
   ) -> Result<()> {
     match cmd {
       Cmd::RegisterStream { stream, tx } => {
-        tx.send(self.register_stream(stream, peer_tx, out_tx).await)
-          .ok();
+        tx.send(
+          self
+            .register_stream(stream, peer_tx, action_tx, out_tx)
+            .await,
+        )
+        .ok();
       }
     }
 
@@ -298,6 +322,7 @@ impl State {
     &mut self,
     stream: PlayerStream,
     peer_tx: &Sender<PeerMsg>,
+    action_tx: &mut Sender<ActionMsg>,
     out_tx: &mut GameEventSender,
   ) -> Result<PlayerStreamHandle> {
     let game_id = self.game_id;
@@ -311,7 +336,7 @@ impl State {
     let (peer_cmd_tx, peer_cmd_rx) = channel(crate::constants::PEER_CHANNEL_SIZE);
     let sender = PlayerStreamHandle::new(&stream, peer_cmd_tx.clone());
 
-    let (status, delay, resend_frames) = {
+    let (status, delay, reconnected, resend_frames) = {
       let mut guard = self.shared.lock();
       let player = guard
         .get_player(player_id)
@@ -324,18 +349,26 @@ impl State {
         let msg = format!("Reconnected to the server: {}", player.player_name());
         guard.broadcast_message(msg);
         (
-          if guard.sync.tick() > 0 {
+          if *self.status_rx.borrow() != DispatchStatus::Pending {
             SlotClientStatus::Loaded
           } else {
             SlotClientStatus::Connected
           },
           delay,
+          reconnected,
           resend_frames,
         )
       } else {
-        (SlotClientStatus::Connected, delay, None)
+        (SlotClientStatus::Connected, delay, reconnected, None)
       }
     };
+
+    if reconnected {
+      action_tx
+        .send(ActionMsg::CheckStopLag)
+        .await
+        .map_err(|_| Error::Cancelled)?;
+    }
 
     out_tx
       .send(GameEvent::PlayerStatusChange(
@@ -346,7 +379,13 @@ impl State {
       .await
       .map_err(|_| Error::Cancelled)?;
 
-    let mut worker = PeerWorker::new(stream, peer_cmd_rx, peer_tx.clone(), delay);
+    let mut worker = PeerWorker::new(
+      stream,
+      self.status_rx.clone(),
+      peer_cmd_rx,
+      peer_tx.clone(),
+      delay,
+    );
     tokio::spawn(
       async move {
         if let Err(err) = worker.serve(resend_frames).await {
@@ -391,22 +430,21 @@ impl State {
         player_id,
         stream_id,
       } => {
-        if let Some(player) = self.shared.lock().get_player(player_id) {
-          if player.stream_id() == Some(stream_id) {
-            player.close_sender();
-          }
+        tracing::debug!(player_id, "player stream closed: {}", stream_id);
+        if self.left_players.contains(&player_id) {
+          return Ok(());
+        } else {
+          self.shared.lock().close_player_stream(player_id)?;
         }
 
-        if !self.left_players.contains(&player_id) {
-          out_tx
-            .send(GameEvent::PlayerStatusChange(
-              player_id,
-              SlotClientStatus::Disconnected,
-              SlotClientStatusUpdateSource::Node,
-            ))
-            .await
-            .map_err(|_| Error::Cancelled)?;
-        }
+        out_tx
+          .send(GameEvent::PlayerStatusChange(
+            player_id,
+            SlotClientStatus::Disconnected,
+            SlotClientStatusUpdateSource::Node,
+          ))
+          .await
+          .map_err(|_| Error::Cancelled)?;
       }
     }
     Ok(())
@@ -471,7 +509,7 @@ impl State {
             .get_player(player_id)
             .ok_or_else(|| Error::PlayerNotFoundInGame)?;
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
-          player.close_sender();
+          player.close_stream();
           guard.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
         }
 
@@ -495,7 +533,7 @@ impl State {
           RequestDropResult::Done(dropped_player_ids) => {
             self.left_players.extend(dropped_player_ids);
             action_tx
-              .send(ActionMsg::ResumeClock)
+              .send(ActionMsg::CheckStopLag)
               .await
               .map_err(|_| Error::Cancelled)?;
           }
@@ -511,10 +549,9 @@ impl State {
         let res = self.shared.lock().ack(player_id, checksum);
         match res {
           Ok(AckAction::Continue) => {}
-          Ok(AckAction::ResumeClock) => {
-            tracing::info!("all lagging player dropped or resumed.");
+          Ok(AckAction::CheckStopLag) => {
             action_tx
-              .send(ActionMsg::ResumeClock)
+              .send(ActionMsg::CheckStopLag)
               .await
               .map_err(|_| Error::Cancelled)?;
           }
@@ -607,13 +644,25 @@ impl State {
     match cmd.name() {
       "drop" => {
         let shared = self.shared.clone();
-        let ct = self.ct.clone();
         tokio::spawn(async move {
           shared
             .lock()
             .get_player(player_id)
-            .map(|v| v.close_sender());
+            .map(|v| v.close_stream());
         });
+      }
+      "block" => {
+        if let Some(Some((ms,))) = cmd.parse_arguments::<Option<(u64,)>>().ok() {
+          self.shared.clone().lock().get_player(player_id).map(|p| {
+            p.set_block(Duration::from_millis(ms)).ok();
+            tracing::debug!(player_id, "block for {}ms", ms);
+          });
+        } else {
+          self
+            .shared
+            .lock()
+            .private_message(player_id, "Invalid syntax, usage: !block 30");
+        }
       }
       "delay" => {
         if let Some(Some((ms,))) = cmd.parse_arguments::<Option<(u16,)>>().ok() {
@@ -621,13 +670,21 @@ impl State {
 
           if ms == 0 {
             let mut guard = self.shared.lock();
-            let name = guard.get_player(player_id).map(|player| {
-              player.set_delay(None);
-              player.player_name().to_string()
-            });
-            if let Some(name) = name {
-              guard.broadcast_message(format!("Removed delay for {}", name));
-            }
+            match guard
+              .get_player(player_id)
+              .map(|player| -> Result<_> {
+                player.set_delay(None)?;
+                Ok(player.player_name().to_string())
+              })
+              .transpose()
+            {
+              Ok(name) => {
+                if let Some(name) = name {
+                  guard.broadcast_message(format!("Removed delay for {}", name));
+                }
+              }
+              Err(_) => {}
+            };
             return Ok(true);
           }
 
@@ -636,7 +693,7 @@ impl State {
             self.shared.lock().private_message(
               player_id,
               format!(
-                "Invalid value, range {} ~ {}",
+                "Invalid value, range {} - {}",
                 min.as_millis(),
                 max.as_millis()
               ),
@@ -646,13 +703,21 @@ impl State {
 
           {
             let mut guard = self.shared.lock();
-            let name = guard.get_player(player_id).map(|player| {
-              player.set_delay(Some(duration));
-              player.player_name().to_string()
-            });
-            if let Some(name) = name {
-              guard.broadcast_message(format!("Set delay for {}: {}ms", name, ms));
-            }
+            match guard
+              .get_player(player_id)
+              .map(|player| -> Result<_> {
+                player.set_delay(Some(duration))?;
+                Ok(player.player_name().to_string())
+              })
+              .transpose()
+            {
+              Ok(name) => {
+                if let Some(name) = name {
+                  guard.broadcast_message(format!("Set delay for {}: {}ms", name, ms));
+                }
+              }
+              Err(_) => {}
+            };
           }
         } else {
           let mut lock = self.shared.lock();
@@ -737,6 +802,7 @@ impl State {
 #[derive(Debug)]
 struct Shared {
   game_id: i32,
+  started: bool,
   map: BTreeMap<i32, PlayerDispatchInfo>,
   sync: SyncMap,
   lagging_player_ids: BTreeSet<i32>,
@@ -748,6 +814,7 @@ impl Shared {
     let sync = SyncMap::new(slots.iter().map(|s| s.player.player_id).collect());
     Self {
       game_id,
+      started: false,
       map: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, PlayerDispatchInfo::new(slot)))
@@ -756,6 +823,10 @@ impl Shared {
       lagging_player_ids: BTreeSet::new(),
       drop_votes: BTreeSet::new(),
     }
+  }
+
+  fn set_started(&mut self) {
+    self.started = true;
   }
 
   fn get_player(&mut self, player_id: i32) -> Option<&mut PlayerDispatchInfo> {
@@ -781,9 +852,14 @@ impl Shared {
 
   fn handle_lag(&mut self, add_player_ids: Vec<i32>) -> Result<bool> {
     self.lagging_player_ids.extend(add_player_ids);
-    if let Some((pkt, ids)) = self.refresh_lag_packet()? {
+    if let Some((pkt, ids, slots)) = self.refresh_lag_packet()? {
       self.drop_votes.clear();
       self.broadcast(pkt, broadcast::DenyList(&ids))?;
+      for (id, info) in &mut self.map {
+        if !ids.contains(id) {
+          info.set_lag_slots(slots.iter().cloned());
+        }
+      }
       Ok(true)
     } else {
       Ok(false)
@@ -797,26 +873,42 @@ impl Shared {
     let mut stop_lag_players = vec![];
     let mut packets = vec![];
     for (id, info) in &mut self.map {
-      if self.lagging_player_ids.contains(id) {
+      if info.stream_id().is_some() && self.lagging_player_ids.contains(id) {
         if self.sync.player_pending_ticks(*id) == Some(0) {
           self.lagging_player_ids.remove(id);
           stop_lag_players.push(*id);
-          packets.push(W3GSPacket::simple(StopLag(LagPlayer {
-            player_id: info.slot_player_id(),
-            lag_duration_ms: info.end_lag(),
-          }))?);
+          let slot = info.slot_player_id();
+          packets.push((
+            slot,
+            W3GSPacket::simple(StopLag(LagPlayer {
+              player_id: info.slot_player_id(),
+              lag_duration_ms: info.end_lag(),
+            }))?,
+          ));
         }
       }
     }
-    for pkt in packets {
-      self.broadcast(pkt, broadcast::DenyList(&stop_lag_players))?;
+    for (slot, pkt) in packets {
+      let targets = self
+        .map
+        .iter_mut()
+        .filter_map(|(id, p)| {
+          if p.remove_lag_slot(slot) {
+            Some(*id)
+          } else {
+            None
+          }
+        })
+        .collect::<Vec<_>>();
+      self.broadcast(pkt, broadcast::AllowList(&targets))?;
     }
 
     Ok(self.lagging_player_ids.is_empty())
   }
 
-  fn refresh_lag_packet(&mut self) -> Result<Option<(W3GSPacket, Vec<i32>)>> {
+  fn refresh_lag_packet(&mut self) -> Result<Option<(W3GSPacket, Vec<i32>, Vec<u8>)>> {
     let mut lag_player_ids = Vec::with_capacity(self.lagging_player_ids.len());
+    let mut lag_slot_ids = Vec::with_capacity(self.lagging_player_ids.len());
     let lag_players: Vec<_> = self
       .lagging_player_ids
       .clone()
@@ -825,6 +917,7 @@ impl Shared {
         let player = self.get_player(player_id)?;
         let slot_player_id = player.slot_player_id();
         lag_player_ids.push(player_id);
+        lag_slot_ids.push(slot_player_id);
         Some(LagPlayer {
           player_id: slot_player_id,
           lag_duration_ms: player.start_lag(),
@@ -844,11 +937,36 @@ impl Shared {
     }
 
     let payload = StartLag::new(lag_players);
-    Ok(Some((W3GSPacket::simple(payload)?, lag_player_ids)))
+    Ok(Some((
+      W3GSPacket::simple(payload)?,
+      lag_player_ids,
+      lag_slot_ids,
+    )))
   }
 
-  fn disconnect_player_and_broadcast(&mut self, player_id: i32) -> Result<()> {
-    let player = if let Some(v) = self.get_player(player_id) {
+  fn close_player_stream(&mut self, player_id: i32) -> Result<()> {
+    if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| v.take_stream()) {
+      if self.started {
+        // player disconnected without LeaveReq
+        if !self.lagging_player_ids.contains(&player_id) {
+          self.handle_lag(vec![player_id])?;
+        }
+        stream.close();
+      } else {
+        tracing::warn!(
+          game_id = self.game_id,
+          player_id,
+          "player dropped before game start"
+        );
+        self.remove_player_and_broadcast(player_id)?;
+      }
+    }
+    return Ok(());
+  }
+
+  fn remove_player_and_broadcast(&mut self, player_id: i32) -> Result<()> {
+    tracing::info!(game_id = self.game_id, player_id, "remove player");
+    let mut player = if let Some(v) = self.map.remove(&player_id) {
       v
     } else {
       return Ok(());
@@ -858,7 +976,6 @@ impl Shared {
       reason: LeaveReason::LeaveDisconnect,
     })?;
 
-    self.map.remove(&player_id);
     self.lagging_player_ids.remove(&player_id);
     self.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
     if let Some(desync) = self.sync.remove_player(player_id) {
@@ -869,6 +986,7 @@ impl Shared {
       );
       tracing::warn!("{}", self.sync.debug_pending())
     }
+    player.close_stream();
     Ok(())
   }
 
@@ -911,7 +1029,7 @@ impl Shared {
               player_id,
               "removing player: channel full"
             );
-            self.disconnect_player_and_broadcast(player_id)?;
+            self.remove_player_and_broadcast(player_id)?;
           }
           _ => {}
         }
@@ -952,7 +1070,7 @@ impl Shared {
       let drop_player_ids: Vec<_> = self.lagging_player_ids.iter().cloned().collect();
       for drop_player_id in &drop_player_ids {
         tracing::info!(player_id = *drop_player_id, "lagging player dropped.");
-        self.disconnect_player_and_broadcast(*drop_player_id)?;
+        self.remove_player_and_broadcast(*drop_player_id)?;
       }
       self.lagging_player_ids.clear();
       Ok(RequestDropResult::Done(drop_player_ids))
@@ -966,10 +1084,10 @@ impl Shared {
     if let Some(desync) = res.desync {
       self.handle_desync(desync)?;
     }
-    if self.check_stop_lag()? {
-      Ok(AckAction::ResumeClock)
-    } else {
+    if self.lagging_player_ids.is_empty() {
       Ok(AckAction::Continue)
+    } else {
+      Ok(AckAction::CheckStopLag)
     }
   }
 
@@ -1002,7 +1120,7 @@ impl Shared {
 
     for (player_id, message) in targets {
       self.broadcast_message(message);
-      self.disconnect_player_and_broadcast(player_id)?;
+      self.remove_player_and_broadcast(player_id)?;
     }
     Ok(())
   }
@@ -1010,7 +1128,7 @@ impl Shared {
 
 enum AckAction {
   Continue,
-  ResumeClock,
+  CheckStopLag,
 }
 
 enum RequestDropResult {
@@ -1019,8 +1137,16 @@ enum RequestDropResult {
   Done(Vec<i32>),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum DispatchStatus {
+  Pending,
+  Running,
+  Paused,
+}
+
 struct PeerWorker {
   stream: PlayerStream,
+  status_rx: watch::Receiver<DispatchStatus>,
   in_rx: Receiver<PlayerStreamCmd>,
   dispatcher_tx: Sender<PeerMsg>,
   delay: DelayedFrameStream,
@@ -1030,12 +1156,14 @@ struct PeerWorker {
 impl PeerWorker {
   fn new(
     stream: PlayerStream,
+    status_rx: watch::Receiver<DispatchStatus>,
     in_rx: Receiver<PlayerStreamCmd>,
     out_tx: Sender<PeerMsg>,
     delay: Option<Duration>,
   ) -> Self {
     Self {
       stream,
+      status_rx,
       in_rx,
       dispatcher_tx: out_tx,
       delay: DelayedFrameStream::new(delay),
@@ -1052,13 +1180,48 @@ impl PeerWorker {
     }
 
     let mut delay_buf = VecDeque::new();
+    let mut ping = PingStream::interval(
+      crate::constants::GAME_PING_INTERVAL,
+      crate::constants::GAME_PING_TIMEOUT,
+    );
+    let mut last_status = *self.status_rx.borrow();
+    let mut flush = false;
+
+    if last_status == DispatchStatus::Pending {
+      ping.start();
+    }
 
     loop {
       tokio::select! {
-        _ = ct.cancelled() => break,
+        _ = ct.cancelled() => {
+          flush = true;
+          break
+        },
+        _ = self.status_rx.changed() => {
+          let status = *self.status_rx.borrow();
+          if status != last_status {
+            last_status = status;
+            match status {
+              DispatchStatus::Paused => {
+                ping.start();
+              },
+              DispatchStatus::Running => {
+                ping.stop();
+              },
+              _ => {}
+            }
+          }
+        }
         next = self.stream.get_mut().recv_frame() => {
           match next {
             Ok(frame) => {
+              if frame.type_id == PingStream::PONG_TYPE_ID {
+                if ping.started() {
+                  ping.capture_pong(frame);
+                }
+                continue;
+              }
+
               if self.delay.enabled() {
                 self.delay.insert(DelayedFrame::In(frame));
                 continue;
@@ -1096,9 +1259,12 @@ impl PeerWorker {
                 self.dispatch_delayed(player_id, &frames).await?;
               }
             }
+            PlayerStreamCmd::SetBlock(duration) => {
+              tokio::time::sleep(duration).await;
+            }
           }
         }
-        res = self.delay.recv_expired(&mut delay_buf) => {
+        res = self.delay.recv_expired(&mut delay_buf), if self.delay.enabled() => {
           match res {
             Ok(()) => {
               self.dispatch_delayed(player_id, &delay_buf).await?;
@@ -1109,7 +1275,22 @@ impl PeerWorker {
             }
           }
         }
+        Some(next) = ping.next(), if ping.started() => {
+          match next {
+            PingMsg::Ping(frame) => {
+              self.stream.get_mut().send_frame(frame).await?;
+            },
+            PingMsg::Timeout => {
+              tracing::info!("ping timeout");
+              break;
+            }
+          }
+        }
       }
+    }
+
+    if flush {
+      self.stream.get_mut().flush().await.ok();
     }
 
     Ok(())

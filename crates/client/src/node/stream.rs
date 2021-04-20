@@ -17,11 +17,12 @@ use flo_w3gs::action::IncomingAction;
 use flo_w3gs::protocol::chat::{ChatFromHost, ChatToHost};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Notify;
-use tokio::time::sleep;
+use tokio::time::{sleep, Sleep};
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
@@ -93,6 +94,7 @@ impl NodeStream {
 
 struct Session {
   game_id: i32,
+  #[allow(unused)]
   player_id: i32,
   slot_player_id: u8,
   addr: SocketAddr,
@@ -132,8 +134,9 @@ impl Session {
                 }
                 Err(err) => {
                   tracing::error!("connect node: {}", err);
+                  use flo_net::proto::flo_node::ClientConnectRejectReason;
                   match err {
-                    Error::NodeConnectionRejected(_, _) => {
+                    Error::NodeConnectionRejected(reason, _) if reason == ClientConnectRejectReason::InvalidToken => {
                       self.notify_disconnected().await;
                       return
                     },
@@ -243,7 +246,7 @@ impl Session {
 
     Ok(Connection {
       game_id,
-      player_id,
+      _player_id: player_id,
       stream,
     })
   }
@@ -276,14 +279,28 @@ impl Session {
 
 struct Connection {
   game_id: i32,
-  player_id: i32,
+  _player_id: i32,
   stream: FloStream,
 }
 
 impl Connection {
+  const HOST_PING_TIMEOUT: Duration = Duration::from_secs(3);
+
+  fn reset_timeout(t: Pin<&mut Sleep>) {
+    t.reset((Instant::now() + Self::HOST_PING_TIMEOUT).into())
+  }
+
   async fn run(mut self, session: &mut Session) -> Result<ConnectionRunResult> {
+    let ping_timeout = sleep(Self::HOST_PING_TIMEOUT);
+    tokio::pin!(ping_timeout);
+
     loop {
       tokio::select! {
+        _ = &mut ping_timeout => {
+          tracing::error!("node stream timeout");
+          return Ok(ConnectionRunResult::NodeDisconnected)
+        }
+
         // cancel
         _ = session.ct.cancelled() => {
           drop(self.stream);
@@ -294,8 +311,16 @@ impl Connection {
         // packet from node
         next = self.stream.recv_frame() => {
           match next {
-            Ok(frame) => {
+            Ok(mut frame) => {
               match frame.type_id {
+                PacketTypeId::Ping => {
+                  Self::reset_timeout(ping_timeout.as_mut());
+
+                  frame.type_id = PacketTypeId::Pong;
+                  if self.stream.send_frame(frame).await.is_err() {
+                    return Ok(ConnectionRunResult::NodeDisconnected)
+                  }
+                }
                 PacketTypeId::W3GS => {
                   let (meta, pkt) = frame.try_into_w3gs()?;
 
@@ -303,6 +328,8 @@ impl Connection {
                     let time = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
                     session.tick += 1;
                     session.time += time as u32;
+
+                    Self::reset_timeout(ping_timeout.as_mut());
                   }
 
                   if !session.ack_q.ack_received(meta.sid()) {

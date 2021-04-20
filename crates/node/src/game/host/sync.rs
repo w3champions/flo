@@ -30,9 +30,6 @@ impl SyncMap {
   pub fn time(&self) -> u32 {
     self.time
   }
-  pub fn tick(&self) -> u32 {
-    self.tick
-  }
 
   #[must_use]
   pub fn clock(&mut self, time_increment: u16) -> Option<Vec<PlayerTimeout>> {

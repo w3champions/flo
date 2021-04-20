@@ -1,8 +1,10 @@
-use crate::game::player_stream::PlayerStreamHandle;
+use crate::error::Result;
+use crate::game::host::stream::PlayerStreamHandle;
 use crate::game::{PlayerBanType, PlayerSlot};
 use flo_net::packet::Frame;
 use flo_net::w3gs::{W3GSAckQueue, W3GSFrameExt, W3GSMetadata, W3GSPacket};
 use flo_w3gs::protocol::chat::ChatFromHost;
+use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::error::TrySendError;
 
@@ -16,6 +18,7 @@ pub struct PlayerDispatchInfo {
   w3gs_ack_q: W3GSAckQueue,
   lag_duration_ms: u32,
   lag_start: Option<Instant>,
+  lag_slot_ids: BTreeSet<u8>,
   delay: Option<Duration>,
 }
 
@@ -30,6 +33,7 @@ impl PlayerDispatchInfo {
       w3gs_ack_q: W3GSAckQueue::new(),
       lag_duration_ms: 0,
       lag_start: None,
+      lag_slot_ids: BTreeSet::new(),
       delay: None,
     }
   }
@@ -61,7 +65,11 @@ impl PlayerDispatchInfo {
     self.tx.replace(tx);
   }
 
-  pub fn close_sender(&mut self) -> Option<PlayerStreamHandle> {
+  pub fn take_stream(&mut self) -> Option<PlayerStreamHandle> {
+    self.tx.take()
+  }
+
+  pub fn close_stream(&mut self) -> Option<PlayerStreamHandle> {
     self.tx.take().map(|v| {
       v.close();
       v
@@ -145,6 +153,15 @@ impl PlayerDispatchInfo {
     self.lag_duration_ms
   }
 
+  pub fn set_lag_slots<I: Iterator<Item = u8>>(&mut self, ids: I) {
+    self.lag_slot_ids.clear();
+    self.lag_slot_ids.extend(ids);
+  }
+
+  pub fn remove_lag_slot(&mut self, slot_id: u8) -> bool {
+    self.lag_slot_ids.remove(&slot_id)
+  }
+
   pub fn pristine(&self) -> bool {
     self.last_stream_id.is_none()
   }
@@ -153,11 +170,19 @@ impl PlayerDispatchInfo {
     self.delay.as_ref()
   }
 
-  pub fn set_delay(&mut self, delay: Option<Duration>) {
+  pub fn set_delay(&mut self, delay: Option<Duration>) -> Result<()> {
     self.delay = delay;
     if let Some(tx) = self.tx.as_ref() {
-      tx.set_delay(self.delay.clone()).ok();
+      tx.set_delay(self.delay.clone())?;
     }
+    Ok(())
+  }
+
+  pub fn set_block(&mut self, delay: Duration) -> Result<()> {
+    if let Some(tx) = self.tx.as_ref() {
+      tx.set_block(delay)?;
+    }
+    Ok(())
   }
 }
 

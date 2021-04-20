@@ -37,6 +37,15 @@ pub struct Frame {
   pub payload: FramePayload,
 }
 
+impl Frame {
+  pub fn new<T: AsRef<[u8]>>(type_id: PacketTypeId, data: T) -> Self {
+    Frame {
+      type_id,
+      payload: FramePayload::Bytes(Bytes::copy_from_slice(data.as_ref())),
+    }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub enum FramePayload {
   Bytes(Bytes),
@@ -278,9 +287,6 @@ macro_rules! packet_type {
     }
   };
 }
-
-packet_type!(Ping, crate::proto::flo_common::PacketPing);
-packet_type!(Pong, crate::proto::flo_common::PacketPong);
 
 pub trait OptionalFieldExt<T> {
   fn extract(self) -> Result<T>;

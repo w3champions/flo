@@ -16,10 +16,12 @@ use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAli
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
-use flo_w3gs::protocol::ping::PongToHost;
+use flo_w3gs::protocol::ping::PingFromHost;
 use std::collections::BTreeSet;
+use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
+use tokio::time::interval;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -103,8 +105,14 @@ impl<'a> GameHandler<'a> {
       self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
     }
 
+    let mut ping = interval(Duration::from_secs(15));
+    let ping_packet = Packet::simple(PingFromHost::with_payload(0))?;
+
     loop {
       tokio::select! {
+        _ = ping.tick() => {
+          self.w3gs_stream.send(ping_packet.clone()).await?;
+        }
         next = self.w3gs_stream.recv() => {
           let pkt = match next {
             Ok(pkt) => pkt,
@@ -124,7 +132,7 @@ impl<'a> GameHandler<'a> {
 
             self.handle_game_packet(&mut loop_state, pkt).await?;
           } else {
-            tracing::error!("stream closed");
+            tracing::error!("game stream closed");
             return Ok(GameResult::Disconnected)
           }
         }
@@ -191,6 +199,7 @@ impl<'a> GameHandler<'a> {
 
   async fn handle_game_packet(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
     match pkt.type_id() {
+      PacketTypeId::PongToHost => return Ok(()),
       ChatToHost::PACKET_TYPE_ID => {
         let pkt: ChatToHost = pkt.decode_simple()?;
         match pkt.message {
@@ -208,7 +217,6 @@ impl<'a> GameHandler<'a> {
       IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
       PacketTypeId::DropReq | PacketTypeId::LeaveReq => {}
-      PongToHost::PACKET_TYPE_ID => {}
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());
       }

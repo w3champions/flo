@@ -63,6 +63,12 @@ impl ActionTickStream {
     self.delay.as_mut().reset(Instant::now().into());
   }
 
+  pub fn is_paused(&self) -> bool {
+    {
+      self.paused
+    }
+  }
+
   pub fn resume(&mut self) {
     self.paused = false;
     self

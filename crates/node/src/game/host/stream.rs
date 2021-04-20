@@ -55,6 +55,7 @@ impl Into<FloStream> for PlayerStream {
 pub enum PlayerStreamCmd {
   Send(Frame),
   SetDelay(Option<Duration>),
+  SetBlock(Duration),
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +94,13 @@ impl PlayerStreamHandle {
     self
       .tx
       .try_send(PlayerStreamCmd::SetDelay(value))
+      .map_err(|_| Error::Cancelled)
+  }
+
+  pub fn set_block(&self, value: Duration) -> Result<()> {
+    self
+      .tx
+      .try_send(PlayerStreamCmd::SetBlock(value))
       .map_err(|_| Error::Cancelled)
   }
 
