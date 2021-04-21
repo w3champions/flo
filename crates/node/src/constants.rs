@@ -1,19 +1,16 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::time::Duration;
-
-lazy_static! {
-  pub static ref ENV_GAME_STEP_MS: Option<u16> = {
-    std::env::var("FLO_GAME_STEP_MS")
-      .ok()
-      .and_then(|v| v.parse().ok())
-  };
-}
 
 pub const PEER_CHANNEL_SIZE: usize = 250;
 pub const CONTROLLER_SENDER_BUF_SIZE: usize = 10;
 pub const GAME_DISPATCH_BUF_SIZE: usize = 256;
 pub const GAME_PLAYER_LAGGING_THRESHOLD_MS: u32 = 1000;
-pub const GAME_DEFAULT_STEP_MS: u16 = 20;
+pub static GAME_DEFAULT_STEP_MS: Lazy<u16> = Lazy::new(|| {
+  std::env::var("FLO_GAME_STEP_MS")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or(20)
+});
 pub const GAME_PING_INTERVAL: Duration = Duration::from_secs(1);
 pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(3);
 

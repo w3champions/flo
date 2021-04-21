@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::env;
 
 #[derive(Debug)]
@@ -8,11 +8,9 @@ pub struct Env {
 
 impl Env {
   pub fn get() -> &'static Env {
-    lazy_static! {
-      static ref INSTANCE: Env = Env {
-        secret_key: env::var("FLO_NODE_SECRET").unwrap_or_default()
-      };
-    }
+    static INSTANCE: Lazy<Env> = Lazy::new(|| Env {
+      secret_key: env::var("FLO_NODE_SECRET").unwrap_or_default(),
+    });
     &INSTANCE
   }
 }

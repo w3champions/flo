@@ -5,3 +5,4 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+rdkafka = { version = "0.26.0", features = ["cmake-build"] }

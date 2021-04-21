@@ -1,20 +1,25 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use prometheus::{register_int_gauge, Encoder, IntGauge, TextEncoder};
 
 use crate::error::*;
 use hyper::header::CONTENT_TYPE;
 
-lazy_static! {
-  pub static ref PLAYER_TOKENS: IntGauge = register_int_gauge!(
+pub static GAME_SESSIONS: Lazy<IntGauge> =
+  Lazy::new(|| register_int_gauge!("flonode_game_sessions", "Number of game sessions").unwrap());
+pub static PLAYERS_CONNECTIONS: Lazy<IntGauge> = Lazy::new(|| {
+  register_int_gauge!(
+    "flonode_player_connections",
+    "Number of players connections"
+  )
+  .unwrap()
+});
+pub static PLAYER_TOKENS: Lazy<IntGauge> = Lazy::new(|| {
+  register_int_gauge!(
     "flonode_player_tokens",
     "Number of registered player tokens"
   )
-  .unwrap();
-  pub static ref CONNECTED_PLAYERS: IntGauge =
-    register_int_gauge!("flonode_connected_players", "Number of players connected").unwrap();
-  pub static ref GAME_SESSIONS: IntGauge =
-    register_int_gauge!("flonode_game_sessions", "Number of game sessions").unwrap();
-}
+  .unwrap()
+});
 
 pub async fn serve_metrics() -> Result<()> {
   use hyper::service::{make_service_fn, service_fn};

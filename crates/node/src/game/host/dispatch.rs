@@ -188,7 +188,7 @@ impl Dispatcher {
         }
       }
 
-      let mut tick_stream = ActionTickStream::new(crate::constants::GAME_DEFAULT_STEP_MS);
+      let mut tick_stream = ActionTickStream::new(*crate::constants::GAME_DEFAULT_STEP_MS);
 
       loop {
         tokio::select! {
@@ -393,6 +393,8 @@ impl State {
     );
     tokio::spawn(
       async move {
+        crate::metrics::PLAYERS_CONNECTIONS.inc();
+
         if let Err(err) = worker.serve(resend_frames).await {
           match err {
             Error::Cancelled => {}
@@ -407,6 +409,8 @@ impl State {
           })
           .await
           .ok();
+
+        crate::metrics::PLAYERS_CONNECTIONS.dec();
       }
       .instrument(tracing::debug_span!("peer", game_id, player_id)),
     );

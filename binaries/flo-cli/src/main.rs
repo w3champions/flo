@@ -5,7 +5,7 @@ mod game;
 mod grpc;
 mod server;
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub use anyhow::Result;
 
 #[derive(Debug, StructOpt)]
 enum Opt {
