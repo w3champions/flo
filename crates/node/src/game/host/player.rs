@@ -156,6 +156,10 @@ impl PlayerDispatchInfo {
     self.lag_duration_ms
   }
 
+  pub fn lag_slots(&self) -> &BTreeSet<u8> {
+    &self.lag_slot_ids
+  }
+
   pub fn set_lag_slots<I: Iterator<Item = u8>>(&mut self, ids: I) {
     self.lag_slot_ids.clear();
     self.lag_slot_ids.extend(ids);

@@ -1396,12 +1396,7 @@ dependencies = [
 name = "flo-observer"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "flo-log-subscriber",
- "futures 0.3.13",
  "rdkafka",
- "tokio",
- "tracing",
 ]
 
 [[package]]

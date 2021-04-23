@@ -905,13 +905,47 @@ impl Shared {
 
   fn handle_lag(&mut self, add_player_ids: Vec<i32>) -> Result<bool> {
     self.lagging_player_ids.extend(add_player_ids);
-    if let Some((pkt, ids, slots)) = self.refresh_lag_packet()? {
+    if let Some(items) = self.refresh_lag_packet()? {
       self.drop_votes.clear();
-      self.broadcast(pkt, broadcast::DenyList(&ids))?;
-      for (id, info) in &mut self.map {
-        if !ids.contains(id) {
-          info.set_lag_slots(slots.iter().cloned());
+      let mut send_errors = vec![];
+      for (recv_player_id, info) in &mut self.map {
+        if !items.iter().any(|(v, _, _)| v == recv_player_id) {
+          let mut start_lag_players = vec![];
+          for (_lag_player, lag_slot, lag_duration_ms) in &items {
+            start_lag_players.push(LagPlayer {
+              player_id: *lag_slot,
+              lag_duration_ms: *lag_duration_ms,
+            });
+          }
+          if !start_lag_players.is_empty() {
+            if !info.lag_slots().is_empty() {
+              for slot in info.lag_slots().clone() {
+                info
+                  .send_w3gs(W3GSPacket::simple(StopLag(LagPlayer {
+                    player_id: slot,
+                    lag_duration_ms: 0,
+                  }))?)
+                  .err()
+                  .map(|err| send_errors.push((*recv_player_id, err)));
+              }
+            }
+
+            tracing::info!(
+              game_id = self.game_id,
+              player_id = recv_player_id,
+              "send start lag: {:?}",
+              start_lag_players
+            );
+            info.set_lag_slots(start_lag_players.iter().map(|v| v.player_id));
+            info
+              .send_w3gs(W3GSPacket::simple(StartLag::new(start_lag_players))?)
+              .err()
+              .map(|err| send_errors.push((*recv_player_id, err)));
+          }
         }
+      }
+      if !send_errors.is_empty() {
+        self.handle_player_send_errors(send_errors)?;
       }
       Ok(true)
     } else {
@@ -974,48 +1008,36 @@ impl Shared {
     Ok(self.lagging_player_ids.is_empty())
   }
 
-  fn refresh_lag_packet(&mut self) -> Result<Option<(W3GSPacket, Vec<i32>, Vec<u8>)>> {
-    let mut lag_player_ids = Vec::with_capacity(self.lagging_player_ids.len());
-    let mut lag_slot_ids = Vec::with_capacity(self.lagging_player_ids.len());
-    let lag_players: Vec<_> = self
+  fn refresh_lag_packet(&mut self) -> Result<Option<Vec<(i32, u8, u32)>>> {
+    let items: Vec<_> = self
       .lagging_player_ids
       .clone()
       .into_iter()
       .filter_map(|player_id| {
         let player = self.get_player(player_id)?;
         let slot_player_id = player.slot_player_id();
-        lag_player_ids.push(player_id);
-        lag_slot_ids.push(slot_player_id);
-        Some(LagPlayer {
-          player_id: slot_player_id,
-          lag_duration_ms: player.start_lag(),
-        })
+        Some((player_id, slot_player_id, player.start_lag()))
       })
       .collect();
-    if lag_players.is_empty() {
+    if items.is_empty() {
       return Ok(None);
     }
 
-    if !lag_players.is_empty() {
-      tracing::warn!(
-        "lag: players = {:?}, time = {}",
-        lag_player_ids,
-        self.sync.time()
-      );
+    if !items.is_empty() {
+      tracing::warn!("lag: items = {:?}, time = {}", items, self.sync.time());
     }
 
-    let payload = StartLag::new(lag_players);
-    Ok(Some((
-      W3GSPacket::simple(payload)?,
-      lag_player_ids,
-      lag_slot_ids,
-    )))
+    Ok(Some(items))
   }
 
   fn close_player_stream(&mut self, player_id: i32) -> Result<bool> {
     if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| v.take_stream()) {
       if self.started {
-        tracing::warn!(player_id, "player disconnected without LeaveReq");
+        tracing::warn!(
+          game_id = self.game_id,
+          player_id,
+          "player disconnected without LeaveReq"
+        );
         if !self.lagging_player_ids.contains(&player_id) {
           self.handle_lag(vec![player_id])?;
         }
@@ -1097,23 +1119,28 @@ impl Shared {
     };
 
     if !errors.is_empty() {
-      for (player_id, err) in errors {
-        match err {
-          PlayerSendError::Closed(_frame) => {
-            tracing::info!(game_id = self.game_id, player_id, "stream broken");
-          }
-          PlayerSendError::ChannelFull => {
-            tracing::info!(game_id = self.game_id, player_id, "channel full");
-          }
-          PlayerSendError::AckQueueFull => {
-            tracing::warn!(game_id = self.game_id, player_id, "ack queue full");
-            self.remove_player_and_broadcast(player_id, None)?;
-          }
-          _ => {}
-        }
-      }
+      self.handle_player_send_errors(errors)?;
     }
 
+    Ok(())
+  }
+
+  pub fn handle_player_send_errors(&mut self, errors: Vec<(i32, PlayerSendError)>) -> Result<()> {
+    for (player_id, err) in errors {
+      match err {
+        PlayerSendError::Closed(_frame) => {
+          tracing::info!(game_id = self.game_id, player_id, "stream broken");
+        }
+        PlayerSendError::ChannelFull => {
+          tracing::info!(game_id = self.game_id, player_id, "channel full");
+        }
+        PlayerSendError::AckQueueFull => {
+          tracing::warn!(game_id = self.game_id, player_id, "ack queue full");
+          self.remove_player_and_broadcast(player_id, None)?;
+        }
+        _ => {}
+      }
+    }
     Ok(())
   }
 
