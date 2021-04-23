@@ -10,6 +10,10 @@ const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 pub struct TriggerStringMap(BTreeMap<i32, String>);
 
 impl TriggerStringMap {
+  pub fn empty() -> Self {
+    TriggerStringMap(BTreeMap::new())
+  }
+
   pub fn len(&self) -> usize {
     self.0.len()
   }

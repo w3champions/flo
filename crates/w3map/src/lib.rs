@@ -224,9 +224,17 @@ impl W3Map {
   }
 
   fn load_info(mut archive: Archive) -> Result<Self> {
-    let trigger_strings = {
-      let bytes = archive.read_file_all("war3map.wts")?;
-      TriggerStringMap::decode(&mut bytes.as_slice()).map_err(Error::ReadTriggerStrings)?
+    let trigger_strings = match archive.read_file_all("war3map.wts") {
+      Ok(bytes) => {
+        TriggerStringMap::decode(&mut bytes.as_slice()).map_err(Error::ReadTriggerStrings)?
+      }
+      Err(err) => {
+        if Archive::is_err_file_not_found(&err) {
+          TriggerStringMap::empty()
+        } else {
+          return Err(err);
+        }
+      }
     };
 
     let info: MapInfo = {
@@ -270,6 +278,7 @@ struct FileArchive {
   path: PathBuf,
   inner: stormlib::Archive,
 }
+
 struct MemoryArchive<'a> {
   bytes: &'a [u8],
   inner: ceres_mpq::Archive<Cursor<&'a [u8]>>,
@@ -310,7 +319,6 @@ impl<'a> Archive<'a> {
     })
   }
 
-  #[cfg(feature = "xoro")]
   fn is_err_file_not_found(e: &Error) -> bool {
     match *e {
       Error::Storm(stormlib::error::StormError::FileNotFound) => true,
@@ -388,7 +396,7 @@ fn test_open_storage_with_checksum() {
       sha1: [
         201, 228, 110, 214, 86, 255, 142, 141, 140, 96, 141, 57, 3, 110, 63, 27, 250, 11, 28, 194,
       ],
-      file_size: 0
+      file_size: 0,
     }
   )
 }
