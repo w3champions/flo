@@ -202,4 +202,5 @@ pub enum PlayerSendError {
   NotConnected(Frame),
   Closed(Frame),
   ChannelFull,
+  AckQueueFull,
 }

@@ -1077,7 +1077,7 @@ impl Shared {
             return None;
           }
 
-          if info.stream_id().is_some() {
+          let res = if info.stream_id().is_some() {
             info.send_w3gs(packet.clone()).err().map(|err| {
               info.close_stream();
               (*player_id, err)
@@ -1085,7 +1085,13 @@ impl Shared {
           } else {
             info.enqueue_w3gs(packet.clone());
             None
+          };
+
+          if info.ack_queue().pending_ack_len() >= crate::constants::GAME_PLAYER_MAX_ACK_QUEUE {
+            return Some((*player_id, PlayerSendError::AckQueueFull));
           }
+
+          res
         })
         .collect()
     };
@@ -1098,6 +1104,10 @@ impl Shared {
           }
           PlayerSendError::ChannelFull => {
             tracing::info!(game_id = self.game_id, player_id, "channel full");
+          }
+          PlayerSendError::AckQueueFull => {
+            tracing::warn!(game_id = self.game_id, player_id, "ack queue full");
+            self.remove_player_and_broadcast(player_id, None)?;
           }
           _ => {}
         }
