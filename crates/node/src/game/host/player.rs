@@ -20,6 +20,7 @@ pub struct PlayerDispatchInfo {
   lag_start: Option<Instant>,
   lag_slot_ids: BTreeSet<u8>,
   delay: Option<Duration>,
+  action_rtt: Option<Duration>,
 }
 
 impl PlayerDispatchInfo {
@@ -35,6 +36,7 @@ impl PlayerDispatchInfo {
       lag_start: None,
       lag_slot_ids: BTreeSet::new(),
       delay: None,
+      action_rtt: None,
     }
   }
 
@@ -146,9 +148,10 @@ impl PlayerDispatchInfo {
 
   pub fn end_lag(&mut self) -> u32 {
     if let Some(start) = self.lag_start.take() {
-      self.lag_duration_ms = self
-        .lag_duration_ms
-        .saturating_add((Instant::now() - start).as_millis() as u32);
+      self.lag_duration_ms = self.lag_duration_ms.saturating_add(std::cmp::min(
+        1000,
+        (Instant::now() - start).as_millis() as u32,
+      ));
     }
     self.lag_duration_ms
   }
@@ -184,6 +187,14 @@ impl PlayerDispatchInfo {
       tx.set_block(delay)?;
     }
     Ok(())
+  }
+
+  pub fn set_action_rtt(&mut self, value: Duration) {
+    self.action_rtt.replace(value);
+  }
+
+  pub fn action_rtt(&self) -> Option<Duration> {
+    self.action_rtt.clone()
   }
 }
 

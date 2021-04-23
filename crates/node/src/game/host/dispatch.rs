@@ -28,10 +28,11 @@ use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoEnum;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, watch, Notify};
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
@@ -189,6 +190,8 @@ impl Dispatcher {
       }
 
       let mut tick_stream = ActionTickStream::new(*crate::constants::GAME_DEFAULT_STEP_MS);
+      let pause_timeout = sleep(Duration::from_secs(0));
+      tokio::pin!(pause_timeout);
 
       loop {
         tokio::select! {
@@ -212,7 +215,7 @@ impl Dispatcher {
                     Ok(true) => {
                       tick_stream.resume();
                       status_tx.send(DispatchStatus::Running).ok();
-                      tracing::info!("all lagging player resumed");
+                      tracing::info!("resume clock: all lagging player resumed");
                     },
                     Err(err) => {
                       tracing::error!("check_stop_lag: {}", err);
@@ -222,6 +225,7 @@ impl Dispatcher {
                 }
               },
               ActionMsg::ResumeClock => {
+                tracing::info!("resume clock");
                 tick_stream.resume();
                 status_tx.send(DispatchStatus::Running).ok();
               }
@@ -232,6 +236,7 @@ impl Dispatcher {
               Ok(DispatchResult::Continue) => {},
               Ok(DispatchResult::Lag(tick)) => {
                 tick_stream.replace_actions(tick.actions);
+                pause_timeout.as_mut().reset((Instant::now() + crate::constants::GAME_CLOCK_MAX_PAUSE).into());
                 tick_stream.pause();
                 status_tx.send(DispatchStatus::Paused).ok();
               }
@@ -240,6 +245,13 @@ impl Dispatcher {
                 break;
               }
             }
+          }
+          _ = &mut pause_timeout, if tick_stream.is_paused() => {
+            if let Err(err) = shared.lock().drop_all_lag_players() {
+              tracing::error!("drop all lag players: {}", err);
+              break;
+            }
+            tick_stream.resume();
           }
         }
       }
@@ -556,8 +568,7 @@ impl State {
         let res = self.shared.lock().request_drop(player_id)?;
         match res {
           RequestDropResult::NoLaggingPlayer | RequestDropResult::Voting => {}
-          RequestDropResult::Done(dropped_player_ids) => {
-            self.left_players.extend(dropped_player_ids);
+          RequestDropResult::Done => {
             action_tx
               .send(ActionMsg::ResumeClock)
               .await
@@ -778,27 +789,26 @@ impl State {
           player.send_w3gs(pkt).ok();
         }
       }
-      // "ping" => {
-      //   let mut lock = self.shared.lock();
-      //   let msgs: Vec<_> = lock
-      //     .map
-      //     .values()
-      //     .map(|v| {
-      //       format!(
-      //         "{}: {}",
-      //         v.player_name(),
-      //         match v.ping() {
-      //           Some(v) => format!("{}ms", v),
-      //           None => "N/A".to_string(),
-      //         }
-      //       )
-      //     })
-      //     .collect();
-      //   for msg in msgs {
-      //     lock.broadcast_message(msg);
-      //   }
-      //   true
-      // }
+      "ping" => {
+        let mut lock = self.shared.lock();
+        let msgs: Vec<_> = lock
+          .map
+          .values()
+          .map(|v| {
+            format!(
+              "{}: {}",
+              v.player_name(),
+              match v.action_rtt() {
+                Some(v) => format!("{}ms", v.as_millis() / 2),
+                None => "N/A".to_string(),
+              }
+            )
+          })
+          .collect();
+        for msg in msgs {
+          lock.broadcast_message(msg);
+        }
+      }
       "conn" => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
@@ -1005,7 +1015,7 @@ impl Shared {
   fn close_player_stream(&mut self, player_id: i32) -> Result<bool> {
     if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| v.take_stream()) {
       if self.started {
-        // player disconnected without LeaveReq
+        tracing::warn!(player_id, "player disconnected without LeaveReq");
         if !self.lagging_player_ids.contains(&player_id) {
           self.handle_lag(vec![player_id])?;
         }
@@ -1125,20 +1135,28 @@ impl Shared {
       ));
     }
     if self.drop_votes.len() >= vote_required {
-      let drop_player_ids: Vec<_> = self.lagging_player_ids.iter().cloned().collect();
-      for drop_player_id in &drop_player_ids {
-        tracing::info!(player_id = *drop_player_id, "lagging player dropped.");
-        self.remove_player_and_broadcast(*drop_player_id, None)?;
-      }
-      self.lagging_player_ids.clear();
-      Ok(RequestDropResult::Done(drop_player_ids))
+      self.drop_all_lag_players()?;
+      Ok(RequestDropResult::Done)
     } else {
       Ok(RequestDropResult::Voting)
     }
   }
 
+  pub fn drop_all_lag_players(&mut self) -> Result<()> {
+    let drop_player_ids: Vec<_> = self.lagging_player_ids.iter().cloned().collect();
+    for drop_player_id in &drop_player_ids {
+      tracing::info!(player_id = *drop_player_id, "lagging player dropped.");
+      self.remove_player_and_broadcast(*drop_player_id, None)?;
+    }
+    self.lagging_player_ids.clear();
+    Ok(())
+  }
+
   pub fn ack(&mut self, player_id: i32, checksum: u32) -> Result<AckAction> {
     let res = self.sync.ack(player_id, checksum)?;
+    self
+      .get_player(player_id)
+      .map(|p| p.set_action_rtt(res.rtt));
     let has_desync = res.desync.is_some();
     if let Some(desync) = res.desync {
       self.handle_desync(desync)?;
@@ -1193,7 +1211,7 @@ enum AckAction {
 enum RequestDropResult {
   NoLaggingPlayer,
   Voting,
-  Done(Vec<i32>),
+  Done,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

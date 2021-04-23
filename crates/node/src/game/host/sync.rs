@@ -1,5 +1,6 @@
 use slab::Slab;
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -115,6 +116,7 @@ impl SyncMap {
     let pending = &mut self.pending_slab[id];
     state.time = pending.time;
     pending.checksums.insert(player_id, checksum);
+    let rtt = Instant::now().saturating_duration_since(pending.t);
     if let Some(token) = pending.should_check_desync(self.players.len()) {
       self.desync_buf.clear();
       pending.check_desync(token, &mut self.desync_buf);
@@ -124,12 +126,14 @@ impl SyncMap {
         Ok(AckResult {
           player_tick: tick,
           game_tick: self.tick,
+          rtt,
           desync: None,
         })
       } else {
         Ok(AckResult {
           player_tick: tick,
           game_tick: self.tick,
+          rtt,
           desync: self.take_desync(),
         })
       }
@@ -137,6 +141,7 @@ impl SyncMap {
       Ok(AckResult {
         player_tick: tick,
         game_tick: self.tick,
+        rtt,
         desync: None,
       })
     }
@@ -147,11 +152,11 @@ impl SyncMap {
     for (tick, id) in &self.pending_tick {
       let item = &self.pending_slab[*id];
       values.push(format!(
-        "tick={}, time={}, checksums={:?}",
+        "- tick={}, time={}, checksums={:?}",
         tick, item.time, item.checksums
       ))
     }
-    values.join("\n")
+    "debug_pending\n".to_string() + &values.join("\n")
   }
 
   fn take_desync(&mut self) -> Option<Vec<PlayerDesync>> {
@@ -165,6 +170,7 @@ impl SyncMap {
 pub struct AckResult {
   pub game_tick: u32,
   pub player_tick: u32,
+  pub rtt: Duration,
   pub desync: Option<Vec<PlayerDesync>>,
 }
 
@@ -181,6 +187,7 @@ struct Pending {
   tick: u32,
   time: u32,
   checksums: BTreeMap<i32, u32>,
+  t: Instant,
 }
 
 impl Pending {
@@ -189,6 +196,7 @@ impl Pending {
       tick,
       time,
       checksums: BTreeMap::new(),
+      t: Instant::now(),
     }
   }
 
@@ -352,7 +360,7 @@ fn test_sync_map() {
 
     let tick: u32 = buckets[player_id as usize];
     buckets[player_id as usize] -= 1;
-    let end = buckets.iter().all(|v| *v < tick);
+    let end = buckets.iter().all(|v| *v <= tick);
 
     // simulate dropping player
     if (player_id == drop_player && buckets[player_id as usize] < SIZE / 2) && !end {
@@ -365,21 +373,22 @@ fn test_sync_map() {
   }
 
   let threshold_ticks = crate::constants::GAME_PLAYER_LAGGING_THRESHOLD_MS / 5;
-
-  for tick in 0..SIZE {
+  let mut offset = 0;
+  for tick in 0..(SIZE + 1/* timeout uss 1 iteration */) {
     let timeout = map.clock(5);
     if let Some(items) = timeout {
       assert_eq!(items.len(), 1);
       assert_eq!(items[0].player_id, drop_player);
       let desync = map.remove_player(drop_player);
       dbg!(&desync);
-      assert!(desync.is_none())
+      assert!(desync.is_none());
+      offset = 1;
     }
 
     for _ in 0..rng.gen_range(0..8) {
       if let Some((ack_tick, player_id, end)) = acks.pop_front() {
         if ack_tick <= tick {
-          let desync = map.ack(player_id, ack_tick).unwrap();
+          let desync = map.ack(player_id, ack_tick).unwrap().desync;
           if desync.is_some() {
             dbg!(&desync);
           }
@@ -394,16 +403,16 @@ fn test_sync_map() {
     }
 
     let oldest_tick = map.pending_tick.keys().next().cloned().unwrap();
-    if oldest_tick + threshold_ticks == tick + 1 {
+    if oldest_tick + threshold_ticks >= tick {
       let mut deferred = vec![];
       while !acks.is_empty() {
         if let Some((ack_tick, player_id, end)) = acks.pop_front() {
-          if ack_tick > tick {
+          if ack_tick > tick - offset {
             deferred.push((ack_tick, player_id, end));
             continue;
           }
 
-          let desync = map.ack(player_id, ack_tick).unwrap();
+          let desync = map.ack(player_id, ack_tick).unwrap().desync;
           assert!(desync.is_none());
 
           if ack_tick == oldest_tick && end {
@@ -418,7 +427,7 @@ fn test_sync_map() {
   }
 
   while let Some((ack_tick, player_id, _)) = acks.pop_front() {
-    let desync = map.ack(player_id, ack_tick).unwrap();
+    let desync = map.ack(player_id, ack_tick).unwrap().desync;
     assert!(desync.is_none());
   }
 

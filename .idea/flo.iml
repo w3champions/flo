@@ -36,6 +36,7 @@
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-worker/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/binaries/flo-worker-ui/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/w3c/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/observer/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

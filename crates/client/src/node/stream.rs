@@ -300,7 +300,7 @@ struct Connection {
 }
 
 impl Connection {
-  const MIN_DURATION: Duration = Duration::from_secs(30);
+  const MIN_DURATION: Duration = Duration::from_secs(3);
   const HOST_PING_TIMEOUT: Duration = Duration::from_secs(3);
 
   fn reset_timeout(t: Pin<&mut Sleep>) {
@@ -545,7 +545,6 @@ pub enum NodeStreamEvent {
   GameStatusSnapshot(NodeGameStatusSnapshot),
   GameStatusUpdate(GameStatusUpdate),
   Disconnected,
-  // Reconnected,
 }
 
 #[derive(Debug, S2ProtoUnpack, serde::Serialize, Clone)]

@@ -154,7 +154,7 @@ impl<'a> GameHandler<'a> {
           if let Some(pkt) = next {
             self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
           } else {
-            return Err(Error::TaskCancelled(anyhow::format_err!("w3g tx dropped")))
+            return Err(Error::TaskCancelled(anyhow::format_err!("W3GS tx dropped")))
           }
         }
       }
@@ -183,6 +183,8 @@ impl<'a> GameHandler<'a> {
       }
       _other => {}
     }
+
+    // tracing::debug!("send: {:?}", pkt.type_id());
 
     self.w3gs_stream.send(pkt).await?;
     Ok(())

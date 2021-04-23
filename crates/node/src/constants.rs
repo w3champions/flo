@@ -13,6 +13,7 @@ pub static GAME_DEFAULT_STEP_MS: Lazy<u16> = Lazy::new(|| {
 });
 pub const GAME_PING_INTERVAL: Duration = Duration::from_secs(1);
 pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(3);
+pub const GAME_CLOCK_MAX_PAUSE: Duration = Duration::from_secs(60 - 3);
 
 #[cfg(not(debug_assertions))]
 pub const GAME_DELAY_RANGE: [Duration; 2] = [Duration::from_millis(25), Duration::from_millis(100)];

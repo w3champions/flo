@@ -65,6 +65,7 @@ pub enum OutgoingMessage {
   GameStartError(ErrorMessage),
   GameSlotClientStatusUpdate(ClientUpdateSlotClientStatus),
   GameStatusUpdate(GameStatusUpdate),
+  GameDisconnect,
   SetNodeAddrOverridesError(ErrorMessage),
 }
 
