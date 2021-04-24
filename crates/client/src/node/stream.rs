@@ -178,7 +178,8 @@ impl Session {
       self.last_connected_at.replace(Instant::now());
       tracing::debug!("node connected.");
 
-      match conn.run(&mut self).await {
+      let res = conn.run(&mut self).await;
+      match res {
         Ok(res) => match res {
           ConnectionRunResult::Cancelled | ConnectionRunResult::GameDisconnected => {
             self.notify_disconnected().await;
@@ -311,18 +312,17 @@ impl Connection {
     let ping_timeout = sleep(Self::HOST_PING_TIMEOUT);
     tokio::pin!(ping_timeout);
 
-    loop {
+    let res = loop {
       tokio::select! {
         _ = &mut ping_timeout => {
           tracing::error!("node stream timeout");
-          return Ok(ConnectionRunResult::NodeDisconnected)
+          break ConnectionRunResult::NodeDisconnected
         }
 
         // cancel
         _ = session.ct.cancelled() => {
-          drop(self.stream);
           session.shutdown_notify.notify_one();
-          return Ok(ConnectionRunResult::Cancelled)
+          break ConnectionRunResult::Cancelled
         }
 
         // packet from node
@@ -335,7 +335,7 @@ impl Connection {
 
                   frame.type_id = PacketTypeId::Pong;
                   if self.stream.send_frame(frame).await.is_err() {
-                    return Ok(ConnectionRunResult::NodeDisconnected)
+                    break ConnectionRunResult::NodeDisconnected
                   }
                 }
                 PacketTypeId::W3GS => {
@@ -363,24 +363,24 @@ impl Connection {
                   }
                   if let Err(_) = session.game_tx.send(pkt).await {
                     tracing::debug!("w3gs receiver gone");
-                    return Ok(ConnectionRunResult::GameDisconnected);
+                    break ConnectionRunResult::GameDisconnected;
                   }
                 }
                 _ => {
                   if let Err(err) = self.handle_node_frame(session, frame).await {
                     tracing::debug!("handle node frame: {}", err);
-                    return Ok(ConnectionRunResult::NodeDisconnected)
+                    break ConnectionRunResult::NodeDisconnected;
                   }
                 }
               }
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::debug!("stream closed");
-              return Ok(ConnectionRunResult::NodeDisconnected)
+              break ConnectionRunResult::NodeDisconnected;
             },
             Err(err) => {
               tracing::error!("stream recv: {}", err);
-              return Ok(ConnectionRunResult::NodeDisconnected)
+              break ConnectionRunResult::NodeDisconnected;
             }
           }
         }
@@ -438,16 +438,19 @@ impl Connection {
               };
               if let Err(err) = self.stream.send_frame(frame).await {
                 tracing::error!("stream send: {}", err);
-                return Ok(ConnectionRunResult::NodeDisconnected)
+                break ConnectionRunResult::NodeDisconnected
               }
             },
             None => {
-              return Ok(ConnectionRunResult::Cancelled);
+              break ConnectionRunResult::Cancelled
             }
           }
         }
       }
-    }
+    };
+
+    self.stream.flush().await.ok();
+    Ok(res)
   }
 
   async fn handle_node_frame(&mut self, session: &mut Session, frame: Frame) -> Result<()> {
