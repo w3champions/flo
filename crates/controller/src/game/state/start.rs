@@ -286,6 +286,7 @@ pub enum ClientInfoAck {
 }
 
 pub struct StartGameState {
+  done: bool,
   game_id: i32,
   player_ack_map: Option<HashMap<i32, ClientInfoAck>>,
   game_addr: Addr<GameActor>,
@@ -313,6 +314,7 @@ impl StartGameState {
     api_tx: Option<oneshot::Sender<StartGameCheckAsBotResult>>,
   ) -> Self {
     StartGameState {
+      done: false,
       game_id,
       player_ack_map: Some(
         player_ids
@@ -372,6 +374,7 @@ impl StartGameState {
     };
 
     if let Some(map) = done_map {
+      self.done = true;
       Ok(Some(StartGameCheckProceed { map }))
     } else {
       Ok(None)
@@ -420,6 +423,15 @@ impl Handler<StartGamePlayerAckInner> for StartGameState {
     _: &mut Context<Self>,
     StartGamePlayerAckInner { player_id, packet }: StartGamePlayerAckInner,
   ) -> <StartGamePlayerAckInner as Message>::Result {
+    if self.done {
+      tracing::info!(
+        game_id = self.game_id,
+        player_id,
+        "game player ack discarded: timeout"
+      );
+      return Ok(None);
+    }
+
     tracing::info!(
       game_id = self.game_id,
       player_id,
@@ -516,8 +528,12 @@ impl Handler<AckTimeout> for StartGameState {
     _: &mut Context<Self>,
     _: AckTimeout,
   ) -> <AckTimeout as Message>::Result {
+    if self.done {
+      return Ok(());
+    }
     if let Some(map) = self.get_map() {
       tracing::debug!(game_id = self.game_id, "ack timeout");
+      self.done = true;
       self.game_addr.notify(StartGameCheckTimeout { map }).await?;
     }
     Ok(())

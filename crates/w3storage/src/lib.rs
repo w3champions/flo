@@ -255,3 +255,11 @@ fn test_fs_map() {
     .unwrap()
     .is_some());
 }
+
+// #[test]
+// fn test_local_override() {
+//   let p = ClientPlatformInfo::from_env().unwrap();
+//   let mut s = W3Storage::new(&p).unwrap();
+//   let mut f = s.resolve_file("units/unitdata.slk").unwrap().unwrap();
+//   dbg!(s.storage_path);
+// }

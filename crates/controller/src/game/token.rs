@@ -1,7 +1,7 @@
 use chrono::Utc;
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use crate::error::*;
@@ -17,11 +17,10 @@ pub struct JoinToken {
 }
 
 pub fn create_join_token(game_id: i32) -> Result<String> {
-  lazy_static! {
-    static ref ENCODING_KEY: EncodingKey =
-      EncodingKey::from_base64_secret(&crate::config::JWT_SECRET_BASE64)
-        .expect("DecodingKey::from_base64_secret");
-  }
+  static ENCODING_KEY: Lazy<EncodingKey> = Lazy::new(|| {
+    EncodingKey::from_base64_secret(&crate::config::JWT_SECRET_BASE64)
+      .expect("DecodingKey::from_base64_secret")
+  });
 
   let exp = Utc::now().timestamp() + TOKEN_EXPIRATION_SECS;
   let claims = JoinToken {

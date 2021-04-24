@@ -5,7 +5,7 @@ use flo_grpc::game::*;
 
 const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
 
-pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
+pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
     panic!("Need to specify at least one player or observer");
   }
@@ -13,7 +13,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
 
   let nodes = client.list_nodes(()).await?.into_inner().nodes;
-  let node_id = nodes.first().unwrap().id;
+  let node_id = node_id.unwrap_or(nodes.first().unwrap().id);
 
   tracing::info!(node_id);
 

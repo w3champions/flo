@@ -119,10 +119,10 @@ impl NodeConnActor {
     flo_net::try_flo_packet! {
       res => {
         packet: PacketControllerConnectAccept => {
-          tracing::debug!(node_id, "node connected: version = {:?}", packet.version);
+          tracing::info!(node_id, "node connected: version = {:?}", packet.version);
         }
         packet: PacketControllerConnectReject => {
-          tracing::debug!(node_id, "node connect rejected: reason = {:?}", packet.reason());
+          tracing::error!(node_id, "node connect rejected: reason = {:?}", packet.reason());
           return Err(NodeConnectError::Fatal(Error::NodeConnectionRejected {
             addr,
             reason: packet.reason(),
@@ -232,7 +232,7 @@ impl Handler<Connect> for NodeConnActor {
         return;
       }
     };
-    let (tx, rx) = mpsc::channel(3);
+    let (tx, rx) = mpsc::channel(32);
     ctx.spawn(
       Self::stream_worker(ctx.addr(), rx, stream)
         .instrument(tracing::debug_span!("stream_worker", node_id)),

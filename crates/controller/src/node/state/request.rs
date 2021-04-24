@@ -176,7 +176,7 @@ impl Handler<Request> for NodeRequestActor {
 }
 
 async fn request_callback(addr: &Addr<NodeRequestActor>, id: RequestId, result: Result<Response>) {
-  if addr.send(RequestDone { id, result }).await.is_err() {
+  if addr.notify(RequestDone { id, result }).await.is_err() {
     tracing::debug!("RequestDone: cancelled: request_id = {:?}", id);
   }
 }

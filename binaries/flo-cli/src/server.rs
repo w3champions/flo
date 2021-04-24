@@ -16,6 +16,8 @@ pub enum Command {
     player: Vec<i32>,
     #[structopt(long)]
     ob: Option<i32>,
+    #[structopt(long)]
+    node: Option<i32>,
   },
   Run2v2Game {
     players: Vec<i32>,
@@ -53,8 +55,9 @@ impl Command {
       Command::RunGame {
         player: players,
         ob,
+        node,
       } => {
-        let game_id = create_game(players, ob).await?;
+        let game_id = create_game(players, ob, node).await?;
         tracing::info!(game_id);
         let res = client
           .start_game_as_bot(StartGameAsBotRequest { game_id })

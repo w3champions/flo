@@ -2,7 +2,7 @@ use arc_swap::ArcSwap;
 use bs_diesel_utils::{DbConn, ExecutorRef};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::env;
 use std::sync::Arc;
@@ -15,10 +15,8 @@ use crate::schema::{api_client, player};
 use crate::state::{Data, Reload};
 use flo_state::{async_trait, Actor, Context, Handler, Message, RegistryRef, Service};
 
-lazy_static! {
-  pub static ref JWT_SECRET_BASE64: String =
-    env::var("JWT_SECRET_BASE64").expect("env `JWT_SECRET_BASE64`");
-}
+pub static JWT_SECRET_BASE64: Lazy<String> =
+  Lazy::new(|| env::var("JWT_SECRET_BASE64").expect("env `JWT_SECRET_BASE64`"));
 
 #[derive(Debug, Queryable)]
 pub struct ApiClient {
