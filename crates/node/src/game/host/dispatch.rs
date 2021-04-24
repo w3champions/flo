@@ -398,6 +398,7 @@ impl State {
       .map_err(|_| Error::Cancelled)?;
 
     let mut worker = PeerWorker::new(
+      self.ct.clone(),
       stream,
       self.status_rx.clone(),
       peer_cmd_rx,
@@ -1279,6 +1280,7 @@ enum DispatchStatus {
 }
 
 struct PeerWorker {
+  ct: CancellationToken,
   stream: PlayerStream,
   status_rx: watch::Receiver<DispatchStatus>,
   in_rx: Receiver<PlayerStreamCmd>,
@@ -1289,6 +1291,7 @@ struct PeerWorker {
 
 impl PeerWorker {
   fn new(
+    ct: CancellationToken,
     stream: PlayerStream,
     status_rx: watch::Receiver<DispatchStatus>,
     in_rx: Receiver<PlayerStreamCmd>,
@@ -1296,6 +1299,7 @@ impl PeerWorker {
     delay: Option<Duration>,
   ) -> Self {
     Self {
+      ct,
       stream,
       status_rx,
       in_rx,
@@ -1307,7 +1311,7 @@ impl PeerWorker {
 
   async fn serve(&mut self, resend_frames: Option<Vec<Frame>>) -> Result<()> {
     let player_id = self.stream.player_id();
-    let ct = self.stream.token();
+    let stream_ct = self.stream.token();
 
     if let Some(frames) = resend_frames {
       self.stream.get_mut().send_frames(frames).await?;
@@ -1326,10 +1330,13 @@ impl PeerWorker {
 
     loop {
       tokio::select! {
-        _ = ct.cancelled() => {
+        _ = self.ct.cancelled() => {
           break
         },
-        _ = self.status_rx.changed() => {
+        _ = stream_ct.cancelled() => {
+          break
+        },
+        Ok(_) = self.status_rx.changed() => {
           let status = *self.status_rx.borrow();
           if status != last_status {
             last_status = status;
@@ -1393,7 +1400,7 @@ impl PeerWorker {
             }
             PlayerStreamCmd::SetBlock(duration) => {
               tokio::select! {
-                _ = ct.cancelled() => {
+                _ = stream_ct.cancelled() => {
                   break
                 }
                 _ = tokio::time::sleep(duration) => {}
