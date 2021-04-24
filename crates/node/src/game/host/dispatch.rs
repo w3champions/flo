@@ -364,6 +364,7 @@ impl State {
       if reconnected {
         let resend_frames = player.get_resend_frames();
         let msg = format!("Reconnected to the server: {}", player.player_name());
+        player.update_lag_ms_after_reconnect();
         guard.broadcast_message(msg);
         (
           if *self.status_rx.borrow() != DispatchStatus::Pending {
@@ -536,23 +537,16 @@ impl State {
           req.reason()
         );
 
-        let pkt = Packet::simple(PlayerLeft {
-          player_id: slot_player_id,
-          reason: req.reason(),
-        })?;
-
         {
           let mut guard = self.shared.lock();
           let player = guard
             .get_player(player_id)
             .ok_or_else(|| Error::PlayerNotFoundInGame)?;
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
-          player.close_stream();
-          guard.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
+          guard.remove_player_and_broadcast(player_id, Some(req.reason()))?;
         }
 
         self.left_players.insert(player_id);
-        self.shared.lock().map.remove(&player_id);
 
         out_tx
           .send(GameEvent::PlayerStatusChange(
@@ -593,7 +587,12 @@ impl State {
               .map_err(|_| Error::Cancelled)?;
           }
           Err(err) => {
-            tracing::error!("sync ack error: {:?}", err);
+            tracing::error!(
+              game_id = self.game_id,
+              player_id,
+              "sync ack error: {:?}",
+              err
+            );
           }
         }
       }
@@ -911,30 +910,20 @@ impl Shared {
       for (recv_player_id, info) in &mut self.map {
         if !items.iter().any(|(v, _, _)| v == recv_player_id) {
           let mut start_lag_players = vec![];
-          for (_lag_player, lag_slot, lag_duration_ms) in &items {
+          let mut start_lag_player_ids = vec![];
+          for (lag_player, lag_slot, lag_duration_ms) in &items {
+            start_lag_player_ids.push(*lag_player);
             start_lag_players.push(LagPlayer {
               player_id: *lag_slot,
               lag_duration_ms: *lag_duration_ms,
             });
           }
           if !start_lag_players.is_empty() {
-            if !info.lag_slots().is_empty() {
-              for slot in info.lag_slots().clone() {
-                info
-                  .send_w3gs(W3GSPacket::simple(StopLag(LagPlayer {
-                    player_id: slot,
-                    lag_duration_ms: 0,
-                  }))?)
-                  .err()
-                  .map(|err| send_errors.push((*recv_player_id, err)));
-              }
-            }
-
             tracing::info!(
               game_id = self.game_id,
               player_id = recv_player_id,
               "send start lag: {:?}",
-              start_lag_players
+              start_lag_player_ids
             );
             info.set_lag_slots(start_lag_players.iter().map(|v| v.player_id));
             info
@@ -1001,6 +990,12 @@ impl Shared {
           }
         })
         .collect::<Vec<_>>();
+      tracing::info!(
+        game_id = self.game_id,
+        "send stop lag to {:?}: {:?}",
+        targets,
+        stop_lag_players
+      );
       self.broadcast(pkt, broadcast::AllowList(&targets))?;
     }
 
@@ -1031,16 +1026,17 @@ impl Shared {
   }
 
   fn close_player_stream(&mut self, player_id: i32) -> Result<bool> {
-    if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| v.take_stream()) {
+    if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
+      v.set_last_disconnect();
+      v.take_stream()
+    }) {
       if self.started {
         tracing::warn!(
           game_id = self.game_id,
           player_id,
           "player disconnected without LeaveReq"
         );
-        if !self.lagging_player_ids.contains(&player_id) {
-          self.handle_lag(vec![player_id])?;
-        }
+
         stream.close();
       } else {
         tracing::warn!(
@@ -1067,6 +1063,9 @@ impl Shared {
     } else {
       return Ok(());
     };
+    for p in self.map.values_mut() {
+      p.remove_lag_slot(player.slot_player_id());
+    }
     let pkt = Packet::simple(PlayerLeft {
       player_id: player.slot_player_id(),
       reason: reason.unwrap_or(LeaveReason::LeaveDisconnect),
@@ -1182,7 +1181,11 @@ impl Shared {
   pub fn drop_all_lag_players(&mut self) -> Result<()> {
     let drop_player_ids: Vec<_> = self.lagging_player_ids.iter().cloned().collect();
     for drop_player_id in &drop_player_ids {
-      tracing::info!(player_id = *drop_player_id, "lagging player dropped.");
+      tracing::info!(
+        game_id = self.game_id,
+        player_id = *drop_player_id,
+        "lagging player dropped."
+      );
       self.remove_player_and_broadcast(*drop_player_id, None)?;
     }
     self.lagging_player_ids.clear();
@@ -1190,7 +1193,24 @@ impl Shared {
   }
 
   pub fn ack(&mut self, player_id: i32, checksum: u32) -> Result<AckAction> {
-    let res = self.sync.ack(player_id, checksum)?;
+    let res = match self.sync.ack(player_id, checksum) {
+      Ok(res) => res,
+      Err(err) => {
+        tracing::error!(
+          game_id = self.game_id,
+          player_id,
+          "syn ack internal: {:?}: {}",
+          err,
+          self.sync.debug_pending()
+        );
+        self.remove_player_and_broadcast(player_id, None)?;
+        return if !self.lagging_player_ids.contains(&player_id) {
+          Ok(AckAction::Continue)
+        } else {
+          Ok(AckAction::CheckStopLag)
+        };
+      }
+    };
     self
       .get_player(player_id)
       .map(|p| p.set_action_rtt(res.rtt));

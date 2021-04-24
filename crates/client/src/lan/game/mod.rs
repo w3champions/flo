@@ -65,6 +65,7 @@ impl LanGame {
       game.map_checksum,
     )?;
     let token = NodeConnectToken::from_vec(player_token).ok_or_else(|| Error::InvalidNodeToken)?;
+
     let proxy = LanProxy::start(
       LanGameInfo {
         slot_info: crate::lan::game::slot::build_player_slot_info(

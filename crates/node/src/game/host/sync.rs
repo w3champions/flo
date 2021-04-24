@@ -35,10 +35,10 @@ impl SyncMap {
   #[must_use]
   pub fn clock(&mut self, time_increment: u16) -> Option<Vec<PlayerTimeout>> {
     let timeout_players = self.check_timeout(time_increment);
-    let id = self.pending_slab.insert(Pending::new(self.tick, self.time));
     if timeout_players.is_none() {
       self.tick += 1;
       self.time += time_increment as u32;
+      let id = self.pending_slab.insert(Pending::new(self.tick, self.time));
       self.pending_tick.insert(self.tick, id);
     }
     timeout_players
@@ -387,7 +387,7 @@ fn test_sync_map() {
 
     for _ in 0..rng.gen_range(0..8) {
       if let Some((ack_tick, player_id, end)) = acks.pop_front() {
-        if ack_tick <= tick {
+        if ack_tick <= tick - offset {
           let desync = map.ack(player_id, ack_tick).unwrap().desync;
           if desync.is_some() {
             dbg!(&desync);

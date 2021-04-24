@@ -509,8 +509,9 @@ struct SharedState {
 impl State {
   async fn check_game_end(&mut self) -> bool {
     if self.player_slots.values().all(|slot| {
-      slot.client_status == SlotClientStatus::Left
-        || slot.client_status == SlotClientStatus::Disconnected
+      (slot.client_status == SlotClientStatus::Left
+        || slot.client_status == SlotClientStatus::Disconnected)
+        || slot.settings.team == 24
     }) {
       self.status = NodeGameStatus::Ended;
       tracing::debug!("all player left, end game");

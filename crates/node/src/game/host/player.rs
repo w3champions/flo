@@ -21,6 +21,7 @@ pub struct PlayerDispatchInfo {
   lag_slot_ids: BTreeSet<u8>,
   delay: Option<Duration>,
   action_rtt: Option<Duration>,
+  last_disconnect: Option<Instant>,
 }
 
 impl PlayerDispatchInfo {
@@ -37,6 +38,7 @@ impl PlayerDispatchInfo {
       lag_slot_ids: BTreeSet::new(),
       delay: None,
       action_rtt: None,
+      last_disconnect: None,
     }
   }
 
@@ -73,9 +75,26 @@ impl PlayerDispatchInfo {
 
   pub fn close_stream(&mut self) -> Option<PlayerStreamHandle> {
     self.tx.take().map(|v| {
+      self.set_last_disconnect();
       v.close();
       v
     })
+  }
+
+  pub fn set_last_disconnect(&mut self) {
+    self.last_disconnect.replace(Instant::now());
+  }
+
+  pub fn update_lag_ms_after_reconnect(&mut self) {
+    if let Some(inst) = self.last_disconnect {
+      self.lag_duration_ms = self.lag_duration_ms.saturating_add(
+        std::cmp::min(
+          Duration::from_secs(1),
+          Instant::now().saturating_duration_since(inst),
+        )
+        .as_millis() as u32,
+      );
+    }
   }
 
   pub fn stream_id(&self) -> Option<u64> {
@@ -149,15 +168,11 @@ impl PlayerDispatchInfo {
   pub fn end_lag(&mut self) -> u32 {
     if let Some(start) = self.lag_start.take() {
       self.lag_duration_ms = self.lag_duration_ms.saturating_add(std::cmp::min(
-        1000,
+        500,
         (Instant::now() - start).as_millis() as u32,
       ));
     }
     self.lag_duration_ms
-  }
-
-  pub fn lag_slots(&self) -> &BTreeSet<u8> {
-    &self.lag_slot_ids
   }
 
   pub fn set_lag_slots<I: Iterator<Item = u8>>(&mut self, ids: I) {

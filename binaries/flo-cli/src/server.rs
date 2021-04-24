@@ -1,7 +1,7 @@
 use flo_grpc::controller::*;
 use structopt::StructOpt;
 
-use crate::game::{create_2v2_game, create_game};
+use crate::game::{create_2v2_game, create_ffa_game, create_game};
 use crate::grpc::get_grpc_client;
 use crate::Result;
 use flo_controller::player::PlayerSource;
@@ -18,6 +18,9 @@ pub enum Command {
     ob: Option<i32>,
   },
   Run2v2Game {
+    players: Vec<i32>,
+  },
+  RunFFAGame {
     players: Vec<i32>,
   },
   StartGame {
@@ -61,6 +64,15 @@ impl Command {
       }
       Command::Run2v2Game { players } => {
         let game_id = create_2v2_game(players).await?;
+        tracing::info!(game_id);
+        let res = client
+          .start_game_as_bot(StartGameAsBotRequest { game_id })
+          .await?
+          .into_inner();
+        tracing::info!("start game: {:?}", res);
+      }
+      Command::RunFFAGame { players } => {
+        let game_id = create_ffa_game(players).await?;
         tracing::info!(game_id);
         let res = client
           .start_game_as_bot(StartGameAsBotRequest { game_id })
