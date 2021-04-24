@@ -538,6 +538,8 @@ impl State {
           req.reason()
         );
 
+        self.left_players.insert(player_id);
+
         {
           let mut guard = self.shared.lock();
           let player = guard
@@ -546,8 +548,6 @@ impl State {
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
           guard.remove_player_and_broadcast(player_id, Some(req.reason()))?;
         }
-
-        self.left_players.insert(player_id);
 
         out_tx
           .send(GameEvent::PlayerStatusChange(
