@@ -18,6 +18,7 @@ use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
@@ -37,6 +38,7 @@ pub struct GameHandler<'a> {
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_tx: &'a mut Sender<Packet>,
   w3gs_rx: &'a mut Receiver<Packet>,
+  left_game: &'a AtomicBool,
   client: &'a mut Addr<ControllerClient>,
   muted_players: BTreeSet<u8>,
 }
@@ -50,6 +52,7 @@ impl<'a> GameHandler<'a> {
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
+    left_game: &'a AtomicBool,
     client: &'a mut Addr<ControllerClient>,
   ) -> Self {
     GameHandler {
@@ -60,6 +63,7 @@ impl<'a> GameHandler<'a> {
       status_rx,
       w3gs_tx,
       w3gs_rx,
+      left_game,
       client,
       muted_players: BTreeSet::new(),
     }
@@ -218,7 +222,11 @@ impl<'a> GameHandler<'a> {
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
       IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
-      PacketTypeId::DropReq | PacketTypeId::LeaveReq => {}
+      PacketTypeId::DropReq => {}
+      PacketTypeId::LeaveReq => {
+        tracing::info!("send LeaveReq");
+        self.left_game.store(true, Ordering::SeqCst);
+      }
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());
       }

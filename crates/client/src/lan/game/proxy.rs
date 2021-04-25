@@ -17,6 +17,7 @@ use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
 use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -52,12 +53,15 @@ impl LanProxy {
 
     tracing::debug!("connecting to node: {}", node.client_socket_addr());
 
+    let left_game = Arc::new(AtomicBool::new(false));
+
     let node_stream = NodeStream::connect(
       &info,
       node.client_socket_addr(),
       token,
       client.clone(),
       w3gs_tx.clone(),
+      left_game.clone(),
     )
     .await?;
 
@@ -81,6 +85,7 @@ impl LanProxy {
             event_rx,
             w3gs_tx,
             w3gs_rx,
+            left_game,
             scope,
             node,
             client.clone(),
@@ -140,6 +145,7 @@ impl State {
     event_rx: Receiver<PlayerEvent>,
     mut w3gs_tx: Sender<Packet>,
     mut w3gs_rx: Receiver<Packet>,
+    left_game: Arc<AtomicBool>,
     mut scope: SpawnScopeHandle,
     node: Arc<NodeInfo>,
     mut client: Addr<ControllerClient>,
@@ -247,6 +253,7 @@ impl State {
       &mut status_rx,
       &mut w3gs_tx,
       &mut w3gs_rx,
+      &left_game,
       &mut client,
     );
     tokio::select! {

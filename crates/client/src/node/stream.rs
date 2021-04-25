@@ -18,6 +18,7 @@ use flo_w3gs::protocol::chat::{ChatFromHost, ChatToHost};
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -52,6 +53,7 @@ impl NodeStream {
     token: NodeConnectToken,
     client: Addr<ControllerClient>,
     game_tx: Sender<W3GSPacket>,
+    left_game: Arc<AtomicBool>,
   ) -> Result<Self> {
     let ct = CancellationToken::new();
     let shutdown_notify = Arc::new(Notify::new());
@@ -73,6 +75,7 @@ impl NodeStream {
       ack: 0,
       time: 0,
       last_connected_at: None,
+      left_game,
     };
 
     tokio::spawn(
@@ -110,6 +113,7 @@ struct Session {
   time: u32,
   ack: u32,
   last_connected_at: Option<Instant>,
+  left_game: Arc<AtomicBool>,
 }
 
 impl Session {
@@ -187,7 +191,11 @@ impl Session {
           }
           ConnectionRunResult::NodeDisconnected => {
             tracing::error!("node disconnected");
-            tracing::error!("reconnecting...");
+            if self.left_game.load(Ordering::SeqCst) {
+              tracing::debug!("left game");
+              self.notify_disconnected().await;
+              return;
+            }
             if let Some(delay) = reconnect_backoff.next_backoff() {
               sleep(delay).await;
             }
