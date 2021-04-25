@@ -23,7 +23,8 @@ enum Opt {
 #[tokio::main]
 async fn main() -> Result<()> {
   dotenv::dotenv()?;
-  flo_log_subscriber::init_env_override("debug,h2=error");
+  // flo_log_subscriber::init_env_override("debug,h2=error,async_dnssd=error");
+  flo_log_subscriber::init();
 
   let opt = Opt::from_args();
 

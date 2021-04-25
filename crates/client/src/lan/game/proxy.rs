@@ -263,7 +263,7 @@ impl State {
       res = game_handler.run(deferred_packets) => {
         match res {
           Ok(res) => {
-            tracing::debug!("game ended: {:?}", res);
+            tracing::info!("game ended: {:?}", res);
           },
           Err(err) => {
             tracing::error!("game ended with error: {}", err);
