@@ -12,9 +12,8 @@ use flo_net::stream::FloStream;
 use flo_net::w3gs::{W3GSAckQueue, W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
 use flo_state::Addr;
 use flo_types::node::NodeGameStatusSnapshot;
-use flo_util::chat::parse_chat_command;
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::protocol::chat::{ChatFromHost, ChatToHost};
+use flo_w3gs::protocol::chat::ChatFromHost;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -343,7 +342,7 @@ impl Connection {
 
                   frame.type_id = PacketTypeId::Pong;
                   if self.stream.send_frame(frame).await.is_err() {
-                    break ConnectionRunResult::NodeDisconnected
+                    return Ok(ConnectionRunResult::NodeDisconnected)
                   }
                 }
                 PacketTypeId::W3GS => {
@@ -384,11 +383,11 @@ impl Connection {
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::debug!("stream closed");
-              break ConnectionRunResult::NodeDisconnected;
+              return Ok(ConnectionRunResult::NodeDisconnected);
             },
             Err(err) => {
               tracing::error!("stream recv: {}", err);
-              break ConnectionRunResult::NodeDisconnected;
+              return Ok(ConnectionRunResult::NodeDisconnected);
             }
           }
         }
@@ -397,68 +396,86 @@ impl Connection {
         next = session.rx.recv() => {
           match next {
             Some(msg) => {
-              let frame = match msg {
-                WorkerMsg::StatusUpdate(status) => {
-                  let mut pkt =
-                    flo_net::proto::flo_node::PacketClientUpdateSlotClientStatusRequest::default();
-                  pkt.set_status(status.into_proto_enum());
-                  pkt.encode_as_frame()?
-                },
-                WorkerMsg::W3GS(pkt) => {
-                  if pkt.type_id() == W3GSPacketTypeId::ChatToHost {
-                    let pkt: ChatToHost = pkt.decode_simple()?;
-                    if let Some(cmd) = pkt.chat_message().and_then(|v| parse_chat_command(v)) {
-                      match cmd.name() {
-                        "conn" => {
-                          session.game_tx.send(W3GSPacket::simple(ChatFromHost::private_to_self(
-                            pkt.from_player,
-                            format!(
-                              "local: last_ack_received = {:?}, len = {}",
-                              session.ack_q.last_ack_received(),
-                              session.ack_q.pending_ack_len()
-                            )
-                          ))?).await.ok();
-                        },
-                        _ => {},
-                      }
-                    }
-                  }
-
-                  let sid = session.ack_q.gen_next_send_sid();
-                  let ack_id = session.ack_q.take_ack_received();
-                  let meta = W3GSMetadata::new(pkt.type_id(), sid, ack_id);
-
-                  if pkt.type_id() == W3GSPacketTypeId::OutgoingKeepAlive {
-                    session.ack += 1;
-                  }
-
-                  // tracing::debug!(
-                  //   "send#{} tick = {}, time = {}, ack = {}",
-                  //   meta.sid(),
-                  //   session.tick,
-                  //   session.time,
-                  //   session.ack,
-                  // );
-
-                  session.ack_q.push_send(meta.clone(), pkt.clone());
-                  Frame::from_w3gs(meta, pkt)
-                },
-              };
+              let frame = self.encode_worker_msg(msg, session)?;
               if let Err(err) = self.stream.send_frame(frame).await {
-                tracing::error!("stream send: {}", err);
-                break ConnectionRunResult::NodeDisconnected
+                tracing::error!("handle_worker_msg: {}", err);
+                break ConnectionRunResult::NodeDisconnected;
               }
             },
             None => {
-              break ConnectionRunResult::Cancelled
+              return Ok(ConnectionRunResult::Cancelled)
             }
           }
         }
       }
     };
 
+    let mut flush_frames = vec![];
+    while let Some(msg) = session.rx.recv().await {
+      flush_frames.push(self.encode_worker_msg(msg, session)?);
+    }
+    if !flush_frames.is_empty() {
+      self.stream.send_frames(flush_frames).await.ok();
+    }
     self.stream.flush().await.ok();
     Ok(res)
+  }
+
+  fn encode_worker_msg(&mut self, msg: WorkerMsg, session: &mut Session) -> Result<Frame> {
+    let frame = match msg {
+      WorkerMsg::StatusUpdate(status) => {
+        let mut pkt =
+          flo_net::proto::flo_node::PacketClientUpdateSlotClientStatusRequest::default();
+        pkt.set_status(status.into_proto_enum());
+        pkt.encode_as_frame()?
+      }
+      WorkerMsg::W3GS(pkt) => {
+        // if pkt.type_id() == W3GSPacketTypeId::ChatToHost {
+        //   use flo_util::chat::parse_chat_command;
+        //   use flo_w3gs::protocol::chat::{ChatToHost};
+        //   let pkt: ChatToHost = pkt.decode_simple()?;
+        //   if let Some(cmd) = pkt.chat_message().and_then(|v| parse_chat_command(v)) {
+        //     match cmd.name() {
+        //       "conn" => {
+        //         session
+        //           .game_tx
+        //           .send(W3GSPacket::simple(ChatFromHost::private_to_self(
+        //             pkt.from_player,
+        //             format!(
+        //               "local: last_ack_received = {:?}, len = {}",
+        //               session.ack_q.last_ack_received(),
+        //               session.ack_q.pending_ack_len()
+        //             ),
+        //           ))?)
+        //           .await
+        //           .ok();
+        //       }
+        //       _ => {}
+        //     }
+        //   }
+        // }
+
+        let sid = session.ack_q.gen_next_send_sid();
+        let ack_id = session.ack_q.take_ack_received();
+        let meta = W3GSMetadata::new(pkt.type_id(), sid, ack_id);
+
+        if pkt.type_id() == W3GSPacketTypeId::OutgoingKeepAlive {
+          session.ack += 1;
+        }
+
+        // tracing::debug!(
+        //   "send#{} tick = {}, time = {}, ack = {}",
+        //   meta.sid(),
+        //   session.tick,
+        //   session.time,
+        //   session.ack,
+        // );
+
+        session.ack_q.push_send(meta.clone(), pkt.clone());
+        Frame::from_w3gs(meta, pkt)
+      }
+    };
+    Ok(frame)
   }
 
   async fn handle_node_frame(&mut self, session: &mut Session, frame: Frame) -> Result<()> {
