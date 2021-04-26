@@ -1085,32 +1085,35 @@ impl Shared {
   }
 
   fn handle_peer_stream_close(&mut self, player_id: i32) -> Result<ClosePlayerStreamResult> {
-    if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
-      v.set_last_disconnect();
-      v.take_stream()
-    }) {
-      if self.started {
-        tracing::warn!(game_id = self.game_id, player_id, "player disconnected");
-        stream.close();
-        // don't need to check `lagging_player_ids`
-        // because disconnect does not change lag status
-        Ok(ClosePlayerStreamResult::ClosedDisconnected)
-      } else {
-        tracing::warn!(
-          game_id = self.game_id,
-          player_id,
-          "player dropped before game start"
-        );
-        self.remove_player_and_broadcast(player_id, None)?;
-        if self.lagging_player_ids.contains(&player_id) {
-          Ok(ClosePlayerStreamResult::ClosedLagging)
-        } else {
-          Ok(ClosePlayerStreamResult::ClosedLeft)
-        }
-      }
-    } else {
-      Ok(ClosePlayerStreamResult::Skipped)
-    }
+    self.remove_player_and_broadcast(player_id, None)?;
+    Ok(ClosePlayerStreamResult::ClosedLeft)
+
+    // if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
+    //   v.set_last_disconnect();
+    //   v.take_stream()
+    // }) {
+    //   if self.started {
+    //     tracing::warn!(game_id = self.game_id, player_id, "player disconnected");
+    //     stream.close();
+    //     // don't need to check `lagging_player_ids`
+    //     // because disconnect does not change lag status
+    //     Ok(ClosePlayerStreamResult::ClosedDisconnected)
+    //   } else {
+    //     tracing::warn!(
+    //       game_id = self.game_id,
+    //       player_id,
+    //       "player dropped before game start"
+    //     );
+    //     self.remove_player_and_broadcast(player_id, None)?;
+    //     if self.lagging_player_ids.contains(&player_id) {
+    //       Ok(ClosePlayerStreamResult::ClosedLagging)
+    //     } else {
+    //       Ok(ClosePlayerStreamResult::ClosedLeft)
+    //     }
+    //   }
+    // } else {
+    //   Ok(ClosePlayerStreamResult::Skipped)
+    // }
   }
 
   fn remove_player_and_broadcast(

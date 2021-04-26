@@ -5,7 +5,7 @@ pub const PEER_CHANNEL_SIZE: usize = 250;
 pub const CONTROLLER_SENDER_BUF_SIZE: usize = 10;
 pub const GAME_DISPATCH_BUF_SIZE: usize = 256;
 pub const GAME_PLAYER_LAGGING_THRESHOLD_MS: u32 = 3000;
-pub const GAME_PLAYER_MAX_ACK_QUEUE: usize = 100;
+pub const GAME_PLAYER_MAX_ACK_QUEUE: usize = 300;
 pub static GAME_DEFAULT_STEP_MS: Lazy<u16> = Lazy::new(|| {
   std::env::var("FLO_GAME_STEP_MS")
     .ok()
