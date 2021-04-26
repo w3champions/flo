@@ -4,6 +4,7 @@ use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_net::w3gs::W3GSPacket;
 use flo_state::Addr;
 use flo_util::chat::{parse_chat_command, ChatCommand};
 #[cfg(feature = "blacklist")]
@@ -126,9 +127,11 @@ impl<'a> GameHandler<'a> {
             },
           };
           if let Some(pkt) = pkt {
-            // tracing::debug!("game => {:?}", pkt.type_id());
             if pkt.type_id() == LeaveAck::PACKET_TYPE_ID {
-              self.node_stream.report_slot_status(SlotClientStatus::Left).await.ok();
+              tracing::info!("game leave ack received");
+              if let Err(err) = self.node_stream.report_slot_status(SlotClientStatus::Left).await {
+                tracing::error!("report player left: {}", err);
+              }
               self.w3gs_stream.send(Packet::simple(LeaveAck)?).await?;
               self.w3gs_stream.flush().await?;
               return Ok(GameResult::Leave)
@@ -136,7 +139,7 @@ impl<'a> GameHandler<'a> {
 
             self.handle_game_packet(&mut loop_state, pkt).await?;
           } else {
-            tracing::error!("game stream closed");
+            tracing::info!("game stream closed");
             return Ok(GameResult::Disconnected)
           }
         }
@@ -224,8 +227,14 @@ impl<'a> GameHandler<'a> {
       OutgoingAction::PACKET_TYPE_ID => {}
       PacketTypeId::DropReq => {}
       PacketTypeId::LeaveReq => {
-        tracing::info!("send LeaveReq");
         self.left_game.store(true, Ordering::SeqCst);
+        tracing::info!("request to leave received.");
+        if let Err(err) = self.node_stream.send_w3gs(pkt).await {
+          tracing::error!("report request to leave: {}", err);
+        }
+        self.w3gs_stream.send(W3GSPacket::simple(LeaveAck)?).await?;
+
+        return Ok(());
       }
       _ => {
         tracing::debug!("unknown game packet: {:?}", pkt.type_id());

@@ -4,7 +4,7 @@ use std::time::Duration;
 pub const PEER_CHANNEL_SIZE: usize = 250;
 pub const CONTROLLER_SENDER_BUF_SIZE: usize = 10;
 pub const GAME_DISPATCH_BUF_SIZE: usize = 256;
-pub const GAME_PLAYER_LAGGING_THRESHOLD_MS: u32 = 1000;
+pub const GAME_PLAYER_LAGGING_THRESHOLD_MS: u32 = 3000;
 pub const GAME_PLAYER_MAX_ACK_QUEUE: usize = 100;
 pub static GAME_DEFAULT_STEP_MS: Lazy<u16> = Lazy::new(|| {
   std::env::var("FLO_GAME_STEP_MS")
@@ -13,7 +13,7 @@ pub static GAME_DEFAULT_STEP_MS: Lazy<u16> = Lazy::new(|| {
     .unwrap_or(30)
 });
 pub const GAME_PING_INTERVAL: Duration = Duration::from_secs(1);
-pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(3);
+pub const GAME_PING_TIMEOUT: Duration = Duration::from_secs(5);
 pub const GAME_CLOCK_MAX_PAUSE: Duration = Duration::from_secs(60 - 3);
 
 #[cfg(not(debug_assertions))]

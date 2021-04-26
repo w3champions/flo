@@ -192,10 +192,11 @@ impl Session {
             break 'main Some(stream);
           }
           ConnectionRunResult::NodeDisconnected => {
-            tracing::error!("node disconnected");
             if self.left_game.load(Ordering::SeqCst) {
-              tracing::debug!("left game");
+              tracing::info!("node session ended");
               break 'main Some(stream);
+            } else {
+              tracing::error!("node disconnected unexpectedly");
             }
             if let Some(delay) = reconnect_backoff.next_backoff() {
               sleep(delay).await;
@@ -221,12 +222,27 @@ impl Session {
           }
         }
       }
+
+      match self.encode_worker_msg(WorkerMsg::StatusUpdate(SlotClientStatus::Left)) {
+        Ok(frame) => {
+          flush_frames.push(frame);
+        }
+        Err(err) => {
+          tracing::error!("encode left status update packet: {}", err);
+        }
+      }
+
       if !flush_frames.is_empty() {
         tracing::debug!("flushing frames: {}", flush_frames.len());
-        stream.send_frames(flush_frames).await.ok();
+        if let Err(err) = stream.send_frames(flush_frames).await {
+          tracing::error!("flush frames: {}", err);
+        }
       }
+
       tracing::debug!("flushing stream");
-      stream.flush().await.ok();
+      if let Err(err) = stream.flush().await {
+        tracing::error!("flush stream: {}", err);
+      }
     }
 
     self.notify_disconnected().await;
@@ -338,8 +354,11 @@ impl Session {
         let ack_id = self.ack_q.take_ack_received();
         let meta = W3GSMetadata::new(pkt.type_id(), sid, ack_id);
 
-        if pkt.type_id() == W3GSPacketTypeId::OutgoingKeepAlive {
-          self.ack += 1;
+        match pkt.type_id() {
+          W3GSPacketTypeId::OutgoingKeepAlive => {
+            self.ack += 1;
+          }
+          _ => {}
         }
 
         // tracing::debug!(
@@ -426,19 +445,26 @@ impl Connection {
                   Self::reset_timeout(ping_timeout.as_mut());
 
                   frame.type_id = PacketTypeId::Pong;
-                  if stream.send_frame(frame).await.is_err() {
+                  if let Err(err) = stream.send_frame(frame).await {
+                    tracing::error!("send pong to node: {}", err);
                     return Ok(ConnectionRunResult::NodeDisconnected)
                   }
                 }
                 PacketTypeId::W3GS => {
                   let (meta, pkt) = frame.try_into_w3gs()?;
 
-                  if pkt.type_id() == W3GSPacketTypeId::IncomingAction {
-                    let time = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
-                    session.tick += 1;
-                    session.time += time as u32;
+                  match pkt.type_id() {
+                    W3GSPacketTypeId::IncomingAction => {
+                      let time = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
+                      session.tick += 1;
+                      session.time += time as u32;
 
-                    Self::reset_timeout(ping_timeout.as_mut());
+                      Self::reset_timeout(ping_timeout.as_mut());
+                    }
+                    W3GSPacketTypeId::LeaveAck => {
+                      tracing::info!("node leave ack received");
+                    },
+                    _ => {}
                   }
 
                   if !session.ack_q.ack_received(meta.sid()) {
@@ -460,18 +486,18 @@ impl Connection {
                 }
                 _ => {
                   if let Err(err) = self.handle_node_frame(session, frame).await {
-                    tracing::debug!("handle node frame: {}", err);
+                    tracing::error!("handle node frame: {}", err);
                     break ConnectionRunResult::NodeDisconnected;
                   }
                 }
               }
             },
             Err(flo_net::error::Error::StreamClosed) => {
-              tracing::debug!("stream closed");
+              tracing::error!("node stream closed");
               return Ok(ConnectionRunResult::NodeDisconnected);
             },
             Err(err) => {
-              tracing::error!("stream recv: {}", err);
+              tracing::error!("node stream recv: {}", err);
               return Ok(ConnectionRunResult::NodeDisconnected);
             }
           }
@@ -547,13 +573,18 @@ pub struct NodeStreamSender {
 
 impl NodeStreamSender {
   pub async fn report_slot_status(&mut self, status: SlotClientStatus) -> Result<()> {
-    self.tx.send(WorkerMsg::StatusUpdate(status)).await.ok();
+    if let Err(_err) = self.tx.send(WorkerMsg::StatusUpdate(status)).await {
+      tracing::error!("report_slot_status failed");
+    }
     Ok(())
   }
 
   #[inline]
   pub async fn send_w3gs(&mut self, pkt: W3GSPacket) -> Result<()> {
-    self.tx.send(WorkerMsg::W3GS(pkt)).await.ok();
+    let type_id = pkt.type_id();
+    self.tx.send(WorkerMsg::W3GS(pkt)).await.err().map(|_err| {
+      tracing::error!("node stream send cancelled: {:?}", type_id);
+    });
     Ok(())
   }
 }

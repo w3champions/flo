@@ -286,6 +286,7 @@ impl GameSessionHandle {
 
     match next_status {
       SlotClientStatus::Left => {
+        guard.host.report_player_left(player_id).await;
         if !guard.check_game_end().await {
           if guard.status == NodeGameStatus::Loading {
             guard.check_game_all_loaded().await;

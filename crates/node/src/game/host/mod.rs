@@ -35,6 +35,10 @@ impl GameHost {
     self.dispatcher.start();
   }
 
+  pub async fn report_player_left(&mut self, player_id: i32) {
+    self.dispatcher.report_player_left(player_id).await;
+  }
+
   pub async fn register_player_stream(
     &mut self,
     mut stream: PlayerStream,

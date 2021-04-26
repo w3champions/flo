@@ -144,8 +144,14 @@ impl LanGame {
     self.state.game_id == game_id && self.state.my_player_id == my_player_id
   }
 
-  pub async fn shutdown(self) {
-    self.proxy.shutdown().await;
+  pub fn shutdown(self) {
+    tokio::spawn(async move {
+      if let Err(_) =
+        tokio::time::timeout(std::time::Duration::from_secs(10), self.proxy.shutdown()).await
+      {
+        tracing::error!("shutdown last lan game timeout.");
+      }
+    });
   }
 }
 

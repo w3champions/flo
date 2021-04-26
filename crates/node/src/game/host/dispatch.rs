@@ -42,6 +42,9 @@ pub enum Cmd {
     stream: PlayerStream,
     tx: oneshot::Sender<Result<PlayerStreamHandle>>,
   },
+  PlayerLeft {
+    player_id: i32,
+  },
 }
 
 enum PeerMsg {
@@ -117,6 +120,21 @@ impl Dispatcher {
     self.start_notify.notify_one();
   }
 
+  pub async fn report_player_left(&mut self, player_id: i32) {
+    self
+      .cmd_tx
+      .send(Cmd::PlayerLeft { player_id })
+      .await
+      .err()
+      .map(|_err| {
+        tracing::warn!(
+          game_id = self.game_id,
+          player_id,
+          "report player left cancelled"
+        )
+      });
+  }
+
   pub async fn register_player_stream(&self, stream: PlayerStream) -> Result<PlayerStreamHandle> {
     let (tx, rx) = oneshot::channel();
     self
@@ -135,6 +153,7 @@ impl Dispatcher {
     ct: CancellationToken,
   ) {
     let (peer_tx, mut peer_rx) = channel::<PeerMsg>(crate::constants::GAME_DISPATCH_BUF_SIZE);
+
     loop {
       tokio::select! {
         _ = ct.cancelled() => {
@@ -330,6 +349,17 @@ impl State {
         )
         .ok();
       }
+      Cmd::PlayerLeft { player_id } => {
+        tracing::info!(
+          game_id = self.game_id,
+          player_id,
+          "player left status received"
+        );
+        self
+          .shared
+          .lock()
+          .remove_player_and_broadcast(player_id, None)?;
+      }
     }
 
     Ok(())
@@ -455,32 +485,52 @@ impl State {
       } => {
         tracing::debug!(player_id, "player stream closed: {}", stream_id);
         if self.left_players.contains(&player_id) {
-          out_tx
-            .send(GameEvent::PlayerStatusChange(
-              player_id,
-              SlotClientStatus::Left,
-              SlotClientStatusUpdateSource::Node,
-            ))
-            .await
-            .map_err(|_| Error::Cancelled)?;
           return Ok(());
         }
 
-        let left = {
+        let res = {
           let mut guard = self.shared.lock();
-          guard.close_player_stream(player_id)?;
-          guard.get_player(player_id).is_none()
+          guard.handle_peer_stream_close(player_id)?
         };
 
-        let status = if left {
-          SlotClientStatus::Left
-        } else {
-          SlotClientStatus::Disconnected
+        let next_status = match res {
+          ClosePlayerStreamResult::ClosedDisconnected => SlotClientStatus::Disconnected,
+          ClosePlayerStreamResult::ClosedLeft => SlotClientStatus::Left,
+          ClosePlayerStreamResult::Skipped => {
+            tracing::warn!(
+              game_id = self.game_id,
+              player_id,
+              stream_id,
+              "close player stream: player stream already removed"
+            );
+            SlotClientStatus::Disconnected
+          }
+          ClosePlayerStreamResult::ClosedLagging => {
+            tracing::warn!(
+              game_id = self.game_id,
+              player_id,
+              stream_id,
+              "lagging player stream closed"
+            );
+            action_tx
+              .send(ActionMsg::CheckStopLag)
+              .await
+              .map_err(|_| Error::Cancelled)?;
+            SlotClientStatus::Left
+          }
         };
+
+        tracing::debug!(
+          game_id = self.game_id,
+          player_id,
+          "next client status: {:?}",
+          next_status
+        );
+
         out_tx
           .send(GameEvent::PlayerStatusChange(
             player_id,
-            status,
+            next_status,
             SlotClientStatusUpdateSource::Node,
           ))
           .await
@@ -540,13 +590,21 @@ impl State {
 
         self.left_players.insert(player_id);
 
-        {
+        let should_check_lag = {
           let mut guard = self.shared.lock();
           let player = guard
             .get_player(player_id)
             .ok_or_else(|| Error::PlayerNotFoundInGame)?;
           player.send_w3gs(Packet::simple(LeaveAck)?).ok();
           guard.remove_player_and_broadcast(player_id, Some(req.reason()))?;
+          guard.lagging_player_ids.contains(&player_id)
+        };
+
+        if should_check_lag {
+          action_tx
+            .send(ActionMsg::CheckStopLag)
+            .await
+            .map_err(|_err| Error::Cancelled)?;
         }
 
         out_tx
@@ -1026,19 +1084,17 @@ impl Shared {
     Ok(Some(items))
   }
 
-  fn close_player_stream(&mut self, player_id: i32) -> Result<bool> {
+  fn handle_peer_stream_close(&mut self, player_id: i32) -> Result<ClosePlayerStreamResult> {
     if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
       v.set_last_disconnect();
       v.take_stream()
     }) {
       if self.started {
-        tracing::warn!(
-          game_id = self.game_id,
-          player_id,
-          "player disconnected without LeaveReq"
-        );
-
+        tracing::warn!(game_id = self.game_id, player_id, "player disconnected");
         stream.close();
+        // don't need to check `lagging_player_ids`
+        // because disconnect does not change lag status
+        Ok(ClosePlayerStreamResult::ClosedDisconnected)
       } else {
         tracing::warn!(
           game_id = self.game_id,
@@ -1046,10 +1102,14 @@ impl Shared {
           "player dropped before game start"
         );
         self.remove_player_and_broadcast(player_id, None)?;
+        if self.lagging_player_ids.contains(&player_id) {
+          Ok(ClosePlayerStreamResult::ClosedLagging)
+        } else {
+          Ok(ClosePlayerStreamResult::ClosedLeft)
+        }
       }
-      Ok(true)
     } else {
-      Ok(false)
+      Ok(ClosePlayerStreamResult::Skipped)
     }
   }
 
@@ -1495,4 +1555,12 @@ impl PeerWorker {
 enum DispatchResult {
   Continue,
   Lag(Tick),
+}
+
+#[derive(Debug)]
+enum ClosePlayerStreamResult {
+  ClosedDisconnected,
+  ClosedLeft,
+  ClosedLagging,
+  Skipped,
 }

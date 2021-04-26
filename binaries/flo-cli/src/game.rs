@@ -3,7 +3,8 @@ use crate::Result;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
-const MAP: &str = r#"maps\frozenthrone\(4)twistedmeadows.w3x"#;
+const MAP: &str = r#"maps\4twistedmeadows.w3x"#;
+const MAP_CHECKSUM: u32 = 3469788252;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
@@ -203,6 +204,51 @@ pub async fn create_ffa_game(players: Vec<i32>) -> Result<i32> {
   Ok(res.into_inner().game.unwrap().id)
 }
 
+pub async fn create_4v4_game(players: Vec<i32>) -> Result<i32> {
+  if players.len() != 8 {
+    panic!("Need to specify 8 player ids");
+  }
+
+  let mut client = get_grpc_client().await;
+
+  let nodes = client.list_nodes(()).await?.into_inner().nodes;
+  let node_id = nodes.first().unwrap().id;
+
+  tracing::info!(node_id);
+
+  let game_name = format!("GAME-{:x}", rand::random::<u32>());
+  tracing::info!("game name = {}", game_name);
+
+  let slots = players
+    .into_iter()
+    .enumerate()
+    .map(|(i, player_id)| CreateGameSlot {
+      player_id: Some(player_id),
+      settings: Some(SlotSettings {
+        team: if i < 4 { 1 } else { 2 },
+        color: i as i32,
+        computer: 2,
+        handicap: 100,
+        status: 2,
+        race: 0,
+        ..Default::default()
+      }),
+      ..Default::default()
+    })
+    .collect();
+
+  let res = client
+    .create_game_as_bot(CreateGameAsBotRequest {
+      name: game_name,
+      map: Some(get_map()?),
+      node_id,
+      slots,
+      ..Default::default()
+    })
+    .await?;
+  Ok(res.into_inner().game.unwrap().id)
+}
+
 pub fn get_map_server() -> Result<Map> {
   let map = Map {
     sha1: hex::decode("9524abb8e35ce7b158bfa4d4b8734234d6073ca5")?,
@@ -229,7 +275,7 @@ fn get_map() -> Result<Map> {
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;
   let map = Map {
     sha1: checksum.sha1.to_vec(),
-    checksum: u32::from_le_bytes([0xED, 0xB9, 0xC9, 0x08]),
+    checksum: MAP_CHECKSUM,
     name: "FLO_CLI".to_string(),
     description: map.description().to_string(),
     author: map.author().to_string(),
