@@ -633,27 +633,26 @@ impl State {
         self.dispatch_chat(player_id, packet, action_tx).await?;
       }
       PacketTypeId::OutgoingKeepAlive => {
-        let payload: OutgoingKeepAlive = packet.decode_simple()?;
-        let checksum = payload.checksum;
-        // tracing::debug!("player_id = {}, checksum = {}", player_id, checksum);
-        let res = self.shared.lock().ack(player_id, checksum);
-        match res {
-          Ok(AckAction::Continue) => {}
-          Ok(AckAction::CheckStopLag) => {
-            action_tx
-              .send(ActionMsg::CheckStopLag)
-              .await
-              .map_err(|_| Error::Cancelled)?;
-          }
-          Err(err) => {
-            tracing::error!(
-              game_id = self.game_id,
-              player_id,
-              "sync ack error: {:?}",
-              err
-            );
-          }
-        }
+        // let payload: OutgoingKeepAlive = packet.decode_simple()?;
+        // let checksum = payload.checksum;
+        // let res = self.shared.lock().ack(player_id, checksum);
+        // match res {
+        //   Ok(AckAction::Continue) => {}
+        //   Ok(AckAction::CheckStopLag) => {
+        //     action_tx
+        //       .send(ActionMsg::CheckStopLag)
+        //       .await
+        //       .map_err(|_| Error::Cancelled)?;
+        //   }
+        //   Err(err) => {
+        //     tracing::error!(
+        //       game_id = self.game_id,
+        //       player_id,
+        //       "sync ack error: {:?}",
+        //       err
+        //     );
+        //   }
+        // }
       }
       id => {
         tracing::warn!("unexpected w3gs packet id = {:?}", id);
@@ -736,8 +735,9 @@ impl State {
     player_id: i32,
     cmd: ChatCommand<'_>,
   ) -> Result<bool> {
+    let debug = cfg!(debug_assertions);
     match cmd.name() {
-      "drop" => {
+      "drop" if debug => {
         let shared = self.shared.clone();
         tokio::spawn(async move {
           shared
@@ -746,7 +746,7 @@ impl State {
             .map(|v| v.close_stream());
         });
       }
-      "block" => {
+      "block" if debug => {
         if let Some(Some((ms,))) = cmd.parse_arguments::<Option<(u64,)>>().ok() {
           self.shared.clone().lock().get_player(player_id).map(|p| {
             p.set_block(Duration::from_millis(ms)).ok();
@@ -837,7 +837,7 @@ impl State {
           }
         }
       }
-      "desync" => {
+      "desync" if debug => {
         let mut lock = self.shared.lock();
         if let Some(player) = lock.get_player(player_id) {
           let pkt = W3GSPacket::with_payload(IncomingAction(TimeSlot {
@@ -847,7 +847,7 @@ impl State {
           player.send_w3gs(pkt).ok();
         }
       }
-      "ping" => {
+      "ping" if debug => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
           .map
@@ -867,7 +867,7 @@ impl State {
           lock.broadcast_message(msg);
         }
       }
-      "conn" => {
+      "conn" if debug => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
           .map
@@ -947,12 +947,12 @@ impl Shared {
   #[must_use]
   pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<DispatchResult> {
     let time_increment_ms = tick.time_increment_ms;
-    if let Some(timeouts) = self.sync.clock(time_increment_ms) {
-      let player_ids: Vec<_> = timeouts.into_iter().map(|t| t.player_id).collect();
-      if self.handle_lag(player_ids)? {
-        return Ok(DispatchResult::Lag(tick));
-      }
-    }
+    // if let Some(timeouts) = self.sync.clock(time_increment_ms) {
+    //   let player_ids: Vec<_> = timeouts.into_iter().map(|t| t.player_id).collect();
+    //   if self.handle_lag(player_ids)? {
+    //     return Ok(DispatchResult::Lag(tick));
+    //   }
+    // }
     let action_packet = Packet::with_payload(IncomingAction(TimeSlot {
       time_increment_ms,
       actions: tick.actions,
