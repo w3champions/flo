@@ -107,12 +107,16 @@ impl SyncMap {
       .get_mut(&player_id)
       .ok_or_else(|| AckError::PlayerNotFound(player_id))?;
     let tick = state.tick + 1;
+    let time = self.time;
     state.tick = tick;
-    let id = self
-      .pending_tick
-      .get(&tick)
-      .cloned()
-      .ok_or_else(|| AckError::TickNotFound(tick))?;
+    let id = self.pending_tick.get(&tick).cloned().ok_or_else(|| {
+      AckError::TickNotFound(PlayerDesync {
+        player_id,
+        tick,
+        time,
+        checksum,
+      })
+    })?;
     let pending = &mut self.pending_slab[id];
     state.time = pending.time;
     pending.checksums.insert(player_id, checksum);
@@ -178,8 +182,8 @@ pub struct AckResult {
 pub enum AckError {
   #[error("player not found: {0}")]
   PlayerNotFound(i32),
-  #[error("tick not found: {0}")]
-  TickNotFound(u32),
+  #[error("tick not found: {0:?}")]
+  TickNotFound(PlayerDesync),
 }
 
 #[derive(Debug)]

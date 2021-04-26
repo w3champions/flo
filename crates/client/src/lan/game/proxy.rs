@@ -18,6 +18,7 @@ use flo_w3gs::protocol::packet::*;
 use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -253,7 +254,6 @@ impl State {
       &mut status_rx,
       &mut w3gs_tx,
       &mut w3gs_rx,
-      &left_game,
       &mut client,
     );
     tokio::select! {
@@ -271,7 +271,7 @@ impl State {
         }
       }
     };
-
+    left_game.store(true, Ordering::SeqCst);
     stream.flush().await.ok();
     Ok(())
   }

@@ -8,7 +8,7 @@ use crate::game::host::clock::Tick;
 use crate::game::host::stream::{PlayerStream, PlayerStreamCmd, PlayerStreamHandle};
 use crate::game::host::sync::PlayerDesync;
 use crate::game::{
-  GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
+  AckError, GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
   SlotClientStatusUpdateSource,
 };
 use flo_net::packet::{Frame, PacketTypeId};
@@ -633,26 +633,26 @@ impl State {
         self.dispatch_chat(player_id, packet, action_tx).await?;
       }
       PacketTypeId::OutgoingKeepAlive => {
-        // let payload: OutgoingKeepAlive = packet.decode_simple()?;
-        // let checksum = payload.checksum;
-        // let res = self.shared.lock().ack(player_id, checksum);
-        // match res {
-        //   Ok(AckAction::Continue) => {}
-        //   Ok(AckAction::CheckStopLag) => {
-        //     action_tx
-        //       .send(ActionMsg::CheckStopLag)
-        //       .await
-        //       .map_err(|_| Error::Cancelled)?;
-        //   }
-        //   Err(err) => {
-        //     tracing::error!(
-        //       game_id = self.game_id,
-        //       player_id,
-        //       "sync ack error: {:?}",
-        //       err
-        //     );
-        //   }
-        // }
+        let payload: OutgoingKeepAlive = packet.decode_simple()?;
+        let checksum = payload.checksum;
+        let res = self.shared.lock().ack(player_id, checksum);
+        match res {
+          Ok(AckAction::Continue) => {}
+          Ok(AckAction::CheckStopLag) => {
+            action_tx
+              .send(ActionMsg::CheckStopLag)
+              .await
+              .map_err(|_| Error::Cancelled)?;
+          }
+          Err(err) => {
+            tracing::error!(
+              game_id = self.game_id,
+              player_id,
+              "sync ack error: {:?}",
+              err
+            );
+          }
+        }
       }
       id => {
         tracing::warn!("unexpected w3gs packet id = {:?}", id);
@@ -847,7 +847,7 @@ impl State {
           player.send_w3gs(pkt).ok();
         }
       }
-      "ping" if debug => {
+      "ping" => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
           .map
@@ -947,12 +947,12 @@ impl Shared {
   #[must_use]
   pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<DispatchResult> {
     let time_increment_ms = tick.time_increment_ms;
-    // if let Some(timeouts) = self.sync.clock(time_increment_ms) {
-    //   let player_ids: Vec<_> = timeouts.into_iter().map(|t| t.player_id).collect();
-    //   if self.handle_lag(player_ids)? {
-    //     return Ok(DispatchResult::Lag(tick));
-    //   }
-    // }
+    if let Some(timeouts) = self.sync.clock(time_increment_ms) {
+      let player_ids: Vec<_> = timeouts.into_iter().map(|t| t.player_id).collect();
+      if self.handle_lag(player_ids)? {
+        return Ok(DispatchResult::Lag(tick));
+      }
+    }
     let action_packet = Packet::with_payload(IncomingAction(TimeSlot {
       time_increment_ms,
       actions: tick.actions,
@@ -1002,11 +1002,11 @@ impl Shared {
   }
 
   fn check_stop_lag(&mut self) -> Result<bool> {
-    // tracing::debug!(
-    //   "check lag players: {:?}, current: {:?}",
-    //   self.lagging_player_ids,
-    //   self.map.keys().collect::<Vec<_>>()
-    // );
+    tracing::debug!(
+      "check lag players: {:?}, current: {:?}",
+      self.lagging_player_ids,
+      self.map.keys().collect::<Vec<_>>()
+    );
     if self.lagging_player_ids.is_empty() {
       return Ok(false);
     }
@@ -1085,35 +1085,32 @@ impl Shared {
   }
 
   fn handle_peer_stream_close(&mut self, player_id: i32) -> Result<ClosePlayerStreamResult> {
-    self.remove_player_and_broadcast(player_id, None)?;
-    Ok(ClosePlayerStreamResult::ClosedLeft)
-
-    // if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
-    //   v.set_last_disconnect();
-    //   v.take_stream()
-    // }) {
-    //   if self.started {
-    //     tracing::warn!(game_id = self.game_id, player_id, "player disconnected");
-    //     stream.close();
-    //     // don't need to check `lagging_player_ids`
-    //     // because disconnect does not change lag status
-    //     Ok(ClosePlayerStreamResult::ClosedDisconnected)
-    //   } else {
-    //     tracing::warn!(
-    //       game_id = self.game_id,
-    //       player_id,
-    //       "player dropped before game start"
-    //     );
-    //     self.remove_player_and_broadcast(player_id, None)?;
-    //     if self.lagging_player_ids.contains(&player_id) {
-    //       Ok(ClosePlayerStreamResult::ClosedLagging)
-    //     } else {
-    //       Ok(ClosePlayerStreamResult::ClosedLeft)
-    //     }
-    //   }
-    // } else {
-    //   Ok(ClosePlayerStreamResult::Skipped)
-    // }
+    if let Some(stream) = self.map.get_mut(&player_id).and_then(|v| {
+      v.set_last_disconnect();
+      v.take_stream()
+    }) {
+      if self.started {
+        tracing::warn!(game_id = self.game_id, player_id, "player disconnected");
+        stream.close();
+        // don't need to check `lagging_player_ids`
+        // because disconnect does not change lag status
+        Ok(ClosePlayerStreamResult::ClosedDisconnected)
+      } else {
+        tracing::warn!(
+          game_id = self.game_id,
+          player_id,
+          "player dropped before game start"
+        );
+        self.remove_player_and_broadcast(player_id, None)?;
+        if self.lagging_player_ids.contains(&player_id) {
+          Ok(ClosePlayerStreamResult::ClosedLagging)
+        } else {
+          Ok(ClosePlayerStreamResult::ClosedLeft)
+        }
+      }
+    } else {
+      Ok(ClosePlayerStreamResult::Skipped)
+    }
   }
 
   fn remove_player_and_broadcast(
@@ -1263,11 +1260,18 @@ impl Shared {
         tracing::error!(
           game_id = self.game_id,
           player_id,
-          "syn ack internal: {:?}: {}",
+          "desync: syn ack internal: {:?}: {}",
           err,
           self.sync.debug_pending()
         );
-        self.remove_player_and_broadcast(player_id, None)?;
+
+        match err {
+          AckError::PlayerNotFound(_) => {}
+          AckError::TickNotFound(desync) => {
+            self.handle_desync(vec![desync])?;
+          }
+        }
+
         return if !self.lagging_player_ids.contains(&player_id) {
           Ok(AckAction::Continue)
         } else {

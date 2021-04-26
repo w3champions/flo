@@ -447,7 +447,7 @@ impl Connection {
                   frame.type_id = PacketTypeId::Pong;
                   if let Err(err) = stream.send_frame(frame).await {
                     tracing::error!("send pong to node: {}", err);
-                    return Ok(ConnectionRunResult::NodeDisconnected)
+                    break ConnectionRunResult::NodeDisconnected;
                   }
                 }
                 PacketTypeId::W3GS => {
@@ -494,11 +494,11 @@ impl Connection {
             },
             Err(flo_net::error::Error::StreamClosed) => {
               tracing::error!("node stream closed");
-              return Ok(ConnectionRunResult::NodeDisconnected);
+              break ConnectionRunResult::NodeDisconnected;
             },
             Err(err) => {
               tracing::error!("node stream recv: {}", err);
-              return Ok(ConnectionRunResult::NodeDisconnected);
+              break ConnectionRunResult::NodeDisconnected;
             }
           }
         }
@@ -514,7 +514,7 @@ impl Connection {
               }
             },
             None => {
-              return Ok(ConnectionRunResult::Cancelled)
+              break ConnectionRunResult::Cancelled;
             }
           }
         }

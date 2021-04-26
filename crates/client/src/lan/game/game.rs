@@ -3,7 +3,7 @@ use crate::error::*;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
-use crate::types::{NodeGameStatus, SlotClientStatus};
+use crate::types::NodeGameStatus;
 use flo_net::w3gs::W3GSPacket;
 use flo_state::Addr;
 use flo_util::chat::{parse_chat_command, ChatCommand};
@@ -19,7 +19,6 @@ use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
@@ -39,7 +38,6 @@ pub struct GameHandler<'a> {
   status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
   w3gs_tx: &'a mut Sender<Packet>,
   w3gs_rx: &'a mut Receiver<Packet>,
-  left_game: &'a AtomicBool,
   client: &'a mut Addr<ControllerClient>,
   muted_players: BTreeSet<u8>,
 }
@@ -53,7 +51,6 @@ impl<'a> GameHandler<'a> {
     status_rx: &'a mut WatchReceiver<Option<NodeGameStatus>>,
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
-    left_game: &'a AtomicBool,
     client: &'a mut Addr<ControllerClient>,
   ) -> Self {
     GameHandler {
@@ -64,7 +61,6 @@ impl<'a> GameHandler<'a> {
       status_rx,
       w3gs_tx,
       w3gs_rx,
-      left_game,
       client,
       muted_players: BTreeSet::new(),
     }
@@ -129,9 +125,6 @@ impl<'a> GameHandler<'a> {
           if let Some(pkt) = pkt {
             if pkt.type_id() == LeaveAck::PACKET_TYPE_ID {
               tracing::info!("game leave ack received");
-              if let Err(err) = self.node_stream.report_slot_status(SlotClientStatus::Left).await {
-                tracing::error!("report player left: {}", err);
-              }
               self.w3gs_stream.send(Packet::simple(LeaveAck)?).await?;
               self.w3gs_stream.flush().await?;
               return Ok(GameResult::Leave)
@@ -227,7 +220,6 @@ impl<'a> GameHandler<'a> {
       OutgoingAction::PACKET_TYPE_ID => {}
       PacketTypeId::DropReq => {}
       PacketTypeId::LeaveReq => {
-        self.left_game.store(true, Ordering::SeqCst);
         tracing::info!("request to leave received.");
         if let Err(err) = self.node_stream.send_w3gs(pkt).await {
           tracing::error!("report request to leave: {}", err);
