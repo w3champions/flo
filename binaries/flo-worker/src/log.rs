@@ -8,7 +8,7 @@ pub fn init(debug: bool) {
     .add_directive(if debug {
       LevelFilter::DEBUG.into()
     } else {
-      LevelFilter::WARN.into()
+      LevelFilter::INFO.into()
     });
 
   tracing_subscriber::fmt().with_env_filter(filter).init();
