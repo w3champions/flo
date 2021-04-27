@@ -44,6 +44,15 @@ impl Frame {
       payload: FramePayload::Bytes(Bytes::copy_from_slice(data.as_ref())),
     }
   }
+
+  pub fn new_empty(type_id: PacketTypeId) -> Self {
+    use once_cell::sync::Lazy;
+    static EMPTY_PAYLOAD: Lazy<Bytes> = Lazy::new(|| Bytes::new());
+    Frame {
+      type_id,
+      payload: FramePayload::Bytes(EMPTY_PAYLOAD.clone()),
+    }
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -256,6 +265,10 @@ pub enum PacketTypeId {
   ClientUpdateSlotClientStatus,
   #[bin(value = 0x45)]
   ClientUpdateSlotClientStatusReject,
+  #[bin(value = 0x46)]
+  ClientTerminate,
+  #[bin(value = 0x47)]
+  ClientTerminateAck,
 
   // Node -> [Client, Controller]
   #[bin(value = 0x50)]

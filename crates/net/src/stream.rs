@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::time::timeout;
 use tokio_util::codec::Framed;
@@ -146,7 +147,12 @@ impl FloStream {
   }
 
   pub async fn flush(&mut self) -> Result<()> {
-    self.transport.flush().await?;
+    self.transport.get_mut().flush().await?;
+    Ok(())
+  }
+
+  pub async fn shutdown(&mut self) -> Result<()> {
+    self.transport.get_mut().shutdown().await?;
     Ok(())
   }
 }

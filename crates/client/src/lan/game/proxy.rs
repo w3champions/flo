@@ -257,9 +257,7 @@ impl State {
       &mut client,
     );
     tokio::select! {
-      _ = &mut dropped => {
-        return Ok(())
-      }
+      _ = &mut dropped => {}
       res = game_handler.run(deferred_packets) => {
         match res {
           Ok(res) => {

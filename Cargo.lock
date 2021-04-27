@@ -1336,6 +1336,7 @@ dependencies = [
  "flo-util",
  "flo-w3gs",
  "futures 0.3.13",
+ "once_cell",
  "prost",
  "prost-build",
  "serde",

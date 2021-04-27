@@ -129,6 +129,7 @@ impl Session {
       ..Default::default()
     };
     let ct = self.ct.clone();
+    let mut leave_ack_received = false;
 
     let stream = 'main: loop {
       let (mut stream, conn): (FloStream, Connection) = {
@@ -183,7 +184,7 @@ impl Session {
       };
 
       self.last_connected_at.replace(Instant::now());
-      tracing::debug!("node connected.");
+      tracing::info!("node connected");
 
       let res = conn.run(&mut stream, &mut self).await;
       match res {
@@ -202,6 +203,10 @@ impl Session {
               sleep(delay).await;
             }
           }
+          ConnectionRunResult::NodeLeft => {
+            leave_ack_received = true;
+            break 'main Some(stream);
+          }
         },
         Err(err) => {
           tracing::error!("unexpected node conn error: {}", err);
@@ -210,38 +215,59 @@ impl Session {
       }
     };
 
-    if let Some(mut stream) = stream {
-      let mut flush_frames = vec![];
-      self.rx.close();
-      while let Some(msg) = self.rx.recv().await {
-        match self.encode_worker_msg(msg) {
-          Ok(frame) => flush_frames.push(frame),
-          Err(err) => {
-            tracing::error!("encode worker msg: {}", err);
-            break;
+    tracing::info!("session ending...");
+
+    if !leave_ack_received {
+      tracing::info!("leave ack not received");
+
+      if let Some(mut stream) = stream {
+        tracing::info!("flushing...");
+
+        let mut flush_frames = vec![];
+        self.rx.close();
+        while let Some(msg) = self.rx.recv().await {
+          match self.encode_worker_msg(msg) {
+            Ok(frame) => {
+              tracing::info!("flush frame: {:?}", frame);
+              flush_frames.push(frame)
+            }
+            Err(err) => {
+              tracing::error!("encode worker msg: {}", err);
+              break;
+            }
           }
         }
-      }
 
-      match self.encode_worker_msg(WorkerMsg::StatusUpdate(SlotClientStatus::Left)) {
-        Ok(frame) => {
-          flush_frames.push(frame);
-        }
-        Err(err) => {
-          tracing::error!("encode left status update packet: {}", err);
-        }
-      }
-
-      if !flush_frames.is_empty() {
+        flush_frames.push(Frame::new_empty(PacketTypeId::ClientTerminate));
         tracing::debug!("flushing frames: {}", flush_frames.len());
         if let Err(err) = stream.send_frames(flush_frames).await {
           tracing::error!("flush frames: {}", err);
         }
-      }
 
-      tracing::debug!("flushing stream");
-      if let Err(err) = stream.flush().await {
-        tracing::error!("flush stream: {}", err);
+        tracing::debug!("flush stream");
+        if let Err(err) = stream.flush().await {
+          tracing::error!("flushing stream: {}", err);
+        }
+
+        loop {
+          match stream.recv_frame().await {
+            Ok(frame) => {
+              if frame.type_id == PacketTypeId::ClientTerminateAck {
+                tracing::info!("session termination ack received");
+                break;
+              } else {
+                tracing::warn!(
+                  "packet dropped while waiting session termination: {:?}",
+                  frame.type_id
+                );
+              }
+            }
+            Err(err) => {
+              tracing::error!("wait session termination: {}", err);
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -461,9 +487,6 @@ impl Connection {
 
                       Self::reset_timeout(ping_timeout.as_mut());
                     }
-                    W3GSPacketTypeId::LeaveAck => {
-                      tracing::info!("node leave ack received");
-                    },
                     _ => {}
                   }
 
@@ -483,6 +506,10 @@ impl Connection {
                     tracing::debug!("w3gs receiver gone");
                     break ConnectionRunResult::GameDisconnected;
                   }
+                }
+                PacketTypeId::ClientTerminateAck => {
+                  tracing::info!("player left ack received");
+                  break ConnectionRunResult::NodeLeft;
                 }
                 _ => {
                   if let Err(err) = self.handle_node_frame(session, frame).await {
@@ -593,6 +620,7 @@ enum ConnectionRunResult {
   Cancelled,
   GameDisconnected,
   NodeDisconnected,
+  NodeLeft,
 }
 
 enum WorkerMsg {

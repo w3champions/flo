@@ -3,8 +3,8 @@ use crate::Result;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
-const MAP: &str = r#"maps\4twistedmeadows.w3x"#;
-const MAP_CHECKSUM: u32 = 3469788252;
+const MAP: &str = r#"maps\W3Champions\(10)dustwallowkeys.w3m"#;
+const MAP_CHECKSUM: u32 = 460415972;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
@@ -105,7 +105,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32
   let res = client
     .create_game_as_bot(CreateGameAsBotRequest {
       name: game_name,
-      map: Some(get_map_server()?),
+      map: Some(get_map()?),
       node_id,
       slots,
       ..Default::default()
@@ -247,27 +247,6 @@ pub async fn create_4v4_game(players: Vec<i32>) -> Result<i32> {
     })
     .await?;
   Ok(res.into_inner().game.unwrap().id)
-}
-
-pub fn get_map_server() -> Result<Map> {
-  let map = Map {
-    sha1: hex::decode("9524abb8e35ce7b158bfa4d4b8734234d6073ca5")?,
-    checksum: 3851316688u32,
-    name: "TEST".to_string(),
-    description: "The Global Warming cannot be stopped and the last survivors turnout back to the upper Lands behind. Now, even the last dry lands are flooding and the last remainings are fighting for it.".to_string(),
-    author: "OmGan, edit by ESL".to_string(),
-    path: "maps/frozenthrone/community/(2)lastrefuge.w3x".to_string(),
-    width: 84,
-    height: 84,
-    players: vec![
-      MapPlayer { name: "Player 1".to_string(), r#type: 1, flags: 0, ..Default::default() },
-      MapPlayer { name: "Player 2".to_string(), r#type: 1, flags: 0, ..Default::default() }
-    ],
-    forces: vec![
-      MapForce { name: "Force 1".to_string(), flags: 0, player_set: 4294967295, ..Default::default() }
-    ]
-  };
-  Ok(map)
 }
 
 fn get_map() -> Result<Map> {

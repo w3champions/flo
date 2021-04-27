@@ -13,7 +13,7 @@ use crate::game::{
 };
 use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::ping::{PingMsg, PingStream};
-use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket};
+use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
 use flo_util::chat::{parse_chat_command, ChatCommand};
 use flo_w3gs::action::{IncomingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction, TimeSlot};
@@ -42,14 +42,21 @@ pub enum Cmd {
     stream: PlayerStream,
     tx: oneshot::Sender<Result<PlayerStreamHandle>>,
   },
-  PlayerLeft {
-    player_id: i32,
-  },
 }
 
 enum PeerMsg {
-  Incoming { player_id: i32, frame: Frame },
-  Closed { player_id: i32, stream_id: u64 },
+  Incoming {
+    player_id: i32,
+    frame: Frame,
+  },
+  Closed {
+    player_id: i32,
+    stream_id: u64,
+  },
+  Terminated {
+    player_id: i32,
+    leave_reason: Option<LeaveReason>,
+  },
 }
 
 impl PeerMsg {
@@ -57,6 +64,7 @@ impl PeerMsg {
     match *self {
       PeerMsg::Incoming { player_id, .. } => player_id,
       PeerMsg::Closed { player_id, .. } => player_id,
+      PeerMsg::Terminated { player_id, .. } => player_id,
     }
   }
 }
@@ -81,7 +89,7 @@ impl Dispatcher {
     let start_notify = Arc::new(Notify::new());
     let (status_tx, status_rx) = watch::channel(DispatchStatus::Pending);
     let (cmd_tx, cmd_rx) = channel(10);
-    let (action_tx, action_rx) = channel(10);
+    let (action_tx, action_rx) = channel(32);
 
     let state = State::new(game_id, slots, status_rx, action_tx.clone(), ct.clone());
 
@@ -118,21 +126,6 @@ impl Dispatcher {
   pub fn start(&mut self) {
     tracing::info!(game_id = self.game_id, "game started.");
     self.start_notify.notify_one();
-  }
-
-  pub async fn report_player_left(&mut self, player_id: i32) {
-    self
-      .cmd_tx
-      .send(Cmd::PlayerLeft { player_id })
-      .await
-      .err()
-      .map(|_err| {
-        tracing::warn!(
-          game_id = self.game_id,
-          player_id,
-          "report player left cancelled"
-        )
-      });
   }
 
   pub async fn register_player_stream(&self, stream: PlayerStream) -> Result<PlayerStreamHandle> {
@@ -349,17 +342,6 @@ impl State {
         )
         .ok();
       }
-      Cmd::PlayerLeft { player_id } => {
-        tracing::info!(
-          game_id = self.game_id,
-          player_id,
-          "player left status received"
-        );
-        self
-          .shared
-          .lock()
-          .remove_player_and_broadcast(player_id, None)?;
-      }
     }
 
     Ok(())
@@ -369,7 +351,7 @@ impl State {
     &mut self,
     stream: PlayerStream,
     peer_tx: &Sender<PeerMsg>,
-    action_tx: &mut Sender<ActionMsg>,
+    _action_tx: &mut Sender<ActionMsg>,
     out_tx: &mut GameEventSender,
   ) -> Result<PlayerStreamHandle> {
     let game_id = self.game_id;
@@ -412,10 +394,7 @@ impl State {
     };
 
     if reconnected {
-      action_tx
-        .send(ActionMsg::CheckStopLag)
-        .await
-        .map_err(|_| Error::Cancelled)?;
+      tracing::info!(game_id = self.game_id, player_id, "reconnected");
     }
 
     out_tx
@@ -428,6 +407,7 @@ impl State {
       .map_err(|_| Error::Cancelled)?;
 
     let mut worker = PeerWorker::new(
+      self.game_id,
       self.ct.clone(),
       stream,
       self.status_rx.clone(),
@@ -456,7 +436,7 @@ impl State {
 
         crate::metrics::PLAYERS_CONNECTIONS.dec();
       }
-      .instrument(tracing::debug_span!("peer", game_id, player_id)),
+      .instrument(tracing::info_span!("peer", game_id, player_id)),
     );
     Ok(sender)
   }
@@ -495,7 +475,10 @@ impl State {
 
         let next_status = match res {
           ClosePlayerStreamResult::ClosedDisconnected => SlotClientStatus::Disconnected,
-          ClosePlayerStreamResult::ClosedLeft => SlotClientStatus::Left,
+          ClosePlayerStreamResult::ClosedLeft => {
+            self.left_players.insert(player_id);
+            SlotClientStatus::Left
+          }
           ClosePlayerStreamResult::Skipped => {
             tracing::warn!(
               game_id = self.game_id,
@@ -536,6 +519,20 @@ impl State {
           .await
           .map_err(|_| Error::Cancelled)?;
       }
+      PeerMsg::Terminated {
+        player_id,
+        leave_reason,
+      } => {
+        let force = leave_reason.is_none();
+        self
+          .handle_player_leave(player_id, leave_reason, action_tx, out_tx)
+          .await?;
+        if force {
+          tracing::warn!(game_id = self.game_id, player_id, "player force terminated");
+        } else {
+          tracing::info!(game_id = self.game_id, player_id, "player terminated");
+        }
+      }
     }
     Ok(())
   }
@@ -546,7 +543,7 @@ impl State {
     meta: W3GSMetadata,
     packet: Packet,
     action_tx: &mut Sender<ActionMsg>,
-    out_tx: &mut GameEventSender,
+    _out_tx: &mut GameEventSender,
   ) -> Result<()> {
     use flo_w3gs::protocol::constants::PacketTypeId;
 
@@ -576,43 +573,6 @@ impl State {
             player_id: slot_player_id,
             data: payload.data,
           }))
-          .await
-          .map_err(|_| Error::Cancelled)?;
-      }
-      PacketTypeId::LeaveReq => {
-        let req: LeaveReq = packet.decode_simple()?;
-        tracing::info!(
-          game_id = self.game_id,
-          player_id,
-          "leave: {:?}",
-          req.reason()
-        );
-
-        self.left_players.insert(player_id);
-
-        let should_check_lag = {
-          let mut guard = self.shared.lock();
-          let player = guard
-            .get_player(player_id)
-            .ok_or_else(|| Error::PlayerNotFoundInGame)?;
-          player.send_w3gs(Packet::simple(LeaveAck)?).ok();
-          guard.remove_player_and_broadcast(player_id, Some(req.reason()))?;
-          guard.lagging_player_ids.contains(&player_id)
-        };
-
-        if should_check_lag {
-          action_tx
-            .send(ActionMsg::CheckStopLag)
-            .await
-            .map_err(|_err| Error::Cancelled)?;
-        }
-
-        out_tx
-          .send(GameEvent::PlayerStatusChange(
-            player_id,
-            SlotClientStatus::Left,
-            SlotClientStatusUpdateSource::Node,
-          ))
           .await
           .map_err(|_| Error::Cancelled)?;
       }
@@ -659,6 +619,43 @@ impl State {
       }
     }
 
+    Ok(())
+  }
+
+  async fn handle_player_leave(
+    &mut self,
+    player_id: i32,
+    reason: Option<LeaveReason>,
+    action_tx: &mut Sender<ActionMsg>,
+    out_tx: &mut GameEventSender,
+  ) -> Result<()> {
+    self.left_players.insert(player_id);
+
+    let should_check_lag = {
+      let mut guard = self.shared.lock();
+      let player = guard
+        .get_player(player_id)
+        .ok_or_else(|| Error::PlayerNotFoundInGame)?;
+      player.send_w3gs(Packet::simple(LeaveAck)?).ok();
+      guard.remove_player_and_broadcast(player_id, reason)?;
+      guard.lagging_player_ids.contains(&player_id)
+    };
+
+    if should_check_lag {
+      action_tx
+        .send(ActionMsg::CheckStopLag)
+        .await
+        .map_err(|_err| Error::Cancelled)?;
+    }
+
+    out_tx
+      .send(GameEvent::PlayerStatusChange(
+        player_id,
+        SlotClientStatus::Left,
+        SlotClientStatusUpdateSource::Node,
+      ))
+      .await
+      .map_err(|_| Error::Cancelled)?;
     Ok(())
   }
 
@@ -1118,12 +1115,14 @@ impl Shared {
     player_id: i32,
     reason: Option<LeaveReason>,
   ) -> Result<()> {
-    tracing::info!(game_id = self.game_id, player_id, "remove player");
     let mut player = if let Some(v) = self.map.remove(&player_id) {
       v
     } else {
       return Ok(());
     };
+
+    tracing::info!(game_id = self.game_id, player_id, "remove player");
+
     for p in self.map.values_mut() {
       p.remove_lag_slot(player.slot_player_id());
     }
@@ -1301,6 +1300,7 @@ impl Shared {
         handled.insert(item.player_id);
 
         tracing::warn!(
+          game_id = self.game_id,
           player_id = item.player_id,
           "desync detected: time = {}, tick = {}",
           item.time,
@@ -1347,6 +1347,7 @@ enum DispatchStatus {
 }
 
 struct PeerWorker {
+  game_id: i32,
   ct: CancellationToken,
   stream: PlayerStream,
   status_rx: watch::Receiver<DispatchStatus>,
@@ -1354,10 +1355,12 @@ struct PeerWorker {
   dispatcher_tx: Sender<PeerMsg>,
   delay: DelayedFrameStream,
   delay_send_buf: Vec<Frame>,
+  terminated: bool,
 }
 
 impl PeerWorker {
   fn new(
+    game_id: i32,
     ct: CancellationToken,
     stream: PlayerStream,
     status_rx: watch::Receiver<DispatchStatus>,
@@ -1366,6 +1369,7 @@ impl PeerWorker {
     delay: Option<Duration>,
   ) -> Self {
     Self {
+      game_id,
       ct,
       stream,
       status_rx,
@@ -1373,6 +1377,7 @@ impl PeerWorker {
       dispatcher_tx: out_tx,
       delay: DelayedFrameStream::new(delay),
       delay_send_buf: Vec::new(),
+      terminated: false,
     }
   }
 
@@ -1421,11 +1426,30 @@ impl PeerWorker {
         next = self.stream.get_mut().recv_frame() => {
           match next {
             Ok(frame) => {
-              if frame.type_id == PingStream::PONG_TYPE_ID {
-                if ping.started() {
-                  ping.capture_pong(frame);
+              match frame.type_id {
+                PingStream::PONG_TYPE_ID => {
+                  if ping.started() {
+                    ping.capture_pong(frame);
+                  }
+                  continue;
+                },
+                PacketTypeId::ClientTerminate => {
+                  self.terminate(player_id, None).await;
+                  break;
+                },
+                PacketTypeId::W3GS if frame.payload.w3gs_type_id() == Some(W3GSPacketTypeId::LeaveReq) => {
+                  let (_, packet) = frame.try_into_w3gs()?;
+                  let req: LeaveReq = packet.decode_simple()?;
+                  tracing::info!(
+                    game_id = self.game_id,
+                    player_id,
+                    "leave reason: {:?}",
+                    req.reason()
+                  );
+                  self.terminate(player_id, Some(req.reason())).await;
+                  break;
                 }
-                continue;
+                _ => {}
               }
 
               if self.delay.enabled() {
@@ -1481,7 +1505,7 @@ impl PeerWorker {
               self.dispatch_delayed(player_id, &delay_buf).await?;
             }
             Err(err) => {
-              tracing::debug!("delay: {}", err);
+              tracing::error!("delay: {}", err);
               break;
             }
           }
@@ -1501,6 +1525,57 @@ impl PeerWorker {
     }
 
     Ok(())
+  }
+
+  async fn terminate(&mut self, player_id: i32, leave_reason: Option<LeaveReason>) {
+    if self.terminated {
+      return;
+    }
+    self.terminated = true;
+    if self.delay.enabled() {
+      if let Some(frames) = self.delay.remove_delay() {
+        let in_frames = frames
+          .into_iter()
+          .filter_map(|frame| {
+            if let DelayedFrame::In(_) = frame {
+              Some(frame)
+            } else {
+              None
+            }
+          })
+          .collect::<Vec<_>>();
+        let res = self.dispatch_delayed(player_id, &in_frames).await;
+        if let Err(err) = res {
+          tracing::error!(
+            game_id = self.game_id,
+            player_id,
+            "flush delayed frames: {}",
+            err
+          );
+        }
+      }
+    }
+    let frame = Frame::new_empty(PacketTypeId::ClientTerminateAck);
+    if let Err(err) = self.stream.get_mut().send_frame(frame).await {
+      tracing::error!(
+        game_id = self.game_id,
+        player_id,
+        "send session termination: {}",
+        err
+      );
+    }
+    if let Err(err) = self.stream.get_mut().shutdown().await {
+      tracing::error!(game_id = self.game_id, player_id, "shutdown: {}", err);
+    }
+
+    self
+      .dispatcher_tx
+      .send(PeerMsg::Terminated {
+        player_id,
+        leave_reason,
+      })
+      .await
+      .ok();
   }
 
   async fn dispatch_delayed<'a, I>(&mut self, player_id: i32, frames: I) -> Result<()>

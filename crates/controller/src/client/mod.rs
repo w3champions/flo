@@ -62,7 +62,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
             reason: proto::flo_connect::ClientConnectRejectReason::ClientVersionTooOld.into(),
           })
           .await?;
-        stream.flush().await?;
+        stream.shutdown().await?;
         return Ok(());
       }
 
