@@ -53,7 +53,7 @@ enum PeerMsg {
     player_id: i32,
     stream_id: u64,
   },
-  Terminated {
+  Shutdown {
     player_id: i32,
     leave_reason: Option<LeaveReason>,
   },
@@ -64,7 +64,7 @@ impl PeerMsg {
     match *self {
       PeerMsg::Incoming { player_id, .. } => player_id,
       PeerMsg::Closed { player_id, .. } => player_id,
-      PeerMsg::Terminated { player_id, .. } => player_id,
+      PeerMsg::Shutdown { player_id, .. } => player_id,
     }
   }
 }
@@ -519,7 +519,7 @@ impl State {
           .await
           .map_err(|_| Error::Cancelled)?;
       }
-      PeerMsg::Terminated {
+      PeerMsg::Shutdown {
         player_id,
         leave_reason,
       } => {
@@ -528,9 +528,9 @@ impl State {
           .handle_player_leave(player_id, leave_reason, action_tx, out_tx)
           .await?;
         if force {
-          tracing::warn!(game_id = self.game_id, player_id, "player force terminated");
+          tracing::warn!(game_id = self.game_id, player_id, "player force shutdown");
         } else {
-          tracing::info!(game_id = self.game_id, player_id, "player terminated");
+          tracing::info!(game_id = self.game_id, player_id, "player shutdown");
         }
       }
     }
@@ -1355,7 +1355,7 @@ struct PeerWorker {
   dispatcher_tx: Sender<PeerMsg>,
   delay: DelayedFrameStream,
   delay_send_buf: Vec<Frame>,
-  terminated: bool,
+  shutdown: bool,
 }
 
 impl PeerWorker {
@@ -1377,7 +1377,7 @@ impl PeerWorker {
       dispatcher_tx: out_tx,
       delay: DelayedFrameStream::new(delay),
       delay_send_buf: Vec::new(),
-      terminated: false,
+      shutdown: false,
     }
   }
 
@@ -1433,8 +1433,8 @@ impl PeerWorker {
                   }
                   continue;
                 },
-                PacketTypeId::ClientTerminate => {
-                  self.terminate(player_id, None).await;
+                PacketTypeId::ClientShutdown => {
+                  self.shutdown(player_id, None).await;
                   break;
                 },
                 PacketTypeId::W3GS if frame.payload.w3gs_type_id() == Some(W3GSPacketTypeId::LeaveReq) => {
@@ -1446,7 +1446,7 @@ impl PeerWorker {
                     "leave reason: {:?}",
                     req.reason()
                   );
-                  self.terminate(player_id, Some(req.reason())).await;
+                  self.shutdown(player_id, Some(req.reason())).await;
                   break;
                 }
                 _ => {}
@@ -1527,11 +1527,11 @@ impl PeerWorker {
     Ok(())
   }
 
-  async fn terminate(&mut self, player_id: i32, leave_reason: Option<LeaveReason>) {
-    if self.terminated {
+  async fn shutdown(&mut self, player_id: i32, leave_reason: Option<LeaveReason>) {
+    if self.shutdown {
       return;
     }
-    self.terminated = true;
+    self.shutdown = true;
     if self.delay.enabled() {
       if let Some(frames) = self.delay.remove_delay() {
         let in_frames = frames
@@ -1555,7 +1555,7 @@ impl PeerWorker {
         }
       }
     }
-    let frame = Frame::new_empty(PacketTypeId::ClientTerminateAck);
+    let frame = Frame::new_empty(PacketTypeId::ClientShutdownAck);
     if let Err(err) = self.stream.get_mut().send_frame(frame).await {
       tracing::error!(
         game_id = self.game_id,
@@ -1570,7 +1570,7 @@ impl PeerWorker {
 
     self
       .dispatcher_tx
-      .send(PeerMsg::Terminated {
+      .send(PeerMsg::Shutdown {
         player_id,
         leave_reason,
       })

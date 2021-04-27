@@ -266,9 +266,9 @@ pub enum PacketTypeId {
   #[bin(value = 0x45)]
   ClientUpdateSlotClientStatusReject,
   #[bin(value = 0x46)]
-  ClientTerminate,
+  ClientShutdown,
   #[bin(value = 0x47)]
-  ClientTerminateAck,
+  ClientShutdownAck,
 
   // Node -> [Client, Controller]
   #[bin(value = 0x50)]

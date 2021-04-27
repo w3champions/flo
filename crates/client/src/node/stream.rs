@@ -238,7 +238,7 @@ impl Session {
           }
         }
 
-        flush_frames.push(Frame::new_empty(PacketTypeId::ClientTerminate));
+        flush_frames.push(Frame::new_empty(PacketTypeId::ClientShutdown));
         tracing::debug!("flushing frames: {}", flush_frames.len());
         if let Err(err) = stream.send_frames(flush_frames).await {
           tracing::error!("flush frames: {}", err);
@@ -252,7 +252,7 @@ impl Session {
         loop {
           match stream.recv_frame().await {
             Ok(frame) => {
-              if frame.type_id == PacketTypeId::ClientTerminateAck {
+              if frame.type_id == PacketTypeId::ClientShutdownAck {
                 tracing::info!("session termination ack received");
                 break;
               } else {
@@ -507,7 +507,7 @@ impl Connection {
                     break ConnectionRunResult::GameDisconnected;
                   }
                 }
-                PacketTypeId::ClientTerminateAck => {
+                PacketTypeId::ClientShutdownAck => {
                   tracing::info!("player left ack received");
                   break ConnectionRunResult::NodeLeft;
                 }
