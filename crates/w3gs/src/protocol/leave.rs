@@ -36,3 +36,12 @@ pub struct PlayerLeft {
 impl PacketPayload for PlayerLeft {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::PlayerLeft;
 }
+
+#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+pub struct PlayerKicked {
+  pub reason: LeaveReason,
+}
+
+impl PacketPayload for PlayerKicked {
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::PlayerKicked;
+}

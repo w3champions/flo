@@ -308,7 +308,6 @@ impl<'a> Archive<'a> {
     Ok(bytes)
   }
 
-  #[cfg(feature = "xoro")]
   fn read_file_all_opt(&mut self, path: &str) -> Result<Option<Vec<u8>>> {
     self.read_file_all(path).map(Some).or_else(|e| {
       if Self::is_err_file_not_found(&e) {

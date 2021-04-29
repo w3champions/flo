@@ -1,8 +1,10 @@
 use structopt::StructOpt;
 
 mod client;
+mod env;
 mod game;
 mod grpc;
+mod lan;
 mod server;
 
 pub use anyhow::Result;
@@ -17,6 +19,10 @@ enum Opt {
   Server {
     #[structopt(subcommand)]
     cmd: server::Command,
+  },
+  Lan {
+    #[structopt(subcommand)]
+    cmd: lan::Command,
   },
 }
 
@@ -33,6 +39,9 @@ async fn main() -> Result<()> {
       cmd.run(player_id).await?;
     }
     Opt::Server { cmd } => {
+      cmd.run().await?;
+    }
+    Opt::Lan { cmd } => {
       cmd.run().await?;
     }
   }

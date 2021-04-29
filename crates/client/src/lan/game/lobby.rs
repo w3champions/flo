@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use tokio::sync::watch::Receiver;
-use tokio::time::{interval, sleep};
+use tokio::time::{interval_at, sleep};
 
 use flo_util::binary::SockAddr;
 use flo_w3gs::net::W3GSStream;
@@ -57,7 +57,10 @@ impl<'a> LobbyHandler<'a> {
     let initial_game_state = { self.status_rx.borrow().clone() };
     let mut join_state =
       JoinPacketRecvState::new(initial_game_state, self.info.slot_info.player_infos.len());
-    let mut ping_interval = interval(LOBBY_PING_INTERVAL);
+    let mut ping_interval = interval_at(
+      (Instant::now() + LOBBY_PING_INTERVAL).into(),
+      LOBBY_PING_INTERVAL,
+    );
     let base_t = Instant::now();
     let mut reported = false;
 

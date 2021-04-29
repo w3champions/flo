@@ -71,6 +71,7 @@ message PacketNodeGameStatusUpdate {
 message PacketClientConnect {
   flo_common.Version version = 1;
   bytes token = 2;
+  bool retry_shutdown = 3;
 }
 
 message PacketClientConnectAccept {

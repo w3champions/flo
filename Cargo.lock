@@ -1125,13 +1125,16 @@ dependencies = [
  "dotenv",
  "flo-client",
  "flo-controller",
+ "flo-debug",
  "flo-grpc",
+ "flo-lan",
  "flo-log-subscriber",
  "flo-net",
  "flo-w3map",
  "flo-w3storage",
  "futures 0.3.13",
  "hex",
+ "once_cell",
  "rand 0.8.3",
  "serde_json",
  "structopt",
@@ -1143,12 +1146,13 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "async-tungstenite",
  "backoff",
  "base64 0.12.3",
+ "bytes 1.0.1",
  "dotenv",
  "flo-config",
  "flo-constants",
@@ -1257,6 +1261,22 @@ dependencies = [
  "flo-log-subscriber",
  "tokio",
  "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "flo-debug"
+version = "0.1.0"
+dependencies = [
+ "dotenv",
+ "flo-lan",
+ "flo-log-subscriber",
+ "flo-net",
+ "flo-w3gs",
+ "flo-w3map",
+ "flo-w3storage",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -1537,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "anyhow",
  "embed-resource",

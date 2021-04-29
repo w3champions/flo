@@ -11,6 +11,17 @@ pub struct OutgoingAction {
   pub data: Bytes,
 }
 
+impl OutgoingAction {
+  pub fn new(bytes: &[u8]) -> Self {
+    let mut crc32 = crc32fast::Hasher::new();
+    crc32.update(bytes);
+    OutgoingAction {
+      crc32: crc32.finalize(),
+      data: Bytes::copy_from_slice(bytes),
+    }
+  }
+}
+
 impl PacketPayloadEncode for OutgoingAction {
   fn encode(&self, buf: &mut BytesMut) {
     buf.reserve(size_of::<u32>() + self.data.len());

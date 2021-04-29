@@ -41,6 +41,16 @@ pub struct MapSize {
   pub map_size: u32,
 }
 
+impl MapSize {
+  pub fn new(map_size: u32) -> Self {
+    Self {
+      _unknown_1: 1,
+      size_flag: 1,
+      map_size,
+    }
+  }
+}
+
 impl PacketPayload for MapSize {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::MapSize;
 }

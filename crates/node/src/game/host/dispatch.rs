@@ -42,6 +42,9 @@ pub enum Cmd {
     stream: PlayerStream,
     tx: oneshot::Sender<Result<PlayerStreamHandle>>,
   },
+  RemovePlayer {
+    player_id: i32,
+  },
 }
 
 enum PeerMsg {
@@ -138,6 +141,15 @@ impl Dispatcher {
     rx.await.map_err(|_| Error::Cancelled)?
   }
 
+  pub async fn notify_player_shutdown(&self, player_id: i32) -> Result<()> {
+    self
+      .cmd_tx
+      .send(Cmd::RemovePlayer { player_id })
+      .await
+      .map_err(|_| Error::Cancelled)?;
+    Ok(())
+  }
+
   async fn serve(
     mut state: State,
     mut rx: Receiver<Cmd>,
@@ -158,7 +170,8 @@ impl Dispatcher {
             Ok(_) => {},
             Err(Error::Cancelled) => {},
             Err(err) => {
-              tracing::error!(player_id, "dispatch peer: {}", err);
+              tracing::error!(player_id, "player removed: dispatch peer: {}", err);
+              state.shared.lock().remove_player_and_broadcast(player_id, None).ok();
             },
           }
         }
@@ -342,6 +355,17 @@ impl State {
         )
         .ok();
       }
+      Cmd::RemovePlayer { player_id } => {
+        if let Err(err) = peer_tx
+          .send(PeerMsg::Shutdown {
+            player_id,
+            leave_reason: None,
+          })
+          .await
+        {
+          tracing::error!(game_id = self.game_id, player_id, "send shutdown: {}", err);
+        }
+      }
     }
 
     Ok(())
@@ -363,6 +387,7 @@ impl State {
     }
 
     let (peer_cmd_tx, peer_cmd_rx) = channel(crate::constants::PEER_CHANNEL_SIZE);
+
     let sender = PlayerStreamHandle::new(&stream, peer_cmd_tx.clone());
 
     let (status, delay, reconnected, resend_frames) = {
@@ -523,14 +548,16 @@ impl State {
         player_id,
         leave_reason,
       } => {
-        let force = leave_reason.is_none();
-        self
-          .handle_player_leave(player_id, leave_reason, action_tx, out_tx)
-          .await?;
-        if force {
-          tracing::warn!(game_id = self.game_id, player_id, "player force shutdown");
-        } else {
-          tracing::info!(game_id = self.game_id, player_id, "player shutdown");
+        if !self.left_players.contains(&player_id) {
+          let force = leave_reason.is_none();
+          self
+            .handle_player_leave(player_id, leave_reason, action_tx, out_tx)
+            .await?;
+          if force {
+            tracing::warn!(game_id = self.game_id, player_id, "player force shutdown");
+          } else {
+            tracing::info!(game_id = self.game_id, player_id, "player shutdown");
+          }
         }
       }
     }

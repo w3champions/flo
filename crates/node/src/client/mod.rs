@@ -53,34 +53,50 @@ pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
           }
         };
 
-        if let Err((stream, err)) = session
-          .register_player_stream(claim.player_id, stream)
-          .await
-        {
-          tracing::error!(
-            game_id = claim.game_id,
-            player_id = claim.player_id,
-            "register player stream: {}",
-            err
-          );
-          if let Some(mut stream) = stream {
-            stream
-              .send(PacketClientConnectReject {
-                reason: match err {
-                  Error::PlayerConnectionExists => ClientConnectRejectReason::Multi,
-                  _ => ClientConnectRejectReason::Unknown,
-                }
-                .into(),
-                message: format!("Register: {}", err),
-              })
-              .await
-              .ok();
+        if claim.shutdown_retry {
+          if let Err(err) = session.retry_shutdown(claim.player_id, &mut stream).await {
+            tracing::error!(
+              game_id = claim.game_id,
+              player_id = claim.player_id,
+              "retry_shutdown: {}",
+              err
+            );
+            reject(&mut stream, err).await.ok();
+          }
+        } else {
+          if let Err((stream, err)) = session
+            .register_player_stream(claim.player_id, stream)
+            .await
+          {
+            tracing::error!(
+              game_id = claim.game_id,
+              player_id = claim.player_id,
+              "register player stream: {}",
+              err
+            );
+            if let Some(mut stream) = stream {
+              reject(&mut stream, err).await.ok();
+            }
           }
         }
       });
     }
   }
 
+  Ok(())
+}
+
+async fn reject(stream: &mut FloStream, err: Error) -> Result<()> {
+  stream
+    .send(PacketClientConnectReject {
+      reason: match err {
+        Error::PlayerConnectionExists => ClientConnectRejectReason::Multi,
+        _ => ClientConnectRejectReason::Unknown,
+      }
+      .into(),
+      message: format!("Register: {}", err),
+    })
+    .await?;
   Ok(())
 }
 
@@ -103,6 +119,7 @@ async fn handshake(state: &GlobalState, stream: &mut FloStream) -> Result<Claim>
   Ok(Claim {
     game_id: pending.game_id,
     player_id: pending.player_id,
+    shutdown_retry: connect.retry_shutdown,
   })
 }
 
@@ -110,4 +127,5 @@ async fn handshake(state: &GlobalState, stream: &mut FloStream) -> Result<Claim>
 pub struct Claim {
   game_id: i32,
   player_id: i32,
+  shutdown_retry: bool,
 }

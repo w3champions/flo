@@ -61,4 +61,8 @@ impl GameHost {
 
     self.dispatcher.register_player_stream(stream).await
   }
+
+  pub async fn notify_player_shutdown(&mut self, player_id: i32) -> Result<()> {
+    self.dispatcher.notify_player_shutdown(player_id).await
+  }
 }

@@ -4,12 +4,12 @@ use futures::stream::TryStreamExt;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::Stream;
 use tokio_util::codec::Framed;
 
 use crate::error::*;
-use crate::protocol::packet::Packet;
+use crate::protocol::packet::{Packet, PacketPayload, PacketPayloadDecode};
 
 mod codec;
 use self::codec::W3GSCodec;
@@ -46,15 +46,24 @@ impl W3GSListener {
 #[derive(Debug)]
 pub struct W3GSStream {
   local_addr: SocketAddr,
-  peer_addr: SocketAddr,
+  peer_addr: Option<SocketAddr>,
   transport: Framed<TcpStream, W3GSCodec>,
 }
 
 impl W3GSStream {
+  pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+    let socket = TcpStream::connect(addr).await?;
+    Ok(W3GSStream {
+      local_addr: socket.local_addr()?,
+      peer_addr: None,
+      transport: Framed::new(socket, W3GSCodec::new()),
+    })
+  }
+
   pub fn local_addr(&self) -> SocketAddr {
     self.local_addr
   }
-  pub fn peer_addr(&self) -> SocketAddr {
+  pub fn peer_addr(&self) -> Option<SocketAddr> {
     self.peer_addr
   }
 
@@ -78,6 +87,23 @@ impl W3GSStream {
   pub async fn recv(&mut self) -> Result<Option<Packet>> {
     let packet = self.transport.try_next().await?;
     Ok(packet)
+  }
+
+  #[inline]
+  pub async fn recv_decode<T>(&mut self) -> Result<T>
+  where
+    T: PacketPayloadDecode + PacketPayload,
+  {
+    let pkt = self.recv().await?.ok_or_else(|| Error::StreamClosed)?;
+
+    if pkt.type_id() != T::PACKET_TYPE_ID {
+      return Err(Error::PacketTypeIdMismatch {
+        expected: T::PACKET_TYPE_ID,
+        found: pkt.type_id(),
+      });
+    }
+
+    Ok(pkt.decode_payload()?)
   }
 
   #[inline]
@@ -108,7 +134,7 @@ impl Incoming<'_> {
 
     let stream = W3GSStream {
       local_addr: socket.local_addr()?,
-      peer_addr: addr,
+      peer_addr: Some(addr),
       transport: Framed::new(socket, W3GSCodec::new()),
     };
 

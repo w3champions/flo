@@ -65,7 +65,7 @@ impl MdnsPublisher {
       (game_info.data.port, game_info.encode_to_bytes()?)
     };
     let reg = register_extended(
-      "_blizzard._udp,_w3xp2730",
+      super::REG_TYPE,
       port,
       RegisterData {
         flags: async_dnssd::RegisterFlags::NO_AUTO_RENAME | async_dnssd::RegisterFlags::UNIQUE,

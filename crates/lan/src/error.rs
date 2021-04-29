@@ -30,6 +30,8 @@ pub enum Error {
   Base64Decode(#[from] base64::DecodeError),
   #[error("replay: {0}")]
   Replay(#[from] flo_w3replay::error::Error),
+  #[error("io: {0}")]
+  Io(#[from] std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

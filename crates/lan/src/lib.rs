@@ -8,3 +8,4 @@ pub mod error;
 
 pub use self::game_info::GameInfo;
 pub use self::mdns::publisher::MdnsPublisher;
+pub use self::mdns::search::{search_lan_games, LanGame};

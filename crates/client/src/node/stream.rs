@@ -215,12 +215,12 @@ impl Session {
       }
     };
 
-    tracing::info!("session ending...");
-
     if !leave_ack_received {
       tracing::info!("leave ack not received");
 
       if let Some(mut stream) = stream {
+        let mut shutdown_ok = false;
+
         tracing::info!("flushing...");
 
         let mut flush_frames = vec![];
@@ -253,17 +253,37 @@ impl Session {
           match stream.recv_frame().await {
             Ok(frame) => {
               if frame.type_id == PacketTypeId::ClientShutdownAck {
-                tracing::info!("session termination ack received");
+                tracing::info!("session shutdown ack received");
+                shutdown_ok = true;
                 break;
-              } else {
-                tracing::warn!(
-                  "packet dropped while waiting session termination: {:?}",
-                  frame.type_id
-                );
               }
             }
             Err(err) => {
-              tracing::error!("wait session termination: {}", err);
+              tracing::error!("wait session shutdown: {}", err);
+              break;
+            }
+          }
+        }
+
+        if !shutdown_ok {
+          let mut shutdown_backoff = ExponentialBackoff {
+            initial_interval: Duration::from_secs(1),
+            max_interval: Duration::from_secs(5),
+            max_elapsed_time: Some(Duration::from_secs(30)),
+            ..Default::default()
+          };
+          loop {
+            tracing::info!("retry shutdown");
+            if let Err(err) = self.retry_shutdown().await {
+              tracing::error!("retry shutdown: {}", err);
+              if let Some(duration) = shutdown_backoff.next_backoff() {
+                sleep(duration).await;
+              } else {
+                tracing::warn!("retry shutdown aborted");
+                break;
+              }
+            } else {
+              tracing::info!("retry shutdown successfully");
               break;
             }
           }
@@ -281,6 +301,7 @@ impl Session {
       .send(proto::PacketClientConnect {
         version: Some(crate::version::FLO_VERSION.into()),
         token: self.token.to_vec(),
+        ..Default::default()
       })
       .await?;
 
@@ -340,6 +361,33 @@ impl Session {
         _player_id: player_id,
       },
     ))
+  }
+
+  async fn retry_shutdown(&self) -> Result<()> {
+    let mut stream = FloStream::connect_no_delay(self.addr).await?;
+
+    stream
+      .send(proto::PacketClientConnect {
+        version: Some(crate::version::FLO_VERSION.into()),
+        token: self.token.to_vec(),
+        retry_shutdown: true,
+      })
+      .await?;
+
+    let frame = stream.recv_frame().await?;
+
+    if frame.type_id == PacketTypeId::ClientShutdownAck {
+      return Ok(());
+    }
+
+    flo_net::try_flo_packet! {
+      frame => {
+        p: proto::PacketClientConnectReject => {
+          tracing::warn!("retry shutdown aborted: {:?}: {}", p.reason(), p.message);
+          return Ok(())
+        }
+      }
+    };
   }
 
   fn encode_worker_msg(&mut self, msg: WorkerMsg) -> Result<Frame> {

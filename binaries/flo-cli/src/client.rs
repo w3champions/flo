@@ -1,5 +1,6 @@
 use structopt::StructOpt;
 
+use crate::env::ENV;
 use crate::Result;
 use std::time::Duration;
 
@@ -25,10 +26,11 @@ impl Command {
       Command::Connect { ws } => {
         let token = flo_controller::player::token::create_player_token(player_id)?;
         tracing::debug!("token generated: {}", token);
+        tracing::info!("controller host: {}", ENV.controller_host);
 
         if ws {
           let client = flo_client::start(flo_client::StartConfig {
-            controller_host: "127.0.0.1".to_string().into(),
+            controller_host: ENV.controller_host.clone().into(),
             ..Default::default()
           })
           .await?;
@@ -44,7 +46,7 @@ impl Command {
         } else {
           let client = flo_client::start(flo_client::StartConfig {
             token: Some(token),
-            controller_host: "127.0.0.1".to_string().into(),
+            controller_host: ENV.controller_host.clone().into(),
             ..Default::default()
           })
           .await?;

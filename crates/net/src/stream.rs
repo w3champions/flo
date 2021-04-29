@@ -1,11 +1,11 @@
+use futures::future::poll_fn;
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
-use futures::Stream;
+use futures::{Sink, Stream};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::time::timeout;
 use tokio_util::codec::Framed;
@@ -13,6 +13,7 @@ use tokio_util::codec::Framed;
 use crate::codec::FloFrameCodec;
 use crate::error::*;
 use crate::packet::{FloPacket, Frame};
+use tokio::io::AsyncWriteExt;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -147,11 +148,13 @@ impl FloStream {
   }
 
   pub async fn flush(&mut self) -> Result<()> {
+    poll_fn(|ctx| Pin::new(&mut self.transport).poll_flush(ctx)).await?;
     self.transport.get_mut().flush().await?;
     Ok(())
   }
 
   pub async fn shutdown(&mut self) -> Result<()> {
+    poll_fn(|ctx| Pin::new(&mut self.transport).poll_close(ctx)).await?;
     self.transport.get_mut().shutdown().await?;
     Ok(())
   }

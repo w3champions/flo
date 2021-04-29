@@ -1,5 +1,5 @@
 use crate::ping::PingError;
-use flo_types::node::{NodeGameStatus};
+use flo_types::node::NodeGameStatus;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -1,0 +1,22 @@
+[package]
+name = "flo-debug"
+version = "0.1.0"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+flo-lan = { path = "../lan" }
+flo-w3storage = { path = "../w3storage" }
+flo-w3map = { path = "../w3map" }
+flo-w3gs = { path = "../w3gs" }
+flo-net = { path = "../net" }
+
+tokio = { version = "1.5", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
+thiserror = "1.0"
+tracing = "0.1"
+
+[dev-dependencies]
+dotenv = "0.15"
+flo-log-subscriber = { path = "../log-subscriber" }

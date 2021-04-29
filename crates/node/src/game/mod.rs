@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 use tracing_futures::Instrument;
 
 use flo_event::*;
-use flo_net::packet::{FloPacket, Frame};
+use flo_net::packet::{FloPacket, Frame, PacketTypeId};
 use flo_net::proto::flo_node as proto;
 use flo_net::stream::FloStream;
 use flo_task::SpawnScope;
@@ -191,6 +191,16 @@ impl GameSessionHandle {
       .player_slots
       .get_mut(&player_id)
       .map(|slot| slot.sender.replace(sender));
+    Ok(())
+  }
+
+  pub async fn retry_shutdown(&self, player_id: i32, stream: &mut FloStream) -> Result<(), Error> {
+    let mut guard = self.0.lock().await;
+    guard.host.notify_player_shutdown(player_id).await?;
+    stream
+      .send_frame(Frame::new_empty(PacketTypeId::ClientShutdownAck))
+      .await?;
+    stream.flush().await?;
     Ok(())
   }
 

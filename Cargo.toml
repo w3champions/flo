@@ -18,6 +18,7 @@ members = [
   "crates/event",
   "crates/task",
   "crates/types",
+  "crates/debug",
 
   "crates/controller",
   "crates/node",

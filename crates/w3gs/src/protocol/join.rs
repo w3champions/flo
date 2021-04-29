@@ -20,6 +20,25 @@ pub struct ReqJoin {
   pub internal_addr: SockAddr,
 }
 
+impl ReqJoin {
+  pub fn new<T>(player_name: T, id: u32, entry_key: u32) -> Self
+  where
+    T: IntoCStringLossy,
+  {
+    Self {
+      host_counter: id,
+      entry_key,
+      _unknown_1: 0,
+      listen_port: 0,
+      join_counter: 1,
+      player_name: player_name.into_c_string_lossy(),
+      _num_unknown_2: 2,
+      _unknown_2: vec![0, 0],
+      internal_addr: SockAddr::new_null(),
+    }
+  }
+}
+
 impl PacketPayload for ReqJoin {
   const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ReqJoin;
 }

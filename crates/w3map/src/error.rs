@@ -3,6 +3,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("map script not found")]
+  MapScriptNotFound,
   #[error("storage file not found: {0}")]
   StorageFileNotFound(String),
   #[error("storage: {0}")]
