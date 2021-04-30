@@ -242,8 +242,9 @@ pub fn create_as_bot(
   let (player_slots, referee_slots): (Vec<_>, Vec<_>) = params
     .slots
     .iter()
-    .filter(|s| s.settings.status == SlotStatus::Occupied)
-    .partition(|s| s.settings.team != 24);
+    .enumerate()
+    .filter(|(_idx, s)| s.settings.status == SlotStatus::Occupied)
+    .partition(|s| s.1.settings.team != 24);
 
   if player_slots.len() > max_players {
     return Err(Error::TooManyPlayers);
@@ -271,7 +272,7 @@ pub fn create_as_bot(
   let mut slots = vec![];
   let mut color_set = BTreeSet::new();
 
-  for (i, slot) in player_slots.iter().enumerate() {
+  for (i, slot) in player_slots.iter() {
     if color_set.contains(&slot.settings.color) {
       return Err(Error::PlayerColorConflict);
     }
@@ -287,22 +288,20 @@ pub fn create_as_bot(
       return Err(Error::PlayerNotFound);
     }
     slots.push(UsedSlot {
-      slot_index: i as i32,
+      slot_index: *i as i32,
       settings: slot.settings.clone(),
       client_status: SlotClientStatus::Pending,
       player,
     });
   }
 
-  for (i, slot) in referee_slots.iter().enumerate() {
-    let i = max_players + i;
-
+  for (i, slot) in referee_slots.iter() {
     let player = slot.player_id.clone().and_then(|id| players.remove(&id));
     if slot.player_id.is_some() && player.is_none() {
       return Err(Error::PlayerNotFound);
     }
     slots.push(UsedSlot {
-      slot_index: i as i32,
+      slot_index: *i as i32,
       settings: SlotSettings {
         color: 0,
         ..slot.settings.clone()
