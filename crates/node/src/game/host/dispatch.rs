@@ -1433,6 +1433,11 @@ impl PeerWorker {
           break
         },
         _ = stream_ct.cancelled() => {
+          tracing::info!(
+            game_id = self.game_id,
+            player_id,
+            "stream cancelled"
+          );
           break
         },
         Ok(_) = self.status_rx.changed() => {
