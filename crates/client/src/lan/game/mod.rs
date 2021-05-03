@@ -4,6 +4,7 @@ mod proxy;
 pub mod slot;
 
 pub use self::lobby::{LobbyAction, LobbyHandler};
+pub use self::proxy::GameEndReason;
 use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::game::LocalGameInfo;

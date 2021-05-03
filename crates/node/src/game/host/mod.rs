@@ -7,6 +7,8 @@ pub use sync::AckError;
 use crate::error::*;
 use crate::game::host::stream::{PlayerStream, PlayerStreamHandle};
 use crate::game::{GameEventSender, NodeGameStatusSnapshot, PlayerSlot};
+use crate::observer::ObserverPublisherHandle;
+use flo_w3gs::constants::LeaveReason;
 
 mod broadcast;
 mod clock;
@@ -23,8 +25,13 @@ pub struct GameHost {
 }
 
 impl GameHost {
-  pub fn new(game_id: i32, slots: &[PlayerSlot], event_sender: GameEventSender) -> Self {
-    let dispatcher = Dispatcher::new(game_id, slots, event_sender);
+  pub fn new(
+    game_id: i32,
+    slots: &[PlayerSlot],
+    obs: ObserverPublisherHandle,
+    event_sender: GameEventSender,
+  ) -> Self {
+    let dispatcher = Dispatcher::new(game_id, slots, obs, event_sender);
     Self {
       game_id,
       dispatcher,
@@ -62,7 +69,14 @@ impl GameHost {
     self.dispatcher.register_player_stream(stream).await
   }
 
-  pub async fn notify_player_shutdown(&mut self, player_id: i32) -> Result<()> {
-    self.dispatcher.notify_player_shutdown(player_id).await
+  pub async fn notify_player_shutdown(
+    &mut self,
+    player_id: i32,
+    leave_reason: Option<LeaveReason>,
+  ) -> Result<()> {
+    self
+      .dispatcher
+      .notify_player_shutdown(player_id, leave_reason)
+      .await
   }
 }

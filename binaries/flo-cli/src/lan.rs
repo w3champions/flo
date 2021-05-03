@@ -42,6 +42,7 @@ impl Command {
             _ = &mut ctrl_c, if !leaving => {
               tracing::info!("leaving");
               leaving = true;
+              tokio::time::sleep(Duration::from_millis(1000)).await;
               handle.leave().await;
             }
           }
@@ -53,7 +54,7 @@ impl Command {
       } => {
         tracing::info!("join multi: name = {}, player_ids = {:?}", name, player_ids);
         let storage = W3Storage::from_env()?;
-        let games = search_lan_games(Duration::from_secs(3)).await;
+        let games = search_lan_games(Duration::from_secs(5)).await;
         let games = games
           .iter()
           .filter_map(|g| {

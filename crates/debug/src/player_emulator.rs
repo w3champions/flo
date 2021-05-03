@@ -86,7 +86,7 @@ impl PlayerEmulator {
     let mut rx = self.rx.take().unwrap();
     let mut interval = interval_at(
       Instant::now() + Duration::from_secs(1),
-      Duration::from_millis(100),
+      Duration::from_millis(300),
     );
     loop {
       tokio::select! {

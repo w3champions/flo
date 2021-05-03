@@ -22,12 +22,14 @@ use crate::controller::ControllerServerHandle;
 use crate::error::*;
 use crate::game::{GameSession, GameSessionHandle, SlotClientStatusUpdateSource};
 use crate::metrics;
+use crate::observer::{ObserverPublisher, ObserverPublisherHandle};
 
 #[derive(Debug)]
 pub struct GlobalState {
   event_sender: GlobalEventSender,
   players: PlayerRegistry,
   games: GameRegistry,
+  obs: ObserverPublisher,
 }
 
 pub type GlobalStateRef = Arc<GlobalState>;
@@ -38,6 +40,7 @@ impl GlobalState {
       event_sender,
       players: PlayerRegistry::new(),
       games: GameRegistry::new(),
+      obs: ObserverPublisher::new(),
     }
   }
 
@@ -96,10 +99,12 @@ impl GlobalState {
         .collect()
     };
 
-    if let Err(err) = self
-      .games
-      .register(game, ctrl, self.event_sender.clone().into())
-    {
+    if let Err(err) = self.games.register(
+      game,
+      ctrl,
+      self.obs.handle(),
+      self.event_sender.clone().into(),
+    ) {
       let reason = match err {
         Error::GameExists => ControllerCreateGameRejectReason::GameExists,
         err => return Err(err),
@@ -329,6 +334,7 @@ impl GameRegistry {
     &self,
     game: Game,
     ctrl: ControllerServerHandle,
+    obs: ObserverPublisherHandle,
     g_event_sender: GlobalEventSender,
   ) -> Result<()> {
     use dashmap::mapref::entry::Entry;
@@ -336,7 +342,7 @@ impl GameRegistry {
 
     match self.map.entry(game_id) {
       Entry::Vacant(entry) => {
-        entry.insert(GameSession::new(game, ctrl, g_event_sender)?);
+        entry.insert(GameSession::new(game, ctrl, obs, g_event_sender)?);
         metrics::GAME_SESSIONS.inc();
       }
       Entry::Occupied(_) => {}

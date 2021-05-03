@@ -1,6 +1,6 @@
 use crate::controller::{ControllerClient, GetMuteList, MutePlayer, UnmutePlayer};
 use crate::error::*;
-use crate::lan::game::LanGameInfo;
+use crate::lan::game::{GameEndReason, LanGameInfo};
 use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
 use crate::types::NodeGameStatus;
@@ -11,6 +11,7 @@ use flo_util::chat::{parse_chat_command, ChatCommand};
 use flo_w3c::blacklist;
 use flo_w3c::stats::get_stats;
 use flo_w3gs::chat::ChatFromHost;
+use flo_w3gs::leave::LeaveReq;
 use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
 use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
@@ -18,6 +19,7 @@ use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
+use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -40,6 +42,7 @@ pub struct GameHandler<'a> {
   w3gs_rx: &'a mut Receiver<Packet>,
   client: &'a mut Addr<ControllerClient>,
   muted_players: BTreeSet<u8>,
+  end_reason: &'a Mutex<Option<GameEndReason>>,
 }
 
 impl<'a> GameHandler<'a> {
@@ -52,6 +55,7 @@ impl<'a> GameHandler<'a> {
     w3gs_tx: &'a mut Sender<Packet>,
     w3gs_rx: &'a mut Receiver<Packet>,
     client: &'a mut Addr<ControllerClient>,
+    end_reason: &'a Mutex<Option<GameEndReason>>,
   ) -> Self {
     GameHandler {
       info,
@@ -63,10 +67,15 @@ impl<'a> GameHandler<'a> {
       w3gs_rx,
       client,
       muted_players: BTreeSet::new(),
+      end_reason,
     }
   }
 
-  pub async fn run(&mut self, deferred_packets: Vec<Packet>) -> Result<GameResult> {
+  pub async fn run(
+    &mut self,
+    deferred_in_packets: Vec<Packet>,
+    deferred_out_packets: Vec<Packet>,
+  ) -> Result<GameResult> {
     let mut loop_state = GameLoopState::new(&self.info);
 
     let mute_list = if let Ok(v) = self.client.send(GetMuteList).await {
@@ -101,9 +110,14 @@ impl<'a> GameHandler<'a> {
       )
     }
 
-    for pkt in deferred_packets {
-      tracing::warn!("deferred packet: {:?}", pkt.type_id());
+    for pkt in deferred_in_packets {
+      tracing::warn!("deferred in packet: {:?}", pkt.type_id());
       self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
+    }
+
+    for pkt in deferred_out_packets {
+      tracing::warn!("deferred out packet: {:?}", pkt.type_id());
+      self.node_stream.send_w3gs(pkt).await?;
     }
 
     let mut ping = interval(Duration::from_secs(15));
@@ -220,7 +234,13 @@ impl<'a> GameHandler<'a> {
       OutgoingAction::PACKET_TYPE_ID => {}
       PacketTypeId::DropReq => {}
       PacketTypeId::LeaveReq => {
-        tracing::info!("request to leave received.");
+        let payload: LeaveReq = pkt.decode_simple()?;
+        tracing::info!("request to leave received: {:?}", payload.reason());
+        self
+          .end_reason
+          .lock()
+          .replace(GameEndReason::LeaveReq(payload.reason()));
+
         if let Err(err) = self.node_stream.send_w3gs(pkt).await {
           tracing::error!("report request to leave: {}", err);
         }

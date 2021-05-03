@@ -43,6 +43,12 @@ impl PingStream {
     self.waker.take().map(|w| w.wake());
   }
 
+  pub fn start_delayed(&mut self, delay: Duration) {
+    self.delay_reason = SleepReason::Ping;
+    self.delay = Box::pin(sleep(self.interval + delay)).into();
+    self.waker.take().map(|w| w.wake());
+  }
+
   pub fn stop(&mut self) {
     self.delay_reason = SleepReason::Ping;
     self.delay.take();

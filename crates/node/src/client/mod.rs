@@ -7,6 +7,7 @@ use flo_net::stream::FloStream;
 
 use crate::error::*;
 use crate::state::{GlobalState, GlobalStateRef, PlayerToken};
+use flo_w3gs::constants::LeaveReason;
 
 pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
   let mut listener = FloListener::bind_v4(NODE_CLIENT_PORT).await?;
@@ -54,7 +55,10 @@ pub async fn serve_client(state: GlobalStateRef) -> Result<()> {
         };
 
         if claim.shutdown_retry {
-          if let Err(err) = session.retry_shutdown(claim.player_id, &mut stream).await {
+          if let Err(err) = session
+            .retry_shutdown(claim.player_id, claim.leave_reason, &mut stream)
+            .await
+          {
             tracing::error!(
               game_id = claim.game_id,
               player_id = claim.player_id,
@@ -120,6 +124,7 @@ async fn handshake(state: &GlobalState, stream: &mut FloStream) -> Result<Claim>
     game_id: pending.game_id,
     player_id: pending.player_id,
     shutdown_retry: connect.retry_shutdown,
+    leave_reason: connect.leave_reason.map(LeaveReason::from),
   })
 }
 
@@ -128,4 +133,5 @@ pub struct Claim {
   game_id: i32,
   player_id: i32,
   shutdown_retry: bool,
+  leave_reason: Option<LeaveReason>,
 }

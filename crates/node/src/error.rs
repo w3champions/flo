@@ -31,6 +31,8 @@ pub enum Error {
   InvalidToken,
   #[error("invalid client status transition: {0:?} => {1:?}")]
   InvalidClientStatusTransition(SlotClientStatus, SlotClientStatus),
+  #[error("observer put record: {0}")]
+  ObsPutRecord(#[from] rusoto_core::RusotoError<rusoto_kinesis::PutRecordError>),
   #[error("tokio io: {0}")]
   Tokio(#[from] tokio::io::Error),
   #[error("operation timeout")]

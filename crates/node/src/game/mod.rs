@@ -20,8 +20,10 @@ use host::GameHost;
 
 use crate::controller::ControllerServerHandle;
 use crate::error::*;
+use crate::observer::ObserverPublisherHandle;
 use crate::state::event::GlobalEventSender;
 use crate::state::GlobalEvent;
+use flo_w3gs::constants::LeaveReason;
 
 mod host;
 
@@ -49,6 +51,7 @@ impl GameSession {
   pub fn new(
     game: proto::Game,
     ctrl: ControllerServerHandle,
+    obs: ObserverPublisherHandle,
     g_event_sender: GlobalEventSender,
   ) -> Result<Self> {
     let scope = SpawnScope::new();
@@ -63,7 +66,7 @@ impl GameSession {
     let state = Arc::new(Mutex::new(State {
       game_id,
       g_event_sender,
-      host: GameHost::new(game_id, &slots, tx.clone()),
+      host: GameHost::new(game_id, &slots, obs.clone(), tx.clone()),
       status: NodeGameStatus::Created,
       player_slots: slots
         .into_iter()
@@ -71,6 +74,7 @@ impl GameSession {
         .collect(),
       tx,
       ctrl,
+      obs,
     }));
 
     let shared = Arc::new(SharedState {
@@ -194,9 +198,17 @@ impl GameSessionHandle {
     Ok(())
   }
 
-  pub async fn retry_shutdown(&self, player_id: i32, stream: &mut FloStream) -> Result<(), Error> {
+  pub async fn retry_shutdown(
+    &self,
+    player_id: i32,
+    leave_reason: Option<LeaveReason>,
+    stream: &mut FloStream,
+  ) -> Result<(), Error> {
     let mut guard = self.0.lock().await;
-    guard.host.notify_player_shutdown(player_id).await?;
+    guard
+      .host
+      .notify_player_shutdown(player_id, leave_reason)
+      .await?;
     stream
       .send_frame(Frame::new_empty(PacketTypeId::ClientShutdownAck))
       .await?;
@@ -388,6 +400,7 @@ struct State {
   player_slots: BTreeMap<i32, PlayerSlot>,
   ctrl: ControllerServerHandle,
   tx: GameEventSender,
+  obs: ObserverPublisherHandle,
 }
 
 impl State {
@@ -530,6 +543,7 @@ impl State {
         .send(GlobalEvent::GameEnded(self.game_id))
         .await
         .ok();
+      self.obs.remove_game(self.game_id);
       true
     } else {
       false

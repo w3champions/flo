@@ -9,6 +9,7 @@ mod version;
 
 mod constants;
 pub mod error;
+mod observer;
 
 use error::Result;
 

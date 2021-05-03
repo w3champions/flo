@@ -9,6 +9,7 @@ use crate::node::NodeInfo;
 use crate::types::{NodeGameStatus, SlotClientStatus};
 use flo_state::Addr;
 use flo_task::{SpawnScope, SpawnScopeHandle};
+use flo_w3gs::constants::LeaveReason;
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::game::{GameLoadedSelf, PlayerLoaded};
@@ -16,9 +17,8 @@ use flo_w3gs::protocol::leave::{LeaveAck, LeaveReq};
 use flo_w3gs::protocol::packet::Packet;
 use flo_w3gs::protocol::packet::*;
 use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -28,6 +28,12 @@ use tokio_stream::StreamExt;
 use tracing_futures::Instrument;
 
 const LOAD_SCREEN_PING_INTERVAL: Duration = Duration::from_secs(15);
+
+#[derive(Debug, Clone)]
+pub enum GameEndReason {
+  Unknown,
+  LeaveReq(LeaveReason),
+}
 
 pub struct LanProxy {
   _scope: SpawnScope,
@@ -54,7 +60,7 @@ impl LanProxy {
 
     tracing::debug!("connecting to node: {}", node.client_socket_addr());
 
-    let left_game = Arc::new(AtomicBool::new(false));
+    let end_reason = Arc::new(Mutex::new(None));
 
     let node_stream = NodeStream::connect(
       &info,
@@ -62,7 +68,7 @@ impl LanProxy {
       token,
       client.clone(),
       w3gs_tx.clone(),
-      left_game.clone(),
+      end_reason.clone(),
     )
     .await?;
 
@@ -86,7 +92,7 @@ impl LanProxy {
             event_rx,
             w3gs_tx,
             w3gs_rx,
-            left_game,
+            end_reason,
             scope,
             node,
             client.clone(),
@@ -146,7 +152,7 @@ impl State {
     event_rx: Receiver<PlayerEvent>,
     mut w3gs_tx: Sender<Packet>,
     mut w3gs_rx: Receiver<Packet>,
-    left_game: Arc<AtomicBool>,
+    end_reason: Arc<Mutex<Option<GameEndReason>>>,
     mut scope: SpawnScopeHandle,
     node: Arc<NodeInfo>,
     mut client: Addr<ControllerClient>,
@@ -217,7 +223,8 @@ impl State {
       None => return Ok(()),
     };
 
-    let mut deferred_packets = vec![];
+    let mut deferred_in_packets = vec![];
+    let mut deferred_out_packets = vec![];
 
     // Load Screen
     {
@@ -229,7 +236,8 @@ impl State {
         &mut status_rx,
         &mut w3gs_rx,
         slot_status_map,
-        &mut deferred_packets,
+        &mut deferred_in_packets,
+        &mut deferred_out_packets,
       );
       tokio::pin!(load_screen);
 
@@ -255,10 +263,11 @@ impl State {
       &mut w3gs_tx,
       &mut w3gs_rx,
       &mut client,
+      &end_reason,
     );
     tokio::select! {
       _ = &mut dropped => {}
-      res = game_handler.run(deferred_packets) => {
+      res = game_handler.run(deferred_in_packets, deferred_out_packets) => {
         match res {
           Ok(res) => {
             tracing::info!("game ended: {:?}", res);
@@ -269,7 +278,12 @@ impl State {
         }
       }
     };
-    left_game.store(true, Ordering::SeqCst);
+    {
+      let mut guard = end_reason.lock();
+      if guard.is_none() {
+        guard.replace(GameEndReason::Unknown);
+      }
+    }
     stream.flush().await.ok();
     Ok(())
   }
@@ -333,7 +347,8 @@ impl State {
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
     w3gs_rx: &mut Receiver<Packet>,
     initial_status_map: HashMap<i32, SlotClientStatus>,
-    deferred_packets: &mut Vec<Packet>,
+    deferred_in_packets: &mut Vec<Packet>,
+    deferred_out_packets: &mut Vec<Packet>,
   ) -> Result<()> {
     let my_player_id = info.game.player_id;
     let my_slot_player_id = info.slot_info.slot_player_id;
@@ -400,8 +415,8 @@ impl State {
                   break;
                 }
                 PongToHost::PACKET_TYPE_ID => {}
-                id => {
-                  tracing::warn!("unexpected w3gs packet id: {:?}", id)
+                _ => {
+                  deferred_out_packets.push(pkt);
                 }
               }
             },
@@ -453,7 +468,7 @@ impl State {
             if pkt.type_id() == PacketTypeId::PingFromHost {
               stream.send(pkt).await?;
             } else {
-              deferred_packets.push(pkt);
+              deferred_in_packets.push(pkt);
             }
           } else {
             return Err(Error::TaskCancelled(anyhow::format_err!("w3g tx dropped")))

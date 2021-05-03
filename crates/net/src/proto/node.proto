@@ -2,6 +2,7 @@ syntax = "proto3";
 package flo_node;
 
 import "proto/common.proto";
+import "google/protobuf/wrappers.proto";
 
 message PacketControllerConnect {
   flo_common.Version lobby_version = 1;
@@ -72,6 +73,7 @@ message PacketClientConnect {
   flo_common.Version version = 1;
   bytes token = 2;
   bool retry_shutdown = 3;
+  google.protobuf.UInt32Value leave_reason = 4;
 }
 
 message PacketClientConnectAccept {

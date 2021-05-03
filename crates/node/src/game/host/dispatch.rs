@@ -11,6 +11,7 @@ use crate::game::{
   AckError, GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
   SlotClientStatusUpdateSource,
 };
+use crate::observer::ObserverPublisherHandle;
 use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::ping::{PingMsg, PingStream};
 use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
@@ -44,6 +45,7 @@ pub enum Cmd {
   },
   RemovePlayer {
     player_id: i32,
+    leave_reason: Option<LeaveReason>,
   },
 }
 
@@ -87,14 +89,26 @@ impl Drop for Dispatcher {
 }
 
 impl Dispatcher {
-  pub fn new(game_id: i32, slots: &[PlayerSlot], out_tx: GameEventSender) -> Self {
+  pub fn new(
+    game_id: i32,
+    slots: &[PlayerSlot],
+    obs: ObserverPublisherHandle,
+    out_tx: GameEventSender,
+  ) -> Self {
     let ct = CancellationToken::new();
     let start_notify = Arc::new(Notify::new());
     let (status_tx, status_rx) = watch::channel(DispatchStatus::Pending);
     let (cmd_tx, cmd_rx) = channel(10);
     let (action_tx, action_rx) = channel(32);
 
-    let state = State::new(game_id, slots, status_rx, action_tx.clone(), ct.clone());
+    let state = State::new(
+      game_id,
+      slots,
+      obs.clone(),
+      status_rx,
+      action_tx.clone(),
+      ct.clone(),
+    );
 
     let mut start_messages = vec![];
     if !state.chat_banned_player_ids.is_empty() {
@@ -103,6 +117,7 @@ impl Dispatcher {
 
     tokio::spawn(
       Self::tick(
+        game_id,
         state.shared.clone(),
         start_messages,
         start_notify.clone(),
@@ -141,10 +156,17 @@ impl Dispatcher {
     rx.await.map_err(|_| Error::Cancelled)?
   }
 
-  pub async fn notify_player_shutdown(&self, player_id: i32) -> Result<()> {
+  pub async fn notify_player_shutdown(
+    &self,
+    player_id: i32,
+    leave_reason: Option<LeaveReason>,
+  ) -> Result<()> {
     self
       .cmd_tx
-      .send(Cmd::RemovePlayer { player_id })
+      .send(Cmd::RemovePlayer {
+        player_id,
+        leave_reason,
+      })
       .await
       .map_err(|_| Error::Cancelled)?;
     Ok(())
@@ -189,6 +211,7 @@ impl Dispatcher {
   }
 
   async fn tick(
+    game_id: i32,
     shared: Arc<Mutex<Shared>>,
     start_messages: Vec<String>,
     start_notify: Arc<Notify>,
@@ -240,7 +263,10 @@ impl Dispatcher {
                     Ok(true) => {
                       tick_stream.resume();
                       status_tx.send(DispatchStatus::Running).ok();
-                      tracing::info!("resume clock: all lagging player resumed");
+                      tracing::info!(
+                        game_id,
+                        "resume clock: all lagging player resumed"
+                      );
                     },
                     Err(err) => {
                       tracing::error!("check_stop_lag: {}", err);
@@ -250,7 +276,10 @@ impl Dispatcher {
                 }
               },
               ActionMsg::ResumeClock => {
-                tracing::info!("resume clock");
+                tracing::info!(
+                  game_id,
+                  "resume clock"
+                );
                 tick_stream.resume();
                 status_tx.send(DispatchStatus::Running).ok();
               }
@@ -266,14 +295,20 @@ impl Dispatcher {
                 status_tx.send(DispatchStatus::Paused).ok();
               }
               Err(err) => {
-                tracing::error!("dispatch action tick: {}", err);
+                tracing::error!(
+                  game_id,
+                  "dispatch action tick: {}", err
+                );
                 break;
               }
             }
           }
           _ = &mut pause_timeout, if tick_stream.is_paused() => {
             if let Err(err) = shared.lock().drop_all_lag_players() {
-              tracing::error!("drop all lag players: {}", err);
+              tracing::error!(
+                game_id,
+                "drop all lag players: {}", err
+              );
               break;
             }
             tick_stream.resume();
@@ -308,6 +343,7 @@ impl State {
   fn new(
     game_id: i32,
     slots: &[PlayerSlot],
+    obs: ObserverPublisherHandle,
     status_rx: watch::Receiver<DispatchStatus>,
     _action_tx: Sender<ActionMsg>,
     ct: CancellationToken,
@@ -315,7 +351,7 @@ impl State {
     State {
       game_id,
       ct,
-      shared: Arc::new(Mutex::new(Shared::new(game_id, slots))),
+      shared: Arc::new(Mutex::new(Shared::new(game_id, slots, obs))),
       status_rx,
       game_player_id_lookup: slots
         .into_iter()
@@ -355,11 +391,14 @@ impl State {
         )
         .ok();
       }
-      Cmd::RemovePlayer { player_id } => {
+      Cmd::RemovePlayer {
+        player_id,
+        leave_reason,
+      } => {
         if let Err(err) = peer_tx
           .send(PeerMsg::Shutdown {
             player_id,
-            leave_reason: None,
+            leave_reason,
           })
           .await
         {
@@ -450,6 +489,7 @@ impl State {
             err => tracing::error!("worker: {}", err),
           }
         }
+
         worker
           .dispatcher_tx
           .send(PeerMsg::Closed {
@@ -730,26 +770,30 @@ impl State {
     }
 
     packet.header.type_id = PacketTypeId::ChatFromHost;
-    self.shared.lock().broadcast(
-      packet,
-      broadcast::AllowList(
-        &chat
-          .to_players
-          .into_iter()
-          .filter_map(|id| {
-            if let Some(id) = self.game_player_id_lookup.get(&id).cloned() {
-              if id != player_id {
-                Some(id)
+    {
+      let mut guard = self.shared.lock();
+      guard.obs.push_w3gs(self.game_id, packet.clone());
+      guard.broadcast(
+        packet,
+        broadcast::AllowList(
+          &chat
+            .to_players
+            .into_iter()
+            .filter_map(|id| {
+              if let Some(id) = self.game_player_id_lookup.get(&id).cloned() {
+                if id != player_id {
+                  Some(id)
+                } else {
+                  None
+                }
               } else {
                 None
               }
-            } else {
-              None
-            }
-          })
-          .collect::<Vec<_>>(),
-      ),
-    )?;
+            })
+            .collect::<Vec<_>>(),
+        ),
+      )?;
+    }
     Ok(())
   }
 
@@ -936,10 +980,11 @@ struct Shared {
   sync: SyncMap,
   lagging_player_ids: BTreeSet<i32>,
   drop_votes: BTreeSet<i32>,
+  obs: ObserverPublisherHandle,
 }
 
 impl Shared {
-  fn new(game_id: i32, slots: &[PlayerSlot]) -> Self {
+  fn new(game_id: i32, slots: &[PlayerSlot], obs: ObserverPublisherHandle) -> Self {
     let sync = SyncMap::new(slots.iter().map(|s| s.player.player_id).collect());
     let mut slot_id_lookup = BTreeMap::new();
     Self {
@@ -957,6 +1002,7 @@ impl Shared {
       sync,
       lagging_player_ids: BTreeSet::new(),
       drop_votes: BTreeSet::new(),
+      obs,
     }
   }
 
@@ -981,6 +1027,7 @@ impl Shared {
       time_increment_ms,
       actions: tick.actions,
     }))?;
+    self.obs.push_w3gs(self.game_id, action_packet.clone());
     self.broadcast(action_packet, broadcast::Everyone)?;
     Ok(DispatchResult::Continue)
   }
@@ -1430,6 +1477,11 @@ impl PeerWorker {
     loop {
       tokio::select! {
         _ = self.ct.cancelled() => {
+          tracing::info!(
+            game_id = self.game_id,
+            player_id,
+            "dispatcher cancelled"
+          );
           break
         },
         _ = stream_ct.cancelled() => {
@@ -1537,7 +1589,11 @@ impl PeerWorker {
               self.dispatch_delayed(player_id, &delay_buf).await?;
             }
             Err(err) => {
-              tracing::error!("delay: {}", err);
+              tracing::error!(
+                game_id = self.game_id,
+                player_id,
+                "delay: {}", err
+              );
               break;
             }
           }
@@ -1548,7 +1604,11 @@ impl PeerWorker {
               self.stream.get_mut().send_frame(frame).await?;
             },
             PingMsg::Timeout => {
-              tracing::info!("ping timeout");
+              tracing::info!(
+                game_id = self.game_id,
+                player_id,
+                "ping timeout"
+              );
               break;
             }
           }
@@ -1592,7 +1652,7 @@ impl PeerWorker {
       tracing::error!(
         game_id = self.game_id,
         player_id,
-        "send session termination: {}",
+        "send shutdown ack: {}",
         err
       );
     }

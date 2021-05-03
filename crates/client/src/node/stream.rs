@@ -1,5 +1,6 @@
 use crate::controller::ControllerClient;
 use crate::error::*;
+use crate::lan::game::GameEndReason;
 use crate::lan::game::LanGameInfo;
 use crate::lan::LanEvent;
 use crate::types::GameStatusUpdate;
@@ -15,10 +16,10 @@ use flo_types::node::NodeGameStatusSnapshot;
 use flo_w3gs::action::IncomingAction;
 use flo_w3gs::protocol::chat::ChatFromHost;
 use futures::FutureExt;
+use parking_lot::Mutex;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -53,7 +54,7 @@ impl NodeStream {
     token: NodeConnectToken,
     client: Addr<ControllerClient>,
     game_tx: Sender<W3GSPacket>,
-    left_game: Arc<AtomicBool>,
+    end_reason: Arc<Mutex<Option<GameEndReason>>>,
   ) -> Result<Self> {
     let ct = CancellationToken::new();
     let shutdown_notify = Arc::new(Notify::new());
@@ -74,7 +75,7 @@ impl NodeStream {
       ack: 0,
       time: 0,
       last_connected_at: None,
-      left_game,
+      end_reason,
     };
 
     tokio::spawn(
@@ -117,7 +118,7 @@ struct Session {
   time: u32,
   ack: u32,
   last_connected_at: Option<Instant>,
-  left_game: Arc<AtomicBool>,
+  end_reason: Arc<Mutex<Option<GameEndReason>>>,
 }
 
 impl Session {
@@ -193,7 +194,7 @@ impl Session {
             break 'main Some(stream);
           }
           ConnectionRunResult::NodeDisconnected => {
-            if self.left_game.load(Ordering::SeqCst) {
+            if self.end_reason.lock().is_some() {
               tracing::info!("node session ended");
               break 'main Some(stream);
             } else {
@@ -364,6 +365,13 @@ impl Session {
   }
 
   async fn retry_shutdown(&self) -> Result<()> {
+    let leave_reason = {
+      let guard = self.end_reason.lock();
+      match guard.clone() {
+        Some(GameEndReason::LeaveReq(reason)) => Some(reason.into()),
+        _ => None,
+      }
+    };
     let mut stream = FloStream::connect_no_delay(self.addr).await?;
 
     stream
@@ -371,6 +379,7 @@ impl Session {
         version: Some(crate::version::FLO_VERSION.into()),
         token: self.token.to_vec(),
         retry_shutdown: true,
+        leave_reason,
       })
       .await?;
 

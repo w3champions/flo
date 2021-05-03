@@ -21,3 +21,13 @@ pub const GAME_DELAY_RANGE: [Duration; 2] = [Duration::from_millis(25), Duration
 #[cfg(debug_assertions)]
 pub const GAME_DELAY_RANGE: [Duration; 2] =
   [Duration::from_millis(25), Duration::from_millis(60 * 1000)];
+
+pub const OBS_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+pub const OBS_CHANNEL_SIZE: usize = 512;
+pub const OBS_MAX_CHUNK_SIZE: usize = 512 * 1024;
+pub static OBS_KINESIS_STREAM_NAME: Lazy<String> = Lazy::new(|| {
+  std::env::var("AWS_KINESIS_STREAM_NAME")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or("flo".to_string())
+});
