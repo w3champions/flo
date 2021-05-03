@@ -52,7 +52,7 @@ impl ObserverPublisher {
 
   pub fn handle(&self) -> ObserverPublisherHandle {
     ObserverPublisherHandle {
-      broken: Cell::new(false),
+      broken: Cell::new(true),
       tx: self.tx.clone(),
     }
   }
