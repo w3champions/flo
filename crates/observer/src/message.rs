@@ -15,16 +15,12 @@ pub struct GameRecord {
 #[derive(Debug)]
 pub enum GameRecordData {
   W3GS(Packet),
-  StartLag(Vec<i32>),
-  StopLag(i32),
 }
 
 #[derive(Debug)]
 #[repr(u8)]
 pub enum DataTypeId {
   W3GS = 1,
-  StartLag = 2,
-  StopLag = 3,
 }
 
 impl GameRecordData {
