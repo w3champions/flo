@@ -7,7 +7,7 @@ use crate::error::Error;
 use crate::packet::{Frame, FramePayload, Header, PacketTypeId};
 use crate::w3gs::W3GSMetadata;
 
-const MAX_PAYLOAD_LEN: usize = 4096;
+const MAX_PAYLOAD_LEN: usize = 16384;
 
 #[derive(Debug)]
 pub struct FloFrameCodec {
