@@ -260,6 +260,9 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: ChatCommand) -> bool {
     match cmd.raw() {
+      "ping" => {
+        // disable ping command
+      }
       "flo" => {
         let messages = vec![
           "-game: print game information.".to_string(),
