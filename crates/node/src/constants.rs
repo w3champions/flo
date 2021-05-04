@@ -32,9 +32,3 @@ pub static OBS_SOURCE: Lazy<ObserverRecordSource> = Lazy::new(|| {
     .and_then(|v| v.parse().ok())
     .unwrap_or(ObserverRecordSource::Test)
 });
-pub static OBS_KINESIS_STREAM_NAME: Lazy<String> = Lazy::new(|| {
-  std::env::var("AWS_KINESIS_STREAM_NAME")
-    .ok()
-    .and_then(|v| v.parse().ok())
-    .unwrap_or("flo".to_string())
-});

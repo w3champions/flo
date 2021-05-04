@@ -2,32 +2,19 @@ use crate::error::Result;
 use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
 use flo_net::proto::flo_node::Game;
-use flo_observer::record::GameRecord;
+use flo_observer::{
+  KINESIS_CLIENT,
+  record::GameRecord
+};
 use flo_w3gs::packet::Packet;
-use once_cell::sync::Lazy;
-use rusoto_core::{credential::StaticProvider, request::HttpClient};
-use rusoto_kinesis::KinesisClient;
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
-use std::env;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
 
 const BUFFER_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-
-static KINESIS_CLIENT: Lazy<KinesisClient> = Lazy::new(|| {
-  let provider = StaticProvider::new(
-    env::var("AWS_ACCESS_KEY_ID").unwrap(),
-    env::var("AWS_SECRET_ACCESS_KEY").unwrap(),
-    None,
-    None,
-  );
-  let client = HttpClient::new().unwrap();
-  let region = env::var("AWS_KINESIS_REGION").unwrap().parse().unwrap();
-  KinesisClient::new_with(client, provider, region)
-});
 
 #[derive(Debug)]
 pub struct ObserverPublisher {
@@ -247,7 +234,7 @@ impl Worker {
         explicit_hash_key: None,
         partition_key: game_id.to_string(),
         sequence_number_for_ordering: self.last_sequence_number.clone(),
-        stream_name: crate::constants::OBS_KINESIS_STREAM_NAME.clone(),
+        stream_name: flo_observer::KINESIS_STREAM_NAME.clone(),
       };
 
       loop {

@@ -83,11 +83,11 @@ jobs:
   - script: |
       curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
     displayName: 'install rust'
-  
+
   - script: |
       cargo build -p flo-worker --release
     displayName: 'build flo worker'
-  
+
   - script: |
       zip -j -r $(Build.ArtifactStagingDirectory)/flo-worker-$(Build.BuildID)-macOS.zip target/release/flo-worker
 
