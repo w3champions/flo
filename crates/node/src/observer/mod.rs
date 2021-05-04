@@ -199,6 +199,7 @@ impl Worker {
     use rusoto_core::RusotoError;
     use rusoto_kinesis::{Kinesis, PutRecordError, PutRecordInput};
 
+    let mut remove_ids = None;
     let mut expired_ids = None;
     let start = Instant::now();
     let items: Vec<_> = self
@@ -206,7 +207,7 @@ impl Worker {
       .iter_mut()
       .filter_map(|(game_id, buf)| {
         if buf.should_remove {
-          expired_ids.get_or_insert_with(|| vec![]).push(*game_id);
+          remove_ids.get_or_insert_with(|| vec![]).push(*game_id);
           return None;
         }
 
@@ -222,6 +223,12 @@ impl Worker {
         Some((*game_id, buf.split_chunk()))
       })
       .collect();
+
+    if let Some(ids) = remove_ids {
+      for id in ids {
+        self.buffer_map.remove(&id);
+      }
+    }
 
     if let Some(ids) = expired_ids {
       for id in ids {
