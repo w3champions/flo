@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1418,7 +1418,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "backoff",
  "bytes 1.0.1",
@@ -1472,9 +1472,12 @@ version = "0.1.0"
 dependencies = [
  "bytes 1.0.1",
  "flo-net",
+ "flo-util",
  "flo-w3gs",
+ "prost",
  "rusoto_core",
  "rusoto_kinesis",
+ "thiserror",
 ]
 
 [[package]]
@@ -1614,7 +1617,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -2995,6 +2998,10 @@ checksum = "c92d4ddb4bd7b50d730c215ff871754d0da6b2178849f8a2a2ab69712d0c073b"
 dependencies = [
  "objc",
 ]
+
+[[package]]
+name = "observer-consumer"
+version = "0.1.0"
 
 [[package]]
 name = "once_cell"

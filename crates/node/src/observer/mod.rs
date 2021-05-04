@@ -1,7 +1,8 @@
 use crate::error::Result;
 use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
-use flo_observer::message::GameRecord;
+use flo_net::proto::flo_node::Game;
+use flo_observer::record::GameRecord;
 use flo_w3gs::packet::Packet;
 use once_cell::sync::Lazy;
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
@@ -52,7 +53,7 @@ impl ObserverPublisher {
 
   pub fn handle(&self) -> ObserverPublisherHandle {
     ObserverPublisherHandle {
-      broken: Cell::new(true),
+      broken: Cell::new(false),
       tx: self.tx.clone(),
     }
   }
@@ -65,13 +66,29 @@ pub struct ObserverPublisherHandle {
 }
 
 impl ObserverPublisherHandle {
+  pub fn push_game(&self, game: Game) {
+    self.push_record(GameRecord::new_game_info(game))
+  }
+
   pub fn push_w3gs(&self, game_id: i32, packet: Packet) {
+    self.push_record(GameRecord::new_w3gs(game_id, packet))
+  }
+
+  pub fn push_start_lag(&self, game_id: i32, player_ids: Vec<i32>) {
+    self.push_record(GameRecord::new_start_lag(game_id, player_ids))
+  }
+
+  pub fn push_end_lag(&self, game_id: i32, player_id: i32) {
+    self.push_record(GameRecord::new_end_lag(game_id, player_id))
+  }
+
+  fn push_record(&self, record: GameRecord) {
     if self.broken.get() {
       return;
     }
     self
       .tx
-      .try_send(Cmd::AddRecord(GameRecord::new_w3gs(game_id, packet)))
+      .try_send(Cmd::AddRecord(record))
       .err()
       .map(|_| self.broken.set(true));
   }
@@ -285,6 +302,10 @@ impl GameBuffer {
     let next_len = self.data.len() + record.encode_len();
     if next_len > crate::constants::OBS_MAX_CHUNK_SIZE {
       self.split_chunks.push_back(self.data.split().freeze());
+    }
+
+    if self.data.is_empty() {
+      self.data.put_u32(*crate::constants::OBS_SOURCE as u32);
     }
 
     self.data.put_u32(self.seq_id);

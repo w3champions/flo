@@ -1,7 +1,9 @@
 use flo_util::{BinDecode, BinEncode};
 
-use crate::protocol::constants::{LeaveReason, PacketTypeId};
+use crate::protocol::constants::PacketTypeId;
 use crate::protocol::packet::PacketPayload;
+
+pub use crate::protocol::constants::LeaveReason;
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
 pub struct LeaveReq(LeaveReason);

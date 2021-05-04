@@ -1034,6 +1034,10 @@ impl Shared {
 
   fn handle_lag(&mut self, add_player_ids: Vec<i32>) -> Result<bool> {
     self.lagging_player_ids.extend(add_player_ids);
+    self.obs.push_start_lag(
+      self.game_id,
+      self.lagging_player_ids.iter().cloned().collect(),
+    );
     if let Some(items) = self.refresh_lag_packet()? {
       self.drop_votes.clear();
       let mut send_errors = vec![];
@@ -1097,6 +1101,7 @@ impl Shared {
         self.slot_id_lookup.get(&id).cloned().map(|slot| (slot, 0))
       };
       if let Some((slot, lag_duration_ms)) = info {
+        self.obs.push_end_lag(self.game_id, id);
         self.lagging_player_ids.remove(&id);
         stop_lag_players.push(id);
         packets.push((

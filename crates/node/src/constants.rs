@@ -1,3 +1,4 @@
+use flo_observer::record::ObserverRecordSource;
 use once_cell::sync::Lazy;
 use std::time::Duration;
 
@@ -25,6 +26,12 @@ pub const GAME_DELAY_RANGE: [Duration; 2] =
 pub const OBS_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 pub const OBS_CHANNEL_SIZE: usize = 512;
 pub const OBS_MAX_CHUNK_SIZE: usize = 512 * 1024;
+pub static OBS_SOURCE: Lazy<ObserverRecordSource> = Lazy::new(|| {
+  std::env::var("OBSERVER_SOURCE")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or(ObserverRecordSource::Test)
+});
 pub static OBS_KINESIS_STREAM_NAME: Lazy<String> = Lazy::new(|| {
   std::env::var("AWS_KINESIS_STREAM_NAME")
     .ok()

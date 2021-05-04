@@ -23,6 +23,7 @@ members = [
   "crates/controller",
   "crates/node",
   "crates/observer",
+  "crates/observer-consumer",
   "crates/client",
 
   "binaries/flo",
