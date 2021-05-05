@@ -228,7 +228,7 @@ impl DecodeInputReceiver {
       impl #imp #mod_path::BinDecode for #ident #ty #wher {
         const MIN_SIZE: usize = <#repr_ty as #mod_path::BinDecode>::MIN_SIZE;
         const FIXED_SIZE: bool = <#repr_ty as #mod_path::BinDecode>::FIXED_SIZE;
-        fn decode<T: #mod_path::Buf>(buf: &mut T) -> Result<Self, #mod_path::BinDecodeError> {
+        fn decode<T: #mod_path::Buf>(buf: &mut T) -> std::result::Result<Self, #mod_path::BinDecodeError> {
           Ok(Self(<#repr_ty as #mod_path::BinDecode>::decode(buf)?))
         }
       }
@@ -320,7 +320,7 @@ impl DecodeInputReceiver {
       impl #imp #mod_path::BinDecode for #ident #ty #wher {
         const MIN_SIZE: usize = #min_size_plus_list;
         const FIXED_SIZE: bool = #fixed_size_and_list;
-        fn decode<T: #mod_path::Buf>(buf: &mut T) -> Result<Self, #mod_path::BinDecodeError> {
+        fn decode<T: #mod_path::Buf>(buf: &mut T) -> std::result::Result<Self, #mod_path::BinDecodeError> {
           if buf.remaining() < Self::MIN_SIZE {
             return Err(#mod_path::BinDecodeError::incomplete());
           }
@@ -372,7 +372,7 @@ impl DecodeInputReceiver {
       impl #imp #mod_path::BinDecode for #ident #ty #wher {
         const MIN_SIZE: usize = <#repr as #mod_path::BinDecode>::MIN_SIZE;
         const FIXED_SIZE: bool = <#repr as #mod_path::BinDecode>::FIXED_SIZE;
-        fn decode<T: #mod_path::Buf>(buf: &mut T) -> Result<Self, #mod_path::BinDecodeError> {
+        fn decode<T: #mod_path::Buf>(buf: &mut T) -> std::result::Result<Self, #mod_path::BinDecodeError> {
           if buf.remaining() < Self::MIN_SIZE {
             return Err(#mod_path::BinDecodeError::incomplete());
           }
@@ -417,7 +417,7 @@ impl ToTokens for DecodeInputReceiver {
             impl #mod_path::BinDecode for #ident {
               const MIN_SIZE: usize = 0;
               const FIXED_SIZE: bool = true;
-              fn decode<T: #mod_path::Buf>(buf: &mut T) -> Result<Self, #mod_path::BinDecodeError> {
+              fn decode<T: #mod_path::Buf>(buf: &mut T) -> std::result::Result<Self, #mod_path::BinDecodeError> {
                 Ok(#ident)
               }
             }

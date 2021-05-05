@@ -1,5 +1,5 @@
-mod consumer;
 mod cache;
+mod consumer;
 mod env;
-mod sink;
 pub mod error;
+mod fs;

@@ -1,7 +1,6 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::error::Result;
 use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use crate::protocol::join::ReqJoin;
 use crate::protocol::packet::{PacketPayload, PacketProtoBufMessage};

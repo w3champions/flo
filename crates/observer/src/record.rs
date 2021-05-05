@@ -56,6 +56,7 @@ pub enum GameRecordData {
   W3GS(Packet),
   StartLag(Vec<i32>),
   StopLag(i32),
+  GameEnd,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -65,6 +66,7 @@ pub enum DataTypeId {
   W3GS = 1,
   StartLag = 2,
   StopLag = 3,
+  GameEnd = 4,
 }
 
 impl GameRecordData {
@@ -74,6 +76,7 @@ impl GameRecordData {
       GameRecordData::W3GS(_) => DataTypeId::W3GS,
       GameRecordData::StartLag(_) => DataTypeId::StartLag,
       GameRecordData::StopLag(_) => DataTypeId::StopLag,
+      GameRecordData::GameEnd => DataTypeId::GameEnd,
     }
   }
 
@@ -83,14 +86,15 @@ impl GameRecordData {
       GameRecordData::W3GS(ref pkt) => 1 + pkt.payload.len(),
       GameRecordData::StartLag(ref ids) => 1 + 4 * ids.len(),
       GameRecordData::StopLag(_) => 4,
+      GameRecordData::GameEnd => 0,
     }
   }
 
-  fn encode_len(&self) -> usize {
-    1 + 2 + self.data_encode_len()
+  pub fn encode_len(&self) -> usize {
+    1 + self.data_encode_len()
   }
 
-  fn encode<T: BufMut>(&self, mut buf: T) {
+  pub fn encode<T: BufMut>(&self, mut buf: T) {
     buf.put_u8(self.type_id() as u8);
     match *self {
       GameRecordData::W3GS(ref pkt) => {
@@ -113,6 +117,7 @@ impl GameRecordData {
       GameRecordData::StopLag(id) => {
         buf.put_i32(id);
       }
+      GameRecordData::GameEnd => {}
     }
   }
 
@@ -125,6 +130,7 @@ impl GameRecordData {
       1 => DataTypeId::W3GS,
       2 => DataTypeId::StartLag,
       3 => DataTypeId::StopLag,
+      4 => DataTypeId::GameEnd,
       other => return Err(RecordError::UnknownDataTypeId(other)),
     };
     Ok(match data_type {
@@ -172,6 +178,7 @@ impl GameRecordData {
         }
         Self::StopLag(buf.get_i32())
       }
+      DataTypeId::GameEnd => Self::GameEnd,
     })
   }
 }
@@ -202,6 +209,13 @@ impl GameRecord {
     Self {
       game_id,
       data: GameRecordData::StopLag(player_id),
+    }
+  }
+
+  pub fn new_game_end(game_id: i32) -> Self {
+    Self {
+      game_id,
+      data: GameRecordData::GameEnd,
     }
   }
 

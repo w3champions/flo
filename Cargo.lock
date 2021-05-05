@@ -1501,6 +1501,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "flo-observer-consumer"
+version = "0.1.0"
+dependencies = [
+ "bytes 1.0.1",
+ "dotenv",
+ "flate2",
+ "flo-net",
+ "flo-observer",
+ "flo-state",
+ "flo-util",
+ "flo-w3gs",
+ "once_cell",
+ "redis",
+ "rusoto_core",
+ "rusoto_dynamodb",
+ "rusoto_kinesis",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "flo-platform"
 version = "0.1.0"
 dependencies = [
@@ -3017,27 +3040,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c92d4ddb4bd7b50d730c215ff871754d0da6b2178849f8a2a2ab69712d0c073b"
 dependencies = [
  "objc",
-]
-
-[[package]]
-name = "observer-consumer"
-version = "0.1.0"
-dependencies = [
- "dotenv",
- "flo-net",
- "flo-observer",
- "flo-state",
- "flo-util",
- "flo-w3gs",
- "once_cell",
- "redis",
- "rusoto_core",
- "rusoto_dynamodb",
- "rusoto_kinesis",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
 ]
 
 [[package]]

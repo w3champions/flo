@@ -545,6 +545,7 @@ impl State {
         .send(GlobalEvent::GameEnded(self.game_id))
         .await
         .ok();
+      self.obs.push_game_end(self.game_id);
       self.obs.remove_game(self.game_id);
       true
     } else {

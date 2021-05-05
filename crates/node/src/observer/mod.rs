@@ -2,10 +2,7 @@ use crate::error::Result;
 use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
 use flo_net::proto::flo_node::Game;
-use flo_observer::{
-  KINESIS_CLIENT,
-  record::GameRecord
-};
+use flo_observer::{record::GameRecord, KINESIS_CLIENT};
 use flo_w3gs::packet::Packet;
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
@@ -67,6 +64,10 @@ impl ObserverPublisherHandle {
 
   pub fn push_end_lag(&self, game_id: i32, player_id: i32) {
     self.push_record(GameRecord::new_end_lag(game_id, player_id))
+  }
+
+  pub fn push_game_end(&self, game_id: i32) {
+    self.push_record(GameRecord::new_game_end(game_id))
   }
 
   fn push_record(&self, record: GameRecord) {
@@ -195,7 +196,6 @@ impl Worker {
       .filter_map(|(game_id, buf)| {
         if buf.should_remove {
           remove_ids.get_or_insert_with(|| vec![]).push(*game_id);
-          return None;
         }
 
         if start.saturating_duration_since(buf.last_update) > BUFFER_TIMEOUT {
@@ -292,6 +292,7 @@ impl GameBuffer {
     self.data.is_empty()
   }
 
+  // [source: u32] [seq_id: u32] [data]
   pub fn push(&mut self, record: GameRecord) {
     let next_len = self.data.len() + record.encode_len();
     if next_len > crate::constants::OBS_MAX_CHUNK_SIZE {

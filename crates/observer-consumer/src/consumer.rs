@@ -1,6 +1,7 @@
-use rusoto_kinesis::Kinesis;
 use crate::cache::Cache;
 use flo_state::{Actor, Owner};
+use rusoto_kinesis::Kinesis;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct ShardConsumer {
@@ -10,10 +11,7 @@ pub struct ShardConsumer {
 
 impl ShardConsumer {
   pub fn new(shard_id: String, cache: Cache) -> Self {
-    Self {
-      shard_id,
-      cache
-    }
+    Self { shard_id, cache }
   }
 }
 
@@ -24,13 +22,13 @@ async fn test_list_shards() {
 
   dotenv::dotenv().unwrap();
 
-  let shards = KINESIS_CLIENT.list_shards(
-    ListShardsInput {
+  let shards = KINESIS_CLIENT
+    .list_shards(ListShardsInput {
       stream_name: Some(flo_observer::KINESIS_STREAM_NAME.clone()),
       ..Default::default()
-    }
-  ).await.unwrap();
+    })
+    .await
+    .unwrap();
 
   dbg!(shards);
-
 }
