@@ -1209,6 +1209,7 @@ impl Shared {
       player_id: player.slot_player_id(),
       reason: reason.unwrap_or(LeaveReason::LeaveDisconnect),
     })?;
+    self.obs.push_w3gs(self.game_id, pkt.clone());
 
     self.broadcast(pkt, broadcast::DenyList(&[player_id]))?;
     if let Some(desync) = self.sync.remove_player(player_id) {
