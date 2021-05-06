@@ -73,6 +73,7 @@ impl GameActor {
     tracing::debug!(game_id, "start game check proceed.");
 
     let mut pass = true;
+    let agreed_version: Option<String>;
     {
       let mut version: Option<&str> = None;
       let mut sha1: Option<&[u8]> = None;
@@ -86,6 +87,7 @@ impl GameActor {
           break;
         }
       }
+      agreed_version = version.map(ToString::to_string);
     }
 
     if !pass {
@@ -216,7 +218,7 @@ impl GameActor {
 
     self
       .db
-      .exec(move |conn| crate::game::db::update_created(conn, game_id, token_map))
+      .exec(move |conn| crate::game::db::update_created(conn, game_id, agreed_version, token_map))
       .await?;
     self.status = GameStatus::Created;
 

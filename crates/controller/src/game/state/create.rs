@@ -64,7 +64,7 @@ impl Handler<CreateGameAsBot> for GameRegistry {
       params,
     }: CreateGameAsBot,
   ) -> <CreateGameAsBot as Message>::Result {
-    let (game, player_ids, mute_list_map) = self
+    let (mut game, player_ids, mute_list_map) = self
       .db
       .exec(move |conn| {
         let game = crate::game::db::create_as_bot(conn, api_client_id, api_player_id, params)?;
@@ -73,6 +73,15 @@ impl Handler<CreateGameAsBot> for GameRegistry {
         Ok::<_, Error>((game, player_ids, mute_list_map))
       })
       .await?;
+
+    if game.mask_player_names {
+      for (idx, slot) in game.slots.iter_mut().enumerate() {
+        slot
+          .player
+          .as_mut()
+          .map(|v| v.name = format!("Player {}", idx + 1));
+      }
+    }
 
     self.register(Register {
       id: game.id,

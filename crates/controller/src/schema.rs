@@ -26,6 +26,8 @@ table! {
         updated_at -> Timestamptz,
         random_seed -> Int4,
         locked -> Bool,
+        mask_player_names -> Bool,
+        game_version -> Nullable<Text>,
     }
 }
 

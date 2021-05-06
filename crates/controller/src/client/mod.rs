@@ -224,12 +224,20 @@ async fn send_initial_state(
   let mut frames = vec![frame_accept];
 
   if let Some(game_id) = game_id {
-    let (game, node_player_token) = state
+    let (mut game, node_player_token) = state
       .db
       .exec(move |conn| crate::game::db::get_full_and_node_token(conn, game_id, player_id))
       .await?;
 
     let node_id = game.node.as_ref().map(|node| node.id);
+
+    if game.mask_player_names {
+      for (idx, slot) in game.slots.iter_mut().enumerate() {
+        slot.player.as_mut().map(|v| {
+          v.name = format!("Player {}", idx + 1);
+        });
+      }
+    }
 
     let game = game.pack()?;
 
