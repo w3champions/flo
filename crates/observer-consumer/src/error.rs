@@ -3,6 +3,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("Invalid chunk file")]
+  InvalidChunkFile,
   #[error("No shards")]
   NoShards,
   #[error("List shards iterator: {0}")]

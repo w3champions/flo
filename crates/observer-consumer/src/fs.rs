@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
 use flo_observer::record::{GameRecord, GameRecordData};
@@ -6,10 +6,10 @@ use flo_util::binary::{BinDecode, BinEncode};
 use flo_util::{BinDecode, BinEncode};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, SeekFrom};
 use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::channel;
 
 const MAX_CHUNK_SIZE: usize = 4 * 1024;
@@ -25,6 +25,7 @@ static DATA_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
 #[derive(Debug)]
 pub struct GameDataWriter {
   game_id: i32,
+  next_record_id: u32,
   chunk_id: usize,
   chunk_buf: BytesMut,
   dir: PathBuf,
@@ -39,6 +40,7 @@ impl GameDataWriter {
     let mut chunk_file = File::create(path).await?;
     Ok(Self {
       game_id,
+      next_record_id: 0,
       chunk_id: 0,
       chunk_buf: BytesMut::with_capacity(MAX_CHUNK_SIZE),
       dir,
@@ -52,11 +54,16 @@ impl GameDataWriter {
     let chunk_file = File::create(path).await?;
     Ok(Self {
       game_id,
+      next_record_id: r.next_record_id,
       chunk_id: r.next_chunk_id,
       chunk_buf: BytesMut::with_capacity(MAX_CHUNK_SIZE),
       dir: r.dir,
       chunk_file: chunk_file.into(),
     })
+  }
+
+  pub fn next_record_id(&self) -> u32 {
+    self.next_record_id
   }
 
   pub async fn write_record(&mut self, data: GameRecordData) -> Result<WriteDestination> {
@@ -67,18 +74,7 @@ impl GameDataWriter {
       r = WriteDestination::NewChunk;
     }
     data.encode(&mut self.chunk_buf);
-    Ok(r)
-  }
-
-  pub async fn write_bytes<T: AsRef<[u8]>>(&mut self, bytes: T) -> Result<WriteDestination> {
-    let slice = bytes.as_ref();
-    assert!(slice.len() <= MAX_CHUNK_SIZE);
-    let mut r = WriteDestination::CurrentChunk;
-    if self.chunk_buf.len() + slice.len() > MAX_CHUNK_SIZE {
-      self.flush_chunk().await?;
-      r = WriteDestination::NewChunk;
-    }
-    self.chunk_buf.put(slice);
+    self.next_record_id += 1;
     Ok(r)
   }
 
@@ -102,6 +98,7 @@ impl GameDataWriter {
       encoder.write_all(&FileHeader::new(self.game_id).bytes())?;
       for i in 0..self.chunk_id {
         let mut chunk_file = std::fs::File::open(self.dir.join(format!("{}{}", CHUNK_PREFIX, i)))?;
+        chunk_file.seek(SeekFrom::Start(4))?;
         std::io::copy(&mut chunk_file, &mut encoder)?;
       }
       encoder.flush()?;
@@ -116,6 +113,7 @@ impl GameDataWriter {
 
     {
       let mut chunk_file = self.chunk_file.take().unwrap();
+      chunk_file.write_u32(self.next_record_id).await?;
       chunk_file.write_all(self.chunk_buf.as_ref()).await?;
       self.chunk_buf.clear();
       chunk_file.sync_all().await?;
@@ -136,6 +134,7 @@ pub enum WriteDestination {
 
 pub struct GameDataReader {
   game_id: i32,
+  next_record_id: u32,
   next_chunk_id: usize,
   dir: PathBuf,
 }
@@ -164,8 +163,14 @@ impl GameDataReader {
         }
       }
     }
+    let mut last_chunk_file =
+      fs::File::open(dir.join(format!("{}{}", CHUNK_PREFIX, max_chunk_id))).await?;
+
+    let next_record_id = last_chunk_file.read_u32().await?;
+
     Ok(Self {
       game_id,
+      next_record_id,
       next_chunk_id: max_chunk_id + 1,
       dir,
     })
@@ -265,9 +270,12 @@ impl GameDataReaderRecords {
       GameDataReaderRecordsInner::Content => unreachable!(),
       GameDataReaderRecordsInner::Chunks(ref mut inner) => {
         let id = self.current_chunk.map(|id| id + 1).unwrap_or(0);
-
         self.chunk_buf =
           Cursor::new(fs::read(inner.dir.join(format!("{}{}", CHUNK_PREFIX, id))).await?);
+        if self.chunk_buf.remaining() < 4 {
+          return Err(Error::InvalidChunkFile);
+        }
+        self.chunk_buf.advance(4);
         self.current_chunk = id.into();
       }
     }

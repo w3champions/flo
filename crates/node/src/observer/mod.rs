@@ -296,7 +296,7 @@ impl GameBuffer {
     self.data.is_empty()
   }
 
-  // [source: u32] [seq_id: u32] [data]
+  // [source: u32] [[seq_id: u32] [data]]
   pub fn push(&mut self, record: GameRecord) {
     let next_len = self.data.len() + record.encode_len();
     if next_len > crate::constants::OBS_MAX_CHUNK_SIZE {

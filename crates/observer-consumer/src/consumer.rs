@@ -2,7 +2,8 @@ use crate::cache::{Cache, CacheGameState};
 use crate::error::{Error, Result};
 use crate::fs::GameDataWriter;
 use backoff::backoff::Backoff;
-use flo_observer::record::{GameRecord, GameRecordData};
+use bytes::Bytes;
+use flo_observer::record::{GameRecord, GameRecordData, KMSRecord};
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner};
 use rusoto_core::RusotoError;
@@ -101,6 +102,55 @@ impl Handler<StartShardConsumer> for ShardConsumer {
   }
 }
 
+struct ImportChunk {
+  max_sequence_number: String,
+  game_records: BTreeMap<i32, GameRecords>,
+}
+
+struct GameRecords {
+  max_seq_id: u32,
+  records: Vec<GameRecordData>,
+}
+
+impl Message for ImportChunk {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<ImportChunk> for ShardConsumer {
+  async fn handle(
+    &mut self,
+    _ctx: &mut Context<Self>,
+    ImportChunk {
+      max_sequence_number,
+      game_records,
+    }: ImportChunk,
+  ) -> Result<()> {
+    for (game_id, records) in game_records {
+      let max_seq_id = records.max_seq_id;
+      self
+        .write_records(game_id, records.max_seq_id, records.records)
+        .await?;
+      self
+        .span
+        .in_scope(|| tracing::debug!(game_id, "set_game_finished_seq_id: {}", max_seq_id));
+      self
+        .cache
+        .set_game_finished_seq_id(game_id, records.max_seq_id)
+        .await?;
+    }
+
+    self
+      .span
+      .in_scope(|| tracing::debug!("set_shard_finished_seq: {}", max_sequence_number));
+    self
+      .cache
+      .set_shard_finished_seq(&self.shard_id, &max_sequence_number)
+      .await?;
+    Ok(())
+  }
+}
+
 struct Scanner {
   shard_id: String,
   iterator: String,
@@ -108,7 +158,7 @@ struct Scanner {
 }
 
 impl Scanner {
-  const CHUNK_SIZE: i64 = 1000;
+  const CHUNK_SIZE: i64 = 2000;
   const WAIT_RECORD_TIMEOUT: Duration = Duration::from_millis(100);
 
   async fn run(mut self) {
@@ -133,6 +183,14 @@ impl Scanner {
           span.in_scope(|| {
             tracing::debug!("records: {}", records.len());
           });
+
+          if !records.is_empty() {
+            if let Err(err) = self.handle_chunk(&records).await {
+              span.in_scope(|| tracing::error!("handle_chunk: {}", self.iterator));
+              break;
+            }
+          }
+
           self.iterator = if let Some(v) = output.next_shard_iterator {
             v
           } else {
@@ -156,6 +214,46 @@ impl Scanner {
         }
       }
     }
+  }
+
+  async fn handle_chunk(&mut self, records: &Vec<rusoto_kinesis::Record>) -> Result<()> {
+    let mut map = BTreeMap::new();
+    let max_sequence_number = records.last().map(|r| r.sequence_number.clone()).unwrap();
+
+    for r in records {
+      let bytes = r.data.clone();
+      let source = KMSRecord::peek_source(bytes.as_ref())?;
+      if source != crate::env::ENV.record_source {
+        continue;
+      }
+      let record = KMSRecord::decode(bytes)?;
+      for (seq_id, r) in record.records {
+        let entry = map.entry(r.game_id).or_insert_with(|| GameRecords {
+          max_seq_id: 0,
+          records: vec![],
+        });
+        entry.max_seq_id = seq_id;
+        entry.records.push(r.data);
+      }
+    }
+
+    tracing::debug!(
+      "chunk: {:?}",
+      map
+        .iter()
+        .map(|(game_id, r)| (*game_id, r.max_seq_id))
+        .collect::<Vec<_>>()
+    );
+
+    self
+      .addr
+      .send(ImportChunk {
+        max_sequence_number,
+        game_records: map,
+      })
+      .await??;
+
+    Ok(())
   }
 }
 
@@ -181,6 +279,8 @@ impl ShardConsumer {
     for record in records {
       entry.writer.write_record(record).await?;
     }
+
+    entry.finished_seq_id = Some(seq_id);
 
     Ok(())
   }

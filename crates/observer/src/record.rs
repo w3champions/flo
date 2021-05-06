@@ -3,11 +3,14 @@ use flo_net::proto::flo_node::Game;
 use flo_util::binary::{BinDecode, BinEncode};
 use flo_w3gs::protocol::packet::{Header as W3GSHeader, Packet};
 use prost::Message;
+use std::convert::TryFrom;
 use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RecordError {
+  #[error("unknown record source: {0}")]
+  UnknownRecordSourceU32(u32),
   #[error("unknown record source: {0}")]
   UnknownRecordSource(String),
   #[error("unknown data type id: {0}")]
@@ -30,6 +33,19 @@ pub enum ObserverRecordSource {
   Production = 0x153EA0,
 }
 
+impl TryFrom<u32> for ObserverRecordSource {
+  type Error = RecordError;
+
+  fn try_from(value: u32) -> Result<Self, Self::Error> {
+    Ok(match value {
+      0xDA881C => Self::Test,
+      0xEBCC6D => Self::PTR,
+      0x153EA0 => Self::Production,
+      other => return Err(RecordError::UnknownRecordSourceU32(other)),
+    })
+  }
+}
+
 impl FromStr for ObserverRecordSource {
   type Err = RecordError;
 
@@ -41,6 +57,38 @@ impl FromStr for ObserverRecordSource {
       other => return Err(RecordError::UnknownRecordSource(other.to_string())),
     };
     Ok(v)
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct KMSRecord {
+  pub source: ObserverRecordSource,
+  pub records: Vec<(u32, GameRecord)>,
+}
+
+impl KMSRecord {
+  pub fn peek_source(mut bytes: &[u8]) -> Result<ObserverRecordSource, RecordError> {
+    if bytes.len() < 4 {
+      return Err(RecordError::UnexpectedEndOfBuffer);
+    }
+    ObserverRecordSource::try_from(bytes.get_u32())
+  }
+
+  pub fn decode<T: Buf>(mut buf: T) -> Result<Self, RecordError> {
+    if buf.remaining() < 4 {
+      return Err(RecordError::UnexpectedEndOfBuffer);
+    }
+    let source = ObserverRecordSource::try_from(buf.get_u32())?;
+    let mut records = vec![];
+    while buf.has_remaining() {
+      if buf.remaining() <= 4 {
+        return Err(RecordError::UnexpectedEndOfBuffer);
+      }
+      let seq_id = buf.get_u32();
+      let record = GameRecord::decode(&mut buf)?;
+      records.push((seq_id, record));
+    }
+    Ok(Self { source, records })
   }
 }
 
