@@ -22,6 +22,7 @@ static DATA_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
   path
 });
 
+#[derive(Debug)]
 pub struct GameDataWriter {
   game_id: i32,
   chunk_id: usize,

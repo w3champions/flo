@@ -70,6 +70,10 @@ impl ObserverPublisherHandle {
     self.push_record(GameRecord::new_game_end(game_id))
   }
 
+  pub fn push_tick_checksum(&self, game_id: i32, tick: u32, checksum: u32) {
+    self.push_record(GameRecord::new_tick_checksum(game_id, tick, checksum))
+  }
+
   fn push_record(&self, record: GameRecord) {
     if self.broken.get() {
       return;

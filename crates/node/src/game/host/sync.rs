@@ -125,20 +125,27 @@ impl SyncMap {
       self.desync_buf.clear();
       pending.check_desync(token, &mut self.desync_buf);
       self.pending_tick.remove(&tick);
-      self.pending_slab.remove(id);
+      let pending = self.pending_slab.remove(id);
       if self.desync_buf.is_empty() {
         Ok(AckResult {
           player_tick: tick,
           game_tick: self.tick,
           rtt,
+          agreed_checksum: Some(checksum),
           desync: None,
         })
       } else {
+        let desync = self.take_desync();
         Ok(AckResult {
           player_tick: tick,
           game_tick: self.tick,
           rtt,
-          desync: self.take_desync(),
+          agreed_checksum: pending
+            .checksums
+            .iter()
+            .find(|(k, _v)| self.desync_buf.iter().all(|v| v.player_id != **k))
+            .map(|t| t.1.clone()),
+          desync,
         })
       }
     } else {
@@ -146,6 +153,7 @@ impl SyncMap {
         player_tick: tick,
         game_tick: self.tick,
         rtt,
+        agreed_checksum: None,
         desync: None,
       })
     }
@@ -175,6 +183,7 @@ pub struct AckResult {
   pub game_tick: u32,
   pub player_tick: u32,
   pub rtt: Duration,
+  pub agreed_checksum: Option<u32>,
   pub desync: Option<Vec<PlayerDesync>>,
 }
 

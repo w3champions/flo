@@ -1333,7 +1333,14 @@ impl Shared {
 
   pub fn ack(&mut self, player_id: i32, checksum: u32) -> Result<AckAction> {
     let res = match self.sync.ack(player_id, checksum) {
-      Ok(res) => res,
+      Ok(res) => {
+        if let Some(checksum) = res.agreed_checksum.clone() {
+          self
+            .obs
+            .push_tick_checksum(self.game_id, res.game_tick, checksum);
+        }
+        res
+      }
       Err(err) => {
         tracing::error!(
           game_id = self.game_id,

@@ -39,6 +39,7 @@
       <sourceFolder url="file://$MODULE_DIR$/crates/observer/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/debug/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/observer-consumer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/binaries/flo-observer-service/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

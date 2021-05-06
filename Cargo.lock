@@ -1214,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.9.9"
+version = "0.9.10"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1504,6 +1504,7 @@ dependencies = [
 name = "flo-observer-consumer"
 version = "0.1.0"
 dependencies = [
+ "backoff",
  "bytes 1.0.1",
  "dotenv",
  "flate2",
@@ -1515,12 +1516,24 @@ dependencies = [
  "once_cell",
  "redis",
  "rusoto_core",
- "rusoto_dynamodb",
  "rusoto_kinesis",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "flo-observer-service"
+version = "0.1.0"
+dependencies = [
+ "dotenv",
+ "flo-log-subscriber",
+ "flo-observer-consumer",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -1660,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.9.9"
+version = "0.9.10"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -3693,20 +3706,6 @@ dependencies = [
  "shlex",
  "tokio",
  "zeroize",
-]
-
-[[package]]
-name = "rusoto_dynamodb"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f26af40f36409cb8fae3069690f78f638f747b55c7b90f338d5ed36016b0cda"
-dependencies = [
- "async-trait",
- "bytes 1.0.1",
- "futures 0.3.13",
- "rusoto_core",
- "serde",
- "serde_json",
 ]
 
 [[package]]

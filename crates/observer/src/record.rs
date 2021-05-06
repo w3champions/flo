@@ -57,6 +57,7 @@ pub enum GameRecordData {
   StartLag(Vec<i32>),
   StopLag(i32),
   GameEnd,
+  TickChecksum { tick: u32, checksum: u32 },
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -67,6 +68,7 @@ pub enum DataTypeId {
   StartLag = 2,
   StopLag = 3,
   GameEnd = 4,
+  TickChecksum = 5,
 }
 
 impl GameRecordData {
@@ -77,6 +79,7 @@ impl GameRecordData {
       GameRecordData::StartLag(_) => DataTypeId::StartLag,
       GameRecordData::StopLag(_) => DataTypeId::StopLag,
       GameRecordData::GameEnd => DataTypeId::GameEnd,
+      GameRecordData::TickChecksum { .. } => DataTypeId::TickChecksum,
     }
   }
 
@@ -87,6 +90,7 @@ impl GameRecordData {
       GameRecordData::StartLag(ref ids) => 1 + 4 * ids.len(),
       GameRecordData::StopLag(_) => 4,
       GameRecordData::GameEnd => 0,
+      GameRecordData::TickChecksum { .. } => 4 + 4,
     }
   }
 
@@ -118,6 +122,10 @@ impl GameRecordData {
         buf.put_i32(id);
       }
       GameRecordData::GameEnd => {}
+      GameRecordData::TickChecksum { tick, checksum } => {
+        buf.put_u32(tick);
+        buf.put_u32(checksum);
+      }
     }
   }
 
@@ -131,6 +139,7 @@ impl GameRecordData {
       2 => DataTypeId::StartLag,
       3 => DataTypeId::StopLag,
       4 => DataTypeId::GameEnd,
+      5 => DataTypeId::TickChecksum,
       other => return Err(RecordError::UnknownDataTypeId(other)),
     };
     Ok(match data_type {
@@ -179,6 +188,15 @@ impl GameRecordData {
         Self::StopLag(buf.get_i32())
       }
       DataTypeId::GameEnd => Self::GameEnd,
+      DataTypeId::TickChecksum => {
+        if buf.remaining() < 4 + 4 {
+          return Err(RecordError::UnexpectedEndOfBuffer);
+        }
+        Self::TickChecksum {
+          tick: buf.get_u32(),
+          checksum: buf.get_u32(),
+        }
+      }
     })
   }
 }
@@ -216,6 +234,13 @@ impl GameRecord {
     Self {
       game_id,
       data: GameRecordData::GameEnd,
+    }
+  }
+
+  pub fn new_tick_checksum(game_id: i32, tick: u32, checksum: u32) -> Self {
+    Self {
+      game_id,
+      data: GameRecordData::TickChecksum { tick, checksum },
     }
   }
 

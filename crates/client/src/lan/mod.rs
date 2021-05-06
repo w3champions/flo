@@ -81,6 +81,7 @@ impl Handler<ReplaceLanGame> for Lan {
         path: game.map_path.clone(),
       })
       .await??;
+
     if checksum.sha1 == game.map_sha1 {
       if let Some(last_game) = self.active_game.take() {
         last_game.shutdown();
