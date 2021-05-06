@@ -196,6 +196,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     random_seed: rand::random(),
     locked: false,
     node_id: None,
+    mask_player_names: false,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -219,6 +220,7 @@ pub struct CreateGameAsBotParams {
   pub is_live: bool,
   pub node_id: i32,
   pub slots: Vec<CreateGameSlot>,
+  pub mask_player_names: Option<bool>,
 }
 
 /// Creates a full game and lock it
@@ -334,6 +336,7 @@ pub fn create_as_bot(
     random_seed: rand::random(),
     locked: true,
     node_id: Some(params.node_id),
+    mask_player_names: params.mask_player_names.unwrap_or_default(),
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -882,13 +885,17 @@ pub fn terminate_game(conn: &DbConn, id: i32) -> Result<()> {
 pub fn update_created(
   conn: &DbConn,
   id: i32,
+  agreed_version: Option<String>,
   player_tokens: HashMap<i32, PlayerToken>,
 ) -> Result<()> {
   use game::dsl;
   conn.transaction(|| {
     diesel::update(game::table.find(id))
       .filter(dsl::status.eq(GameStatus::Preparing))
-      .set(dsl::status.eq(GameStatus::Created))
+      .set((
+        dsl::status.eq(GameStatus::Created),
+        dsl::game_version.eq(agreed_version),
+      ))
       .execute(conn)?;
     for (player_id, token) in player_tokens {
       use game_used_slot::dsl as gus;
@@ -974,6 +981,7 @@ pub struct GameRowWithRelated {
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
   pub random_seed: i32,
+  pub mask_player_names: bool,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -993,6 +1001,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::created_at,
   game::dsl::updated_at,
   game::dsl::random_seed,
+  game::dsl::mask_player_names,
 );
 
 impl GameRowWithRelated {
@@ -1014,6 +1023,7 @@ impl GameRowWithRelated {
       game::dsl::created_at,
       game::dsl::updated_at,
       game::dsl::random_seed,
+      game::dsl::mask_player_names,
     )
   }
 
@@ -1037,6 +1047,7 @@ impl GameRowWithRelated {
       created_at: self.created_at,
       updated_at: self.updated_at,
       random_seed: self.random_seed,
+      mask_player_names: self.mask_player_names,
     })
   }
 }
@@ -1054,6 +1065,7 @@ pub struct GameInsert<'a> {
   pub random_seed: i32,
   pub locked: bool,
   pub node_id: Option<i32>,
+  pub mask_player_names: bool,
 }
 
 #[derive(Debug, Insertable)]

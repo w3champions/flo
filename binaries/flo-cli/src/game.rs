@@ -198,6 +198,7 @@ pub async fn create_ffa_game(players: Vec<i32>) -> Result<i32> {
       map: Some(get_map()?),
       node_id,
       slots,
+      mask_player_names: Some(true),
       ..Default::default()
     })
     .await?;

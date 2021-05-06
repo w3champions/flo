@@ -253,7 +253,11 @@ impl NodeRequestExt for Addr<NodeRequestActor> {
           id: i as u32,
           player: slot.player.as_ref().map(|player| GamePlayer {
             player_id: player.id,
-            name: player.name.clone(),
+            name: if game.mask_player_names {
+              format!("Player {}", i + 1)
+            } else {
+              player.name.clone()
+            },
             ban_list: ban_list_map
               .remove(&player.id)
               .map(|items| items.into_iter().map(|v| v as i32).collect())
