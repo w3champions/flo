@@ -1498,6 +1498,7 @@ dependencies = [
  "rusoto_core",
  "rusoto_kinesis",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -1554,9 +1555,9 @@ dependencies = [
 
 [[package]]
 name = "flo-state"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7100ef4cbcbfc86ad0e12cf9ea66acd104a482ad6e0ff2577521d69dd9c02dea"
+checksum = "f904daa69914e432b7ea96fb7225ef3561a3e3d3f770c941042ae66a6c3c422f"
 dependencies = [
  "async-trait",
  "futures 0.3.13",

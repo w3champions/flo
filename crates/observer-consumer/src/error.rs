@@ -3,6 +3,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("Invalid buffer file")]
+  InvalidBufferFile,
   #[error("Invalid chunk file")]
   InvalidChunkFile,
   #[error("No shards")]
@@ -11,6 +13,8 @@ pub enum Error {
   ListShards(#[from] RusotoError<rusoto_kinesis::ListShardsError>),
   #[error("No shard iterator: {0}")]
   NoShardIterator(String),
+  #[error("Game data lost: {0}")]
+  GameDataLost(i32),
   #[error("Get shard iterator: {0}")]
   GetShardIterator(#[from] RusotoError<rusoto_kinesis::GetShardIteratorError>),
   #[error("decode game record: {0}")]
@@ -19,7 +23,7 @@ pub enum Error {
   DecodeArchiveHeader(flo_util::binary::BinDecodeError),
   #[error("redis: {0}")]
   Redis(#[from] redis::RedisError),
-  #[error("redis: {0}")]
+  #[error("io: {0}")]
   Io(#[from] std::io::Error),
   #[error("actor: {0}")]
   Actor(#[from] flo_state::error::Error),

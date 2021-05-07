@@ -10,19 +10,32 @@ use crate::error::Error;
 use consumer::ShardConsumer;
 use error::Result;
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
-use flo_state::{Actor, Owner};
+use flo_state::{async_trait, Actor, Context, Handler, Message, Owner};
 use rusoto_kinesis::Kinesis;
 use std::collections::BTreeMap;
 
-pub struct FloObserver {
-  shards: BTreeMap<String, Owner<ShardConsumer>>,
-}
+pub struct FloObserver;
 
 impl FloObserver {
   pub async fn serve() -> Result<()> {
+    let _actor = ShardsMgr::init().await?.start();
+    std::future::pending::<()>().await;
+    Ok(())
+  }
+}
+
+#[derive(Debug)]
+pub(crate) struct ShardsMgr {
+  cache: Cache,
+  shard_ids: Vec<String>,
+  shards: BTreeMap<String, Owner<ShardConsumer>>,
+}
+
+impl ShardsMgr {
+  async fn init() -> Result<Self> {
     use rusoto_kinesis::ListShardsInput;
 
-    let mut cache = Cache::connect().await?;
+    let cache = Cache::connect().await?;
 
     let shards = KINESIS_CLIENT
       .list_shards(ListShardsInput {
@@ -39,20 +52,30 @@ impl FloObserver {
       .collect();
     tracing::info!("shards: {:?}", shard_ids);
 
-    let state = Self {
-      shards: shard_ids
-        .into_iter()
-        .map(|id| {
-          let actor = ShardConsumer::new(id.clone(), cache.clone()).start();
-          (id, actor)
-        })
-        .collect(),
-    };
+    Ok(Self {
+      cache,
+      shard_ids,
+      shards: Default::default(),
+    })
+  }
 
-    let game_ids = cache.list_games().await?;
+  async fn start_consumers(&mut self, ctx: &mut Context<Self>) -> Result<()> {
+    let addr = ctx.addr();
+
+    let shards: BTreeMap<_, _> = self
+      .shard_ids
+      .iter()
+      .cloned()
+      .map(|id| {
+        let actor = ShardConsumer::new(id.clone(), addr.clone(), self.cache.clone()).start();
+        (id, actor)
+      })
+      .collect();
+
+    let game_ids = self.cache.list_games().await?;
     let mut shard_games = BTreeMap::new();
     for id in game_ids {
-      if let Some(game) = cache.get_game_state(id).await? {
+      if let Some(game) = self.cache.get_game_state(id).await? {
         shard_games
           .entry(game.shard_id.clone())
           .or_insert_with(|| vec![])
@@ -60,7 +83,7 @@ impl FloObserver {
       }
     }
 
-    for (shard_id, actor) in state.shards.iter() {
+    for (shard_id, actor) in &shards {
       let recovered_games = if let Some(recovered_games) = shard_games.remove(shard_id) {
         tracing::info!(
           "recovered shard games: {} = {}",
@@ -74,8 +97,33 @@ impl FloObserver {
       actor.send(StartShardConsumer { recovered_games }).await??;
     }
 
-    std::future::pending::<()>().await;
+    self.shards = shards;
 
     Ok(())
+  }
+}
+
+#[async_trait]
+impl Actor for ShardsMgr {
+  async fn started(&mut self, ctx: &mut Context<Self>) {
+    if let Err(err) = self.start_consumers(ctx).await {
+      tracing::error!("start consumers: {}", err);
+    }
+  }
+}
+
+struct RemoveShard {
+  shard_id: String,
+}
+
+impl Message for RemoveShard {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<RemoveShard> for ShardsMgr {
+  async fn handle(&mut self, _ctx: &mut Context<Self>, RemoveShard { shard_id }: RemoveShard) {
+    tracing::warn!("remove shard: {}", shard_id);
+    self.shards.remove(&shard_id);
   }
 }

@@ -1,20 +1,19 @@
 use crate::error::{Error, Result};
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::GzDecoder;
-use flo_observer::record::{GameRecord, GameRecordData};
+use flo_observer::record::GameRecordData;
 use flo_util::binary::{BinDecode, BinEncode};
 use flo_util::{BinDecode, BinEncode};
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read, SeekFrom};
 use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc::channel;
 
 const MAX_CHUNK_SIZE: usize = 4 * 1024;
 const CHUNK_PREFIX: &'static str = "chunk_";
 const CHUNK_TEMP_FILENAME: &'static str = "_chunk";
+const STATE_TEMP_FILENAME: &'static str = "_state";
 const ARCHIVE_FILE_NAME: &'static str = "archive.gz";
 static DATA_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
   let path = PathBuf::from("./data");
@@ -33,11 +32,19 @@ pub struct GameDataWriter {
 }
 
 impl GameDataWriter {
-  pub async fn create(game_id: i32) -> Result<Self> {
+  pub async fn create_or_recover(game_id: i32) -> Result<Self> {
     let dir = DATA_FOLDER.join(game_id.to_string());
-    fs::create_dir_all(&dir).await?;
     let path = dir.join(CHUNK_TEMP_FILENAME);
-    let mut chunk_file = File::create(path).await?;
+
+    match fs::metadata(&path).await {
+      Ok(_) => return Self::recover(game_id).await,
+      Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+      Err(err) => return Err(err.into()),
+    }
+
+    fs::create_dir_all(&dir).await?;
+
+    let chunk_file = File::create(path).await?;
     Ok(Self {
       game_id,
       next_record_id: 0,
@@ -56,7 +63,7 @@ impl GameDataWriter {
       game_id,
       next_record_id: r.next_record_id,
       chunk_id: r.next_chunk_id,
-      chunk_buf: BytesMut::with_capacity(MAX_CHUNK_SIZE),
+      chunk_buf: r.chunk_buf,
       dir: r.dir,
       chunk_file: chunk_file.into(),
     })
@@ -66,30 +73,21 @@ impl GameDataWriter {
     self.next_record_id
   }
 
-  pub async fn write_record(&mut self, data: GameRecordData) -> Result<WriteDestination> {
+  pub async fn write_record(&mut self, data: GameRecordData) -> Result<WriteRecordDestination> {
     assert!(data.encode_len() <= MAX_CHUNK_SIZE);
-    let mut r = WriteDestination::CurrentChunk;
+    let mut r = WriteRecordDestination::CurrentChunk;
     if self.chunk_buf.len() + data.encode_len() > MAX_CHUNK_SIZE {
       self.flush_chunk().await?;
-      r = WriteDestination::NewChunk;
+      r = WriteRecordDestination::NewChunk;
     }
     data.encode(&mut self.chunk_buf);
     self.next_record_id += 1;
     Ok(r)
   }
 
-  pub async fn sync_all(&mut self) -> Result<()> {
-    if self.chunk_buf.is_empty() {
-      return Ok(());
-    }
-    self.flush_chunk().await?;
-    Ok(())
-  }
-
   pub async fn build_archive(&mut self) -> Result<()> {
     use flate2::write::GzEncoder;
     use flate2::Compression;
-    use std::io;
     use std::io::prelude::*;
     self.flush_chunk().await?;
     tokio::task::block_in_place(|| {
@@ -106,9 +104,29 @@ impl GameDataWriter {
     })
   }
 
+  pub async fn flush_state(&mut self) -> Result<()> {
+    if self.chunk_buf.is_empty() {
+      return Ok(());
+    }
+
+    let mut file = File::create(self.dir.join(STATE_TEMP_FILENAME)).await?;
+    file.write_u32(self.next_record_id).await?;
+    file.write_all(self.chunk_buf.as_ref()).await?;
+    file.sync_all().await?;
+
+    Ok(())
+  }
+
   async fn flush_chunk(&mut self) -> Result<()> {
     if self.chunk_buf.is_empty() {
       return Ok(());
+    }
+
+    if let Err(err) = fs::remove_file(self.dir.join(STATE_TEMP_FILENAME)).await {
+      match err.kind() {
+        std::io::ErrorKind::NotFound => {}
+        _ => return Err(err.into()),
+      }
     }
 
     {
@@ -127,7 +145,7 @@ impl GameDataWriter {
   }
 }
 
-pub enum WriteDestination {
+pub enum WriteRecordDestination {
   CurrentChunk,
   NewChunk,
 }
@@ -137,13 +155,17 @@ pub struct GameDataReader {
   next_record_id: u32,
   next_chunk_id: usize,
   dir: PathBuf,
+  chunk_buf: BytesMut,
 }
 
 impl GameDataReader {
   pub async fn open(game_id: i32) -> Result<Self> {
     let dir = DATA_FOLDER.join(game_id.to_string());
+    let mut chunk_buf = BytesMut::with_capacity(MAX_CHUNK_SIZE);
     let mut stream = fs::read_dir(&dir).await?;
-    let mut max_chunk_id = 0;
+    let mut max_chunk_id: Option<usize> = None;
+    let mut buffer_record_id = None;
+
     while let Some(entry) = stream.next_entry().await? {
       let file_name = entry.file_name();
       let name = if let Some(v) = file_name.to_str() {
@@ -151,27 +173,53 @@ impl GameDataReader {
       } else {
         continue;
       };
+
       if name == CHUNK_TEMP_FILENAME {
         continue;
       }
+
+      if name == STATE_TEMP_FILENAME {
+        let mut content = Cursor::new(fs::read(entry.path()).await?);
+
+        if content.remaining() < 4 {
+          return Err(Error::InvalidBufferFile);
+        }
+
+        buffer_record_id = Some(content.get_u32());
+        chunk_buf.put(content);
+      }
+
       if entry.file_type().await?.is_file() && name.starts_with(CHUNK_PREFIX) {
         if name.starts_with(CHUNK_PREFIX) {
           let number = (&name[(CHUNK_PREFIX.len())..]).parse::<usize>();
           if let Ok(number) = number {
-            max_chunk_id = std::cmp::max(max_chunk_id, number);
+            max_chunk_id = max_chunk_id
+              .map(|v| std::cmp::max(v, number))
+              .or(Some(number));
           }
         }
       }
     }
-    let mut last_chunk_file =
-      fs::File::open(dir.join(format!("{}{}", CHUNK_PREFIX, max_chunk_id))).await?;
 
-    let next_record_id = last_chunk_file.read_u32().await?;
+    let next_record_id = {
+      if let Some(id) = buffer_record_id {
+        id
+      } else {
+        if let Some(id) = max_chunk_id.clone() {
+          let mut last_chunk_file =
+            fs::File::open(dir.join(format!("{}{}", CHUNK_PREFIX, id))).await?;
+          last_chunk_file.read_u32().await?
+        } else {
+          0
+        }
+      }
+    };
 
     Ok(Self {
       game_id,
+      chunk_buf,
       next_record_id,
-      next_chunk_id: max_chunk_id + 1,
+      next_chunk_id: max_chunk_id.map(|v| v + 1).unwrap_or(0),
       dir,
     })
   }
@@ -322,7 +370,7 @@ async fn test_fs() {
     .map(|id| GameRecordData::StopLag(id as i32))
     .collect();
 
-  let mut writer = GameDataWriter::create(game_id).await.unwrap();
+  let mut writer = GameDataWriter::create_or_recover(game_id).await.unwrap();
   for record in records {
     writer.write_record(record).await.unwrap();
   }

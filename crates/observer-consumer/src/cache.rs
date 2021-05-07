@@ -1,8 +1,10 @@
 use crate::error::Result;
 use once_cell::sync::Lazy;
 use redis::aio::ConnectionManager;
-use redis::{cmd, pipe, AsyncCommands, Client};
+use redis::{pipe, Client};
+use std::convert::TryInto;
 use std::fmt::{self, Debug, Formatter};
+use std::time::SystemTime;
 
 static CLIENT: Lazy<Client> =
   Lazy::new(|| Client::open(&*crate::env::ENV.redis_url).expect("redis client open"));
@@ -46,7 +48,7 @@ impl Cache {
   const GAME_SET_KEY: &'static str = "flo_observer:games";
   const GAME_HASH_PREFIX: &'static str = "flo_observer:game";
   const GAME_HASH_SHARD_ID: &'static str = "shard_id";
-  const GAME_HASH_FINISHED_SEQ_ID: &'static str = "finished_seq_id";
+  const GAME_HASH_LAST_TOUCH_TIMESTAMP: &'static str = "last_touch_timestamp";
 
   pub async fn add_game(&mut self, game_id: i32, shard_id: &str) -> Result<()> {
     let game_hash_key = format!("{}:{}", Self::GAME_HASH_PREFIX, game_id);
@@ -90,54 +92,60 @@ impl Cache {
       .arg(Self::GAME_SET_KEY)
       .query_async(&mut self.conn)
       .await?;
-    Ok(
-      list
-        .into_iter()
-        .filter_map(|bytes| {
-          if bytes.len() == 4 {
-            Some(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-          } else {
-            None
-          }
-        })
-        .collect(),
-    )
+    let mut list = list
+      .into_iter()
+      .filter_map(|bytes| {
+        if bytes.len() == 4 {
+          Some(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+        } else {
+          None
+        }
+      })
+      .collect::<Vec<_>>();
+    list.sort();
+    Ok(list)
   }
 
-  pub async fn set_game_finished_seq_id(&mut self, game_id: i32, value: u32) -> Result<()> {
+  pub async fn get_game_state(&mut self, game_id: i32) -> Result<Option<CacheGameState>> {
+    let key = format!("{}:{}", Self::GAME_HASH_PREFIX, game_id);
+    let (shard_id, last_touch_timestamp): (Option<String>, Option<Vec<u8>>) = redis::cmd("HMGET")
+      .arg(key)
+      .arg(Self::GAME_HASH_SHARD_ID)
+      .arg(Self::GAME_HASH_LAST_TOUCH_TIMESTAMP)
+      .query_async(&mut self.conn)
+      .await?;
+
+    let last_touch_timestamp = last_touch_timestamp.and_then(|v| {
+      if v.len() == 8 {
+        return Some(u64::from_le_bytes(v.try_into().unwrap()));
+      }
+      None
+    });
+
+    Ok(shard_id.map(|shard_id| CacheGameState {
+      id: game_id,
+      shard_id,
+      last_touch_timestamp,
+    }))
+  }
+
+  #[allow(unused)]
+  pub async fn touch_game(&mut self, game_id: i32) -> Result<()> {
     let key = format!("{}:{}", Self::GAME_HASH_PREFIX, game_id);
     redis::cmd("HSET")
-      .arg(key)
-      .arg(Self::GAME_HASH_FINISHED_SEQ_ID)
-      .arg(&value.to_le_bytes() as &[u8])
+      .arg(&key)
+      .arg(Self::GAME_HASH_LAST_TOUCH_TIMESTAMP)
+      .arg(&Self::timestamp().to_le_bytes() as &[u8])
       .query_async::<_, ()>(&mut self.conn)
       .await?;
     Ok(())
   }
 
-  pub async fn get_game_state(&mut self, game_id: i32) -> Result<Option<CacheGameState>> {
-    let key = format!("{}:{}", Self::GAME_HASH_PREFIX, game_id);
-    let (shard_id, finished_seq_id): (Option<String>, Option<Vec<u8>>) = redis::cmd("HMGET")
-      .arg(key)
-      .arg(Self::GAME_HASH_SHARD_ID)
-      .arg(Self::GAME_HASH_FINISHED_SEQ_ID)
-      .query_async(&mut self.conn)
-      .await?;
-    Ok(
-      shard_id
-        .and_then(|shard_id| Some((shard_id, finished_seq_id?)))
-        .and_then(|(shard_id, bytes)| {
-          if bytes.len() == 4 {
-            Some(CacheGameState {
-              id: game_id,
-              shard_id,
-              finished_seq_id: u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
-            })
-          } else {
-            None
-          }
-        }),
-    )
+  fn timestamp() -> u64 {
+    SystemTime::now()
+      .duration_since(SystemTime::UNIX_EPOCH)
+      .unwrap()
+      .as_millis() as u64
   }
 }
 
@@ -151,7 +159,7 @@ impl Debug for Cache {
 pub struct CacheGameState {
   pub id: i32,
   pub shard_id: String,
-  pub finished_seq_id: u32,
+  pub last_touch_timestamp: Option<u64>,
 }
 
 #[tokio::test]
@@ -204,7 +212,7 @@ async fn test_game_set() {
 }
 
 #[tokio::test]
-async fn test_game_finished_seq() {
+async fn test_game_state() {
   dotenv::dotenv().unwrap();
   let game_id = i32::MAX;
 
@@ -216,8 +224,12 @@ async fn test_game_finished_seq() {
   assert!(v.is_none());
 
   c.add_game(game_id, "shard").await.unwrap();
-  c.set_game_finished_seq_id(game_id, 456).await.unwrap();
   let v = c.get_game_state(game_id).await.unwrap().unwrap();
   assert_eq!(v.shard_id, "shard");
-  assert_eq!(v.finished_seq_id, 456);
+  assert_eq!(v.last_touch_timestamp, None);
+
+  c.touch_game(game_id).await.unwrap();
+
+  let v = c.get_game_state(game_id).await.unwrap().unwrap();
+  assert!(v.last_touch_timestamp.is_some());
 }

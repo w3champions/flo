@@ -178,7 +178,7 @@ impl GameRecordData {
   }
 
   pub fn decode<T: Buf>(mut buf: T) -> Result<Self, RecordError> {
-    if buf.remaining() <= 1 + 2 {
+    if buf.remaining() < 1 {
       return Err(RecordError::UnexpectedEndOfBuffer);
     }
     let data_type = match buf.get_u8() {
@@ -200,7 +200,7 @@ impl GameRecordData {
           return Err(RecordError::UnexpectedEndOfBuffer);
         }
         let mut sub = buf.take(size);
-        let game = Game::decode(sub.get_mut()).map_err(RecordError::DecodeGameInfo)?;
+        let game = Game::decode(&mut sub).map_err(RecordError::DecodeGameInfo)?;
         Self::GameInfo(game)
       }
       DataTypeId::W3GS => {

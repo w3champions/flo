@@ -208,6 +208,8 @@ impl Dispatcher {
         }
       }
     }
+
+    state.shared.lock().obs.remove_game(state.game_id);
   }
 
   async fn tick(
