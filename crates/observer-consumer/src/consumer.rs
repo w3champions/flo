@@ -61,7 +61,9 @@ impl ShardConsumer {
       if now.saturating_duration_since(entry.t) > Duration::from_secs(90) {
         let removed = removed.get_or_insert_with(|| vec![]);
         removed.push(*id);
-        tracing::info!("archiving game: {}", *id);
+        self.span.in_scope(|| {
+          tracing::debug!("archiving game: {}", *id);
+        });
         entry.writer.build_archive(true).await?;
         if removed.len() == Gc::MAX_ITEM {
           break;
@@ -106,8 +108,6 @@ impl Handler<StartShardConsumer> for ShardConsumer {
     ctx: &mut Context<Self>,
     StartShardConsumer { recovered_games }: StartShardConsumer,
   ) -> Result<()> {
-    use rusoto_kinesis::GetShardIteratorInput;
-
     self.span.in_scope(|| {
       tracing::info!("starting: recovered_games = {}", recovered_games.len());
     });
@@ -121,37 +121,12 @@ impl Handler<StartShardConsumer> for ShardConsumer {
       }
     }
 
-    let starting_sequence_number = self.cache.get_shard_finished_seq(&self.shard_id).await?;
-    self.span.in_scope(|| {
-      tracing::info!("starting_sequence_number = {:?}", starting_sequence_number);
-    });
-
-    let input = GetShardIteratorInput {
-      shard_id: self.shard_id.clone(),
-      shard_iterator_type: if starting_sequence_number.is_some() {
-        "AFTER_SEQUENCE_NUMBER".to_string()
-      } else {
-        "TRIM_HORIZON".to_string()
-      },
-      starting_sequence_number,
-      stream_name: KINESIS_STREAM_NAME.clone(),
-      ..Default::default()
-    };
-
-    let res = KINESIS_CLIENT.get_shard_iterator(input).await?;
-    let iterator = res
-      .shard_iterator
-      .ok_or_else(|| Error::NoShardIterator(self.shard_id.clone()))?;
-
-    self.span.in_scope(|| {
-      tracing::info!("iterator = {}", iterator);
-    });
-
     ctx.spawn(
       Scanner {
         shard_id: self.shard_id.clone(),
-        iterator,
+        cache: self.cache.clone(),
         addr: ctx.addr(),
+        span: tracing::info_span!("scanner", shard_id = self.shard_id.as_str()),
       }
       .run(),
     );
@@ -269,74 +244,143 @@ impl Handler<Gc> for ShardConsumer {
 
 struct Scanner {
   shard_id: String,
-  iterator: String,
+  cache: Cache,
   addr: Addr<ShardConsumer>,
+  span: Span,
 }
 
 impl Scanner {
-  const CHUNK_SIZE: i64 = 2000;
-  const WAIT_RECORD_TIMEOUT: Duration = Duration::from_millis(100);
+  const CHUNK_SIZE: i64 = 10000;
+  const WAIT_RECORD_TIMEOUT: Duration = Duration::from_millis(1000);
+  const GET_RECORDS_SLEEP: Duration = Duration::from_millis(250);
 
   async fn run(mut self) {
-    use rusoto_kinesis::GetRecordsInput;
+    use rusoto_kinesis::{GetRecordsError, GetRecordsInput};
 
-    let span = tracing::info_span!("scanner", shard_id = self.shard_id.as_str());
     let mut backoff = backoff::ExponentialBackoff {
       max_elapsed_time: None,
       ..Default::default()
     };
 
-    loop {
-      let input = GetRecordsInput {
-        limit: Some(Self::CHUNK_SIZE),
-        shard_iterator: self.iterator.clone(),
-      };
-
-      match KINESIS_CLIENT.get_records(input).await {
-        Ok(output) => {
-          backoff.reset();
-          let records = output.records;
-          span.in_scope(|| {
-            tracing::debug!("records: {}", records.len());
-          });
-
-          if !records.is_empty() {
-            if let Err(err) = self.handle_chunk(&span, &records).await {
-              span.in_scope(|| tracing::error!("handle_chunk: {}", err));
-              break;
+    'main: loop {
+      let mut iterator = 'get_iter: loop {
+        match self.refresh_iterator().await {
+          Ok(v) => {
+            backoff.reset();
+            break 'get_iter v;
+          }
+          Err(err) => {
+            if let Some(v) = backoff.next_backoff() {
+              self
+                .span
+                .in_scope(|| tracing::error!("refresh_iterator: {}", err));
+              tokio::time::sleep(v).await;
+            } else {
+              self
+                .span
+                .in_scope(|| tracing::error!("refresh_iterator: max backoff reached"));
+              return;
             }
           }
+        }
+      };
 
-          self.iterator = if let Some(v) = output.next_shard_iterator {
-            v
-          } else {
-            span.in_scope(|| tracing::warn!("shard closed"));
+      loop {
+        let t = Instant::now();
+        let input = GetRecordsInput {
+          limit: Some(Self::CHUNK_SIZE),
+          shard_iterator: iterator.clone(),
+        };
+
+        match KINESIS_CLIENT.get_records(input).await {
+          Ok(output) => {
+            backoff.reset();
+            let records = output.records;
+            self.span.in_scope(|| {
+              tracing::debug!("records: {}", records.len());
+            });
+
+            if !records.is_empty() {
+              if let Err(err) = self.handle_chunk(&records).await {
+                self
+                  .span
+                  .in_scope(|| tracing::error!("handle_chunk: {}", err));
+                break 'main;
+              }
+            }
+
+            iterator = if let Some(v) = output.next_shard_iterator {
+              v
+            } else {
+              self.span.in_scope(|| tracing::warn!("shard closed"));
+              break 'main;
+            };
+            if records.is_empty() {
+              tokio::time::sleep(Self::WAIT_RECORD_TIMEOUT).await;
+            }
+          }
+          Err(rusoto_core::RusotoError::Service(GetRecordsError::ExpiredIterator(_))) => {
+            self.span.in_scope(|| tracing::warn!("iterator expired"));
             break;
-          };
-          if records.is_empty() {
-            tokio::time::sleep(Self::WAIT_RECORD_TIMEOUT).await;
+          }
+          Err(err) => {
+            self.span.in_scope(|| {
+              tracing::error!("get records: {}", err);
+            });
+            if let Some(duration) = backoff.next_backoff() {
+              tokio::time::sleep(duration).await;
+            } else {
+              self
+                .span
+                .in_scope(|| tracing::error!("max backoff reached"));
+              break 'main;
+            }
           }
         }
-        Err(err) => {
-          span.in_scope(|| {
-            tracing::error!("get records: {}", err);
-          });
-          if let Some(duration) = backoff.next_backoff() {
-            tokio::time::sleep(duration).await;
-          } else {
-            span.in_scope(|| tracing::error!("max backoff reached"));
-            break;
-          }
+        let d = Instant::now() - t;
+        if let Some(d) = Self::GET_RECORDS_SLEEP.checked_sub(d) {
+          tokio::time::sleep(d).await;
         }
       }
     }
+    self.span.in_scope(|| {
+      tracing::error!("scanner terminated");
+    });
   }
 
-  async fn handle_chunk(
-    &mut self,
-    span: &Span,
-    records: &Vec<rusoto_kinesis::Record>,
-  ) -> Result<()> {
+  async fn refresh_iterator(&mut self) -> Result<String> {
+    use rusoto_kinesis::GetShardIteratorInput;
+    let starting_sequence_number = self.cache.get_shard_finished_seq(&self.shard_id).await?;
+    self.span.in_scope(|| {
+      tracing::info!("starting_sequence_number = {:?}", starting_sequence_number);
+    });
+
+    let input = GetShardIteratorInput {
+      shard_id: self.shard_id.clone(),
+      shard_iterator_type: if starting_sequence_number.is_some() {
+        "AFTER_SEQUENCE_NUMBER".to_string()
+      } else {
+        "TRIM_HORIZON".to_string()
+      },
+      starting_sequence_number,
+      stream_name: KINESIS_STREAM_NAME.clone(),
+      ..Default::default()
+    };
+
+    let res = KINESIS_CLIENT.get_shard_iterator(input).await?;
+    let iterator = res
+      .shard_iterator
+      .ok_or_else(|| Error::NoShardIterator(self.shard_id.clone()))?;
+
+    self.span.in_scope(|| {
+      tracing::info!("iterator = {}", iterator);
+    });
+
+    Ok(iterator)
+  }
+
+  async fn handle_chunk(&mut self, records: &Vec<rusoto_kinesis::Record>) -> Result<()> {
+    let span = &self.span;
     let mut map = BTreeMap::new();
     let mut lost_games = BTreeSet::new();
     let max_sequence_number = records.last().map(|r| r.sequence_number.clone()).unwrap();
