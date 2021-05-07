@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-const MAX_CHUNK_SIZE: usize = 4 * 1024;
+const MAX_CHUNK_SIZE: usize = 16 * 1024;
 const CHUNK_PREFIX: &'static str = "chunk_";
 const CHUNK_TEMP_FILENAME: &'static str = "_chunk";
 const STATE_TEMP_FILENAME: &'static str = "_state";
@@ -85,7 +85,7 @@ impl GameDataWriter {
     Ok(r)
   }
 
-  pub async fn build_archive(&mut self) -> Result<()> {
+  pub async fn build_archive(&mut self, remove_chunks: bool) -> Result<()> {
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::prelude::*;
@@ -100,6 +100,13 @@ impl GameDataWriter {
         std::io::copy(&mut chunk_file, &mut encoder)?;
       }
       encoder.flush()?;
+
+      if remove_chunks {
+        for i in 0..self.chunk_id {
+          std::fs::remove_file(self.dir.join(format!("{}{}", CHUNK_PREFIX, i))).ok();
+        }
+        std::fs::remove_file(self.dir.join(CHUNK_TEMP_FILENAME)).ok();
+      }
       Ok(())
     })
   }
@@ -374,7 +381,7 @@ async fn test_fs() {
   for record in records {
     writer.write_record(record).await.unwrap();
   }
-  writer.build_archive().await.unwrap();
+  writer.build_archive(false).await.unwrap();
 
   fs::rename(
     writer.dir.join(ARCHIVE_FILE_NAME),
@@ -385,7 +392,7 @@ async fn test_fs() {
 
   let mut writer = GameDataWriter::recover(game_id).await.unwrap();
   assert_eq!(writer.chunk_id, 13);
-  writer.build_archive().await.unwrap();
+  writer.build_archive(false).await.unwrap();
 
   assert_eq!(
     fs::read(writer.dir.join("_archive.gz")).await.unwrap(),

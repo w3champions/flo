@@ -59,9 +59,13 @@ impl ShardConsumer {
     let now = Instant::now();
     for (id, entry) in self.games.iter_mut() {
       if now.saturating_duration_since(entry.t) > Duration::from_secs(90) {
-        removed.get_or_insert_with(|| vec![]).push(*id);
+        let removed = removed.get_or_insert_with(|| vec![]);
+        removed.push(*id);
         tracing::info!("archiving game: {}", *id);
-        entry.writer.build_archive().await?;
+        entry.writer.build_archive(true).await?;
+        if removed.len() == Gc::MAX_ITEM {
+          break;
+        }
       }
     }
     if let Some(removed) = removed {
@@ -237,6 +241,7 @@ impl Handler<Flush> for ShardConsumer {
 struct Gc;
 
 impl Gc {
+  const MAX_ITEM: usize = 10;
   const INTERVAL: Duration = Duration::from_secs(60);
 }
 
