@@ -4,6 +4,7 @@ mod game;
 mod lan;
 mod message;
 mod node;
+mod observer;
 mod ping;
 mod platform;
 mod types;

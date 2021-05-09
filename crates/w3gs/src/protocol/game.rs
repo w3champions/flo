@@ -16,7 +16,29 @@ pub struct GameSettings {
   pub map_sha1: [u8; 20],
 }
 
+#[derive(Debug)]
+pub struct GameSettingsMap {
+  pub path: String,
+  pub width: u16,
+  pub height: u16,
+  pub sha1: [u8; 20],
+  pub checksum: u32,
+}
+
 impl GameSettings {
+  pub fn new(flags: GameSettingFlags, map: GameSettingsMap) -> Self {
+    Self {
+      game_setting_flags: flags,
+      unk_1: 0,
+      map_width: map.width,
+      map_height: map.height,
+      map_checksum: map.checksum,
+      map_sha1: map.sha1,
+      map_path: map.path.into_c_string_lossy(),
+      host_name: CString::new("Flo").unwrap(),
+    }
+  }
+
   fn get_encode_size(&self) -> usize {
     size_of::<u32>() /* Flags */
     + 1 /* 0x0 */

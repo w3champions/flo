@@ -12,6 +12,7 @@ flo.toml
 /flo-logs
 /data
 /crates/observer-consumer/data
+/crates/observer-fs/data
 
 # Config files
 *.json

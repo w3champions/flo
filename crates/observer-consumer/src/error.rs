@@ -15,12 +15,12 @@ pub enum Error {
   NoShardIterator(String),
   #[error("Game data lost: {0}")]
   GameDataLost(i32),
-  #[error("Get shard iterator: {0}")]
-  GetShardIterator(#[from] RusotoError<rusoto_kinesis::GetShardIteratorError>),
   #[error("decode game record: {0}")]
   DecodeGameRecord(#[from] flo_observer::record::RecordError),
-  #[error("decode archive header: {0}")]
-  DecodeArchiveHeader(flo_util::binary::BinDecodeError),
+  #[error("Observer fs: {0}")]
+  ObserverFs(#[from] flo_observer_fs::error::Error),
+  #[error("Get shard iterator: {0}")]
+  GetShardIterator(#[from] RusotoError<rusoto_kinesis::GetShardIteratorError>),
   #[error("redis: {0}")]
   Redis(#[from] redis::RedisError),
   #[error("io: {0}")]

@@ -1,14 +1,15 @@
-use flo_w3gs::slot::{SlotData, SlotInfo};
+use flo_w3gs::slot::{RacePref, SlotData, SlotInfo};
 
 use crate::error::*;
 use crate::types::{Slot, SlotStatus};
 
 #[derive(Debug)]
 pub struct LanSlotInfo {
-  pub slot_player_id: u8,
+  pub my_slot_player_id: u8,
   pub slot_info: SlotInfo,
   pub my_slot: SlotData,
   pub player_infos: Vec<LanSlotPlayerInfo>,
+  pub has_stream_obs_slot: bool,
 }
 
 #[derive(Debug)]
@@ -19,15 +20,23 @@ pub struct LanSlotPlayerInfo {
   pub name: String,
 }
 
-pub fn build_player_slot_info(
-  player_id: i32,
+pub enum SelfPlayer {
+  Player(i32),
+  StreamObserver,
+}
+
+impl From<i32> for SelfPlayer {
+  fn from(id: i32) -> Self {
+    Self::Player(id)
+  }
+}
+
+pub fn build_player_slot_info<S: Into<SelfPlayer>>(
+  self_player: S,
   random_seed: i32,
   slots: &[Slot],
 ) -> Result<LanSlotInfo> {
-  let my_slot_index = slots
-    .into_iter()
-    .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
-    .ok_or_else(|| Error::SlotNotResolved)?;
+  let self_player: SelfPlayer = self_player.into();
 
   let player_slots: Vec<(usize, &Slot)> = slots
     .into_iter()
@@ -40,7 +49,15 @@ pub fn build_player_slot_info(
     return Err(Error::SlotNotResolved);
   }
 
-  let slot_player_id = index_to_player_id(my_slot_index);
+  let has_stream_obs_slot = if let SelfPlayer::StreamObserver = self_player {
+    if player_slots.len() > 23 {
+      return Err(Error::NoVacantSlotForObserver);
+    }
+    true
+  } else {
+    false
+  };
+
   let mut slot_info = {
     let mut b = SlotInfo::build();
     b.random_seed(random_seed)
@@ -49,7 +66,8 @@ pub fn build_player_slot_info(
         player_slots
           .iter()
           .filter(|(_, slot)| slot.settings.team != 24)
-          .count(),
+          .count()
+          + if has_stream_obs_slot { 1 } else { 0 },
       )
       .build()
   };
@@ -78,6 +96,19 @@ pub fn build_player_slot_info(
     }
   }
 
+  if has_stream_obs_slot {
+    use flo_w3gs::slot::SlotStatus;
+    let idx = player_slots.len();
+    let slot = slot_info.slot_mut(idx).expect("always has 24 slots");
+    slot.player_id = index_to_player_id(idx);
+    slot.slot_status = SlotStatus::Occupied;
+    slot.race = RacePref::RANDOM;
+    slot.color = 0;
+    slot.team = 24;
+    slot.handicap = 100;
+    slot.download_status = 100;
+  };
+
   let player_infos = player_slots
     .into_iter()
     .filter_map(|(i, slot)| {
@@ -94,11 +125,22 @@ pub fn build_player_slot_info(
     })
     .collect();
 
+  let my_slot_index = match self_player {
+    SelfPlayer::Player(player_id) => slots
+      .into_iter()
+      .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
+      .ok_or_else(|| Error::SlotNotResolved)?,
+    SelfPlayer::StreamObserver => slots.len(),
+  };
+
+  let my_slot_player_id = index_to_player_id(my_slot_index);
+
   Ok(LanSlotInfo {
-    slot_player_id,
+    my_slot_player_id,
     my_slot: slot_info.slots()[my_slot_index].clone(),
     slot_info,
     player_infos,
+    has_stream_obs_slot,
   })
 }
 

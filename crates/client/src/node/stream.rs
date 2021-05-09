@@ -63,7 +63,7 @@ impl NodeStream {
     let session = Session {
       game_id: game.game.game_id,
       player_id: game.game.player_id,
-      slot_player_id: game.slot_info.slot_player_id,
+      slot_player_id: game.slot_info.my_slot_player_id,
       addr,
       token,
       client,

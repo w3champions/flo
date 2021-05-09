@@ -256,7 +256,16 @@ impl Worker {
             }
             _ => return Err(RusotoError::Service(err).into()),
           },
-          Err(err) => return Err(err.into()),
+          Err(err) => match err {
+            RusotoError::Credentials(_)
+            | RusotoError::Validation(_)
+            | RusotoError::ParseError(_) => {
+              return Err(err.into());
+            }
+            other => {
+              tracing::error!("obs: {}", other);
+            }
+          },
         }
 
         sleep(Duration::from_secs(1)).await;

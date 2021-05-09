@@ -214,7 +214,7 @@ pub struct GameInfo {
   pub host_player_info: PlayerInfo,
   pub game_name: CString,
   #[bin(eq = 0)]
-  pub _unk_1: u8,
+  _unk_1: u8,
   pub game_settings: GameSettings,
   pub player_count: u32,
   #[bin(bitflags(u32))]
@@ -226,7 +226,7 @@ pub struct GameInfo {
 pub struct PlayerInfo {
   pub id: u8,
   pub name: CString,
-  pub _size_of_additional_data: u8,
+  _size_of_additional_data: u8,
   #[bin(repeat = "_size_of_additional_data")]
   pub additional_data: Vec<u8>,
 }
@@ -390,7 +390,7 @@ impl BinEncode for PlayerChatMessage {
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct TimeSlotAck {
   #[bin(eq = 4)]
-  pub _size_checksum: u8,
+  _size_checksum: u8,
   pub checksum: u32,
 }
 

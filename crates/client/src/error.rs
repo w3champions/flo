@@ -16,6 +16,8 @@ pub enum Error {
   NodeConnectionRejected(flo_net::proto::flo_node::ClientConnectRejectReason, String),
   #[error("Map checksum mismatch")]
   MapChecksumMismatch,
+  #[error("no vacant slot for observer")]
+  NoVacantSlotForObserver,
   #[error("Unexpected w3gs packet: {0:?}")]
   UnexpectedW3GSPacket(flo_w3gs::packet::Packet),
   #[error("Slot not resolved")]
@@ -40,6 +42,8 @@ pub enum Error {
   TaskCancelled(anyhow::Error),
   #[error("Lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
+  #[error("Observer fs: {0}")]
+  ObserverFs(#[from] flo_observer_fs::error::Error),
   #[error("Invalid node addr: {0}")]
   InvalidNodeAddr(std::net::AddrParseError),
   #[cfg(feature = "ws")]

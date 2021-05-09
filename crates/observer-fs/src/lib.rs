@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+pub mod error;
+
 const MAX_CHUNK_SIZE: usize = 16 * 1024;
 const CHUNK_PREFIX: &'static str = "chunk_";
 const CHUNK_TEMP_FILENAME: &'static str = "_chunk";
@@ -74,7 +76,11 @@ impl GameDataWriter {
   }
 
   pub async fn write_record(&mut self, data: GameRecordData) -> Result<WriteRecordDestination> {
-    assert!(data.encode_len() <= MAX_CHUNK_SIZE);
+    if data.encode_len() > MAX_CHUNK_SIZE {
+      tracing::warn!("over-sized record dropped: {:?}", data.type_id());
+      self.next_record_id += 1;
+      return Ok(WriteRecordDestination::CurrentChunk);
+    }
     let mut r = WriteRecordDestination::CurrentChunk;
     if self.chunk_buf.len() + data.encode_len() > MAX_CHUNK_SIZE {
       self.flush_chunk().await?;
@@ -158,7 +164,6 @@ pub enum WriteRecordDestination {
 }
 
 pub struct GameDataReader {
-  game_id: i32,
   next_record_id: u32,
   next_chunk_id: usize,
   dir: PathBuf,
@@ -223,7 +228,6 @@ impl GameDataReader {
     };
 
     Ok(Self {
-      game_id,
       chunk_buf,
       next_record_id,
       next_chunk_id: max_chunk_id.map(|v| v + 1).unwrap_or(0),
@@ -391,7 +395,7 @@ async fn test_fs() {
   .unwrap();
 
   let mut writer = GameDataWriter::recover(game_id).await.unwrap();
-  assert_eq!(writer.chunk_id, 13);
+  assert_eq!(writer.chunk_id, 4);
   writer.build_archive(false).await.unwrap();
 
   assert_eq!(

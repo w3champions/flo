@@ -121,7 +121,7 @@ impl Default for Slot {
 }
 
 #[derive(Debug, S2ProtoUnpack, S2ProtoPack, Serialize, Deserialize, Clone)]
-#[s2_grpc(message_type = "flo_net::proto::flo_connect::SlotSettings")]
+#[s2_grpc(message_type(flo_net::proto::flo_connect::SlotSettings))]
 pub struct SlotSettings {
   pub team: i32,
   pub color: i32,

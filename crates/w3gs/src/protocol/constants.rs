@@ -251,7 +251,6 @@ bitflags! {
 }
 
 bitflags! {
-  #[derive(Default)]
   pub struct GameSettingFlags: u32 {
     const SPEED_SLOW   = 0x00000000;
     const SPEED_NORMAL = 0x00000001;
@@ -277,5 +276,15 @@ bitflags! {
     const SHARED_CONTROL = 0x01000000;
     const RANDOM_HERO    = 0x02000000;
     const RANDOM_RACE    = 0x04000000;
+  }
+}
+
+impl Default for GameSettingFlags {
+  fn default() -> Self {
+    GameSettingFlags::SPEED_FAST
+      | GameSettingFlags::TERRAIN_DEFAULT
+      | GameSettingFlags::OBS_ENABLED
+      | GameSettingFlags::TEAMS_TOGETHER
+      | GameSettingFlags::TEAMS_FIXED
   }
 }

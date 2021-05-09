@@ -120,7 +120,7 @@ pub enum DataTypeId {
 }
 
 impl GameRecordData {
-  fn type_id(&self) -> DataTypeId {
+  pub fn type_id(&self) -> DataTypeId {
     match *self {
       GameRecordData::GameInfo(_) => DataTypeId::GameInfo,
       GameRecordData::W3GS(_) => DataTypeId::W3GS,

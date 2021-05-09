@@ -23,7 +23,7 @@ pub struct Platform {
 }
 
 impl Platform {
-  async fn new(start_config: &StartConfig) -> Result<Self> {
+  pub(crate) async fn new(start_config: &StartConfig) -> Result<Self> {
     let (config, info) = load(start_config).await;
     Ok(Platform {
       start_config: start_config.clone(),
@@ -148,6 +148,35 @@ impl Handler<CalcMapChecksum> for Platform {
     self
       .with_storage(|storage| flo_w3map::W3Map::calc_checksum(storage, &path).map_err(Into::into))
       .await
+  }
+}
+
+pub struct OpenMap {
+  pub path: String,
+}
+
+pub struct OpenMapReply {
+  pub map: W3Map,
+  pub checksum: MapChecksum,
+}
+
+impl Message for OpenMap {
+  type Result = Result<OpenMapReply>;
+}
+
+#[async_trait]
+impl Handler<OpenMap> for Platform {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    OpenMap { path }: OpenMap,
+  ) -> <OpenMap as Message>::Result {
+    let (map, checksum) = self
+      .with_storage(|storage| {
+        flo_w3map::W3Map::open_storage_with_checksum(storage, &path).map_err(Into::into)
+      })
+      .await?;
+    Ok(OpenMapReply { map, checksum })
   }
 }
 
@@ -287,7 +316,8 @@ impl Platform {
           let r = f(&s);
           self.storage = Some(s);
           r
-        }, Err(e) => {
+        }
+        Err(e) => {
           tracing::debug!("Failed to locate WC3: {:?}", e);
           Err(Error::War3NotLocated)
         }

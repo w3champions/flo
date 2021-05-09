@@ -351,7 +351,7 @@ impl State {
     deferred_out_packets: &mut Vec<Packet>,
   ) -> Result<()> {
     let my_player_id = info.game.player_id;
-    let my_slot_player_id = info.slot_info.slot_player_id;
+    let my_slot_player_id = info.slot_info.my_slot_player_id;
     let mut loaded_sent = vec![];
 
     node_stream

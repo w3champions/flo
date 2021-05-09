@@ -11,6 +11,7 @@ use crate::node::messages::ListNode;
 use crate::player::state::ping::GetPlayersPingSnapshot;
 use crate::player::{PlayerBanType, PlayerSource, SourceState};
 use crate::state::{ActorMapExt, ControllerStateRef};
+use bs_diesel_utils::executor::ExecutorError;
 use chrono::{DateTime, Utc};
 use flo_grpc::controller::flo_controller_server::*;
 use flo_grpc::controller::*;
@@ -132,6 +133,25 @@ impl FloController for FloControllerService {
       .map_err(|e| Status::internal(e.to_string()))?;
 
     Ok(Response::new(r.pack().map_err(Error::from)?))
+  }
+
+  async fn get_game(
+    &self,
+    request: Request<GetGameRequest>,
+  ) -> Result<Response<GetGameReply>, Status> {
+    let game_id = request.into_inner().game_id;
+    let game = self
+      .state
+      .db
+      .exec(move |conn| crate::game::db::get_full(conn, game_id))
+      .await
+      .map_err(|e| match e {
+        ExecutorError::Task(Error::GameNotFound) => Status::invalid_argument(e.to_string()),
+        other => Status::internal(other.to_string()),
+      })?;
+    Ok(Response::new(GetGameReply {
+      game: game.pack().map_err(Error::from)?,
+    }))
   }
 
   async fn create_game(

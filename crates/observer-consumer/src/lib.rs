@@ -2,7 +2,7 @@ mod cache;
 mod consumer;
 mod env;
 pub mod error;
-mod fs;
+pub use flo_observer_fs as fs;
 
 use crate::cache::Cache;
 use crate::consumer::StartShardConsumer;

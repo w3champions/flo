@@ -98,14 +98,14 @@ impl<'a> GameHandler<'a> {
     }
     if !muted_names.is_empty() {
       self.send_chats_to_self(
-        self.info.slot_info.slot_player_id,
+        self.info.slot_info.my_slot_player_id,
         vec![format!("Auto muted: {}", muted_names.join(", "))],
       )
     }
     #[cfg(feature = "blacklist")]
     if !blacklisted.is_empty() {
       self.send_chats_to_self(
-        self.info.slot_info.slot_player_id,
+        self.info.slot_info.my_slot_player_id,
         vec![format!("Blacklisted: {}", blacklisted.join(", "))],
       )
     }
@@ -276,7 +276,7 @@ impl<'a> GameHandler<'a> {
           "-stats: Print opponent/opponents statistics.".to_string(),
           "-stats <ID>: Print payer statistics, or display a player list.".to_string(),
         ];
-        self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
+        self.send_chats_to_self(self.info.slot_info.my_slot_player_id, messages)
       }
       "game" => {
         let mut messages = vec![
@@ -300,7 +300,7 @@ impl<'a> GameHandler<'a> {
           }
         }
 
-        self.send_chats_to_self(self.info.slot_info.slot_player_id, messages)
+        self.send_chats_to_self(self.info.slot_info.my_slot_player_id, messages)
       }
       "muteall" => {
         let targets: Vec<u8> = self
@@ -309,7 +309,7 @@ impl<'a> GameHandler<'a> {
           .player_infos
           .iter()
           .filter_map(|slot| {
-            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+            if slot.slot_player_id == self.info.slot_info.my_slot_player_id {
               return None;
             }
             Some(slot.slot_player_id)
@@ -317,7 +317,7 @@ impl<'a> GameHandler<'a> {
           .collect();
         self.muted_players.extend(targets);
         self.send_chats_to_self(
-          self.info.slot_info.slot_player_id,
+          self.info.slot_info.my_slot_player_id,
           vec![format!("All players muted.")],
         );
       }
@@ -329,7 +329,7 @@ impl<'a> GameHandler<'a> {
           .player_infos
           .iter()
           .filter_map(|slot| {
-            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+            if slot.slot_player_id == self.info.slot_info.my_slot_player_id {
               return None;
             }
             if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
@@ -340,21 +340,21 @@ impl<'a> GameHandler<'a> {
           .collect();
         self.muted_players.extend(targets);
         self.send_chats_to_self(
-          self.info.slot_info.slot_player_id,
+          self.info.slot_info.my_slot_player_id,
           vec![format!("All opponents muted.")],
         );
       }
       "unmuteall" => {
         self.muted_players.clear();
         self.send_chats_to_self(
-          self.info.slot_info.slot_player_id,
+          self.info.slot_info.my_slot_player_id,
           vec![format!("All players un-muted.")],
         );
       }
       #[cfg(feature = "blacklist")]
       "blacklisted" => {
         if let Ok(b) = blacklist::blacklisted() {
-          self.send_chats_to_self(self.info.slot_info.slot_player_id, vec![b]);
+          self.send_chats_to_self(self.info.slot_info.my_slot_player_id, vec![b]);
         }
       }
       cmd if cmd.starts_with("stats") => {
@@ -366,7 +366,7 @@ impl<'a> GameHandler<'a> {
           let targets: Vec<(String, u32)> = players
             .iter()
             .filter_map(|slot| {
-              if slot.slot_player_id == self.info.slot_info.slot_player_id {
+              if slot.slot_player_id == self.info.slot_info.my_slot_player_id {
                 return None;
               }
               if self.info.game.slots[slot.slot_index].settings.team == my_team as i32 {
@@ -379,7 +379,7 @@ impl<'a> GameHandler<'a> {
             })
             .collect();
           if !targets.is_empty() {
-            self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
+            self.send_stats_to_self(self.info.slot_info.my_slot_player_id, targets, solo);
           }
         } else {
           let id_or_name = &cmd["stats ".len()..];
@@ -398,7 +398,7 @@ impl<'a> GameHandler<'a> {
               })
               .collect();
             if !targets.is_empty() {
-              self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
+              self.send_stats_to_self(self.info.slot_info.my_slot_player_id, targets, solo);
             } else {
               let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
@@ -408,7 +408,7 @@ impl<'a> GameHandler<'a> {
                   slot.name.as_str()
                 ));
               }
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, msgs);
             }
           } else {
             let targets: Vec<(String, u32)> = players
@@ -429,7 +429,7 @@ impl<'a> GameHandler<'a> {
               })
               .collect();
             if !targets.is_empty() {
-              self.send_stats_to_self(self.info.slot_info.slot_player_id, targets, solo);
+              self.send_stats_to_self(self.info.slot_info.my_slot_player_id, targets, solo);
             } else {
               let mut msgs = vec![format!("Type `-stats <ID>` to get stats for:")];
               for slot in &self.info.slot_info.player_infos {
@@ -439,7 +439,7 @@ impl<'a> GameHandler<'a> {
                   slot.name.as_str()
                 ));
               }
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, msgs);
             }
           }
         }
@@ -463,7 +463,7 @@ impl<'a> GameHandler<'a> {
               slot.name.as_str()
             ));
           }
-          self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+          self.send_chats_to_self(self.info.slot_info.my_slot_player_id, msgs);
         } else {
           let args_split: Vec<&str> = args.split_whitespace().collect();
           let id_or_name = args_split[0];
@@ -491,14 +491,14 @@ impl<'a> GameHandler<'a> {
               if unblacklist {
                 if blacklist::unblacklist(targets[0].as_str()).is_ok() {
                   self.send_chats_to_self(
-                    self.info.slot_info.slot_player_id,
+                    self.info.slot_info.my_slot_player_id,
                     vec![format!("{} un-blacklisted", &targets[0])],
                   );
                 }
               } else {
                 if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
                   self.send_chats_to_self(
-                    self.info.slot_info.slot_player_id,
+                    self.info.slot_info.my_slot_player_id,
                     vec![format!("{} blacklisted", &targets[0])],
                   );
                 }
@@ -523,14 +523,14 @@ impl<'a> GameHandler<'a> {
               if unblacklist {
                 if blacklist::unblacklist(targets[0].as_str()).is_ok() {
                   self.send_chats_to_self(
-                    self.info.slot_info.slot_player_id,
+                    self.info.slot_info.my_slot_player_id,
                     vec![format!("{} un-blacklisted", &targets[0])],
                   );
                 }
               } else {
                 if blacklist::blacklist(targets[0].as_str(), &reason).is_ok() {
                   self.send_chats_to_self(
-                    self.info.slot_info.slot_player_id,
+                    self.info.slot_info.my_slot_player_id,
                     vec![format!("{} blacklisted", &targets[0])],
                   );
                 }
@@ -546,7 +546,7 @@ impl<'a> GameHandler<'a> {
           .player_infos
           .iter()
           .filter_map(|slot| {
-            if slot.slot_player_id == self.info.slot_info.slot_player_id {
+            if slot.slot_player_id == self.info.slot_info.my_slot_player_id {
               return None;
             }
             if !self.muted_players.contains(&slot.slot_player_id) {
@@ -563,7 +563,7 @@ impl<'a> GameHandler<'a> {
           match targets.len() {
             0 => {
               self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
+                self.info.slot_info.my_slot_player_id,
                 vec![format!("You have silenced all the players.")],
               );
               return true;
@@ -574,7 +574,7 @@ impl<'a> GameHandler<'a> {
                 self.save_mute(targets[0].2, targets[0].1.to_string(), true);
               } else {
                 self.send_chats_to_self(
-                  self.info.slot_info.slot_player_id,
+                  self.info.slot_info.my_slot_player_id,
                   vec![format!("Muted: {}", targets[0].1)],
                 );
               }
@@ -584,7 +584,7 @@ impl<'a> GameHandler<'a> {
               for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, msgs);
             }
           }
         } else {
@@ -608,12 +608,12 @@ impl<'a> GameHandler<'a> {
                 self.save_mute(info.player_id, info.name.clone(), true);
               } else {
                 self.send_chats_to_self(
-                  self.info.slot_info.slot_player_id,
+                  self.info.slot_info.my_slot_player_id,
                   vec![format!("Muted: {}", info.name)],
                 );
               }
             } else {
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, {
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, {
                 let mut msgs = vec![format!("Invalid player id. Players:")];
                 for (id, name, _) in targets {
                   msgs.push(format!(" ID={} {}", id, name));
@@ -623,7 +623,7 @@ impl<'a> GameHandler<'a> {
             }
           } else {
             self.send_chats_to_self(
-              self.info.slot_info.slot_player_id,
+              self.info.slot_info.my_slot_player_id,
               vec![format!("Invalid syntax. Example: -mute 1")],
             );
           }
@@ -635,7 +635,7 @@ impl<'a> GameHandler<'a> {
           .iter()
           .cloned()
           .filter_map(|id| {
-            if id == self.info.slot_info.slot_player_id {
+            if id == self.info.slot_info.my_slot_player_id {
               return None;
             }
             self
@@ -654,7 +654,7 @@ impl<'a> GameHandler<'a> {
           match targets.len() {
             0 => {
               self.send_chats_to_self(
-                self.info.slot_info.slot_player_id,
+                self.info.slot_info.my_slot_player_id,
                 vec![format!("No player to unmute.")],
               );
               return true;
@@ -666,7 +666,7 @@ impl<'a> GameHandler<'a> {
                 self.save_mute(targets[0].2, targets[0].1.to_string(), false);
               } else {
                 self.send_chats_to_self(
-                  self.info.slot_info.slot_player_id,
+                  self.info.slot_info.my_slot_player_id,
                   vec![format!("Un-muted: {}", targets[0].1)],
                 );
               }
@@ -676,7 +676,7 @@ impl<'a> GameHandler<'a> {
               for (id, name, _) in targets {
                 msgs.push(format!(" ID={} {}", id, name));
               }
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, msgs);
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, msgs);
             }
           }
         } else {
@@ -698,12 +698,12 @@ impl<'a> GameHandler<'a> {
                 self.save_mute(player_id, name.to_string(), false);
               } else {
                 self.send_chats_to_self(
-                  self.info.slot_info.slot_player_id,
+                  self.info.slot_info.my_slot_player_id,
                   vec![format!("Un-muted: {}", name)],
                 );
               }
             } else {
-              self.send_chats_to_self(self.info.slot_info.slot_player_id, {
+              self.send_chats_to_self(self.info.slot_info.my_slot_player_id, {
                 let mut msgs = vec![format!("Invalid player id. Muted players:")];
                 for (id, name, _) in targets {
                   msgs.push(format!(" ID={} {}", id, name));
@@ -713,7 +713,7 @@ impl<'a> GameHandler<'a> {
             }
           } else {
             self.send_chats_to_self(
-              self.info.slot_info.slot_player_id,
+              self.info.slot_info.my_slot_player_id,
               vec![format!("Invalid syntax. Example: -unmute 1")],
             );
           }
@@ -746,7 +746,7 @@ impl<'a> GameHandler<'a> {
   fn save_mute(&self, player_id: i32, name: String, muted: bool) {
     let mut tx = self.w3gs_tx.clone();
     let client = self.client.clone();
-    let my_slot_player_id = self.info.slot_info.slot_player_id;
+    let my_slot_player_id = self.info.slot_info.my_slot_player_id;
     tokio::spawn(async move {
       let action = if muted { "Muted" } else { "Un-muted" };
       let send = if muted {

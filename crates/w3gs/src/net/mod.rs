@@ -1,6 +1,6 @@
-use futures::ready;
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
+use futures::{ready, StreamExt};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -32,6 +32,13 @@ impl W3GSListener {
 
   pub fn incoming(&mut self) -> Incoming {
     Incoming::new(&mut self.listener)
+  }
+
+  pub async fn accept(&mut self) -> Result<Option<W3GSStream>> {
+    match Incoming::new(&mut self.listener).next().await {
+      None => Ok(None),
+      Some(res) => Ok(Some(res?)),
+    }
   }
 
   pub fn local_addr(&self) -> &SocketAddr {

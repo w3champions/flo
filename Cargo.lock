@@ -1229,6 +1229,8 @@ dependencies = [
  "flo-log",
  "flo-log-subscriber",
  "flo-net",
+ "flo-observer",
+ "flo-observer-fs",
  "flo-platform",
  "flo-state",
  "flo-task",
@@ -1343,6 +1345,7 @@ dependencies = [
  "flo-w3gs",
  "flo-w3map",
  "flo-w3storage",
+ "futures 0.3.13",
  "thiserror",
  "tokio",
  "tracing",
@@ -1511,9 +1514,30 @@ dependencies = [
  "flate2",
  "flo-net",
  "flo-observer",
+ "flo-observer-fs",
  "flo-state",
  "flo-util",
  "flo-w3gs",
+ "once_cell",
+ "redis",
+ "rusoto_core",
+ "rusoto_kinesis",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "flo-observer-fs"
+version = "0.1.0"
+dependencies = [
+ "backoff",
+ "bytes 1.0.1",
+ "flate2",
+ "flo-observer",
+ "flo-util",
  "once_cell",
  "redis",
  "rusoto_core",

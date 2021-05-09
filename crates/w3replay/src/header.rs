@@ -49,7 +49,7 @@ use flo_util::{BinDecode, BinEncode};
 #[derive(Debug, BinEncode, BinDecode)]
 pub struct Header {
   #[bin(eq = SIGNATURE)]
-  pub _sig: [u8; 28],
+  _sig: [u8; 28],
   #[bin(eq = 68)]
   pub size_header: u32,
   pub size_file: u32,

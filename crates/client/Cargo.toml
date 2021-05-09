@@ -25,6 +25,8 @@ flo-util = { path = "../util" }
 flo-task = { path = "../task" }
 flo-w3c = { path = "../w3c" }
 flo-state = "1"
+flo-observer = { path = "../observer" }
+flo-observer-fs = { path = "../observer-fs" }
 
 s2-grpc-utils = "0.2"
 tokio = { version = "1.5", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }

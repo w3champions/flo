@@ -156,7 +156,7 @@ impl<'a> LobbyHandler<'a> {
         // slot info
         replies.push(Packet::simple(SlotInfoJoin {
           slot_info: slot_info.slot_info.clone(),
-          player_id: slot_info.slot_player_id,
+          player_id: slot_info.my_slot_player_id,
           external_addr: SockAddr::from(match self.stream.local_addr() {
             SocketAddr::V4(addr) => addr,
             SocketAddr::V6(_) => return Err(flo_w3gs::error::Error::Ipv6NotSupported.into()),
@@ -174,7 +174,7 @@ impl<'a> LobbyHandler<'a> {
         let mut player_profile_packets = Vec::with_capacity(num_players);
 
         for info in &slot_info.player_infos {
-          if info.slot_player_id != slot_info.slot_player_id {
+          if info.slot_player_id != slot_info.my_slot_player_id {
             tracing::debug!(
               "-> PlayerInfo: player: id = {}, name = {}",
               info.slot_player_id,
@@ -232,8 +232,8 @@ impl<'a> LobbyHandler<'a> {
         self
           .stream
           .send(Packet::simple(ChatFromHost::lobby(
-            slot_info.slot_player_id,
-            &[slot_info.slot_player_id],
+            slot_info.my_slot_player_id,
+            &[slot_info.my_slot_player_id],
             "Setting changes and chat are disabled.",
           ))?)
           .await?;

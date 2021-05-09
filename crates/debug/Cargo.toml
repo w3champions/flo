@@ -14,6 +14,7 @@ flo-w3gs = { path = "../w3gs" }
 flo-net = { path = "../net" }
 
 tokio = { version = "1.5", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
+futures = "0.3"
 thiserror = "1.0"
 tracing = "0.1"
 

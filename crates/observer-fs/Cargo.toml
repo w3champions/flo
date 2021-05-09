@@ -1,16 +1,13 @@
 [package]
-name = "flo-observer-consumer"
+name = "flo-observer-fs"
 version = "0.1.0"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-flo-net = { path = "../net" }
-flo-w3gs = { path = "../w3gs" }
-flo-util = { path = "../util" }
 flo-observer = { path = "../observer" }
-flo-observer-fs = { path = "../observer-fs" }
-flo-state = "1.0"
+flo-util = { path = "../util" }
+
 rusoto_core = "0.46.0"
 rusoto_kinesis = "0.46.0"
 thiserror = "1.0"
@@ -23,6 +20,3 @@ bytes = "1.0"
 flate2 = "1.0"
 tracing = "0.1"
 backoff = "0.3"
-
-[dev-dependencies]
-dotenv = "0.15"

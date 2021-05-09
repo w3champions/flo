@@ -19,10 +19,11 @@ members = [
   "crates/task",
   "crates/types",
   "crates/debug",
+  "crates/observer",
+  "crates/observer-fs",
 
   "crates/controller",
   "crates/node",
-  "crates/observer",
   "crates/observer-consumer",
   "crates/client",
 
