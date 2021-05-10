@@ -17,7 +17,7 @@ use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMe
 use crate::error::*;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamSender;
-use crate::types::{NodeGameStatus, SlotClientStatus};
+use flo_types::node::{NodeGameStatus, SlotClientStatus};
 use flo_w3gs::protocol::constants::ProtoBufMessageTypeId;
 
 const LOBBY_PING_INTERVAL: Duration = Duration::from_secs(15);

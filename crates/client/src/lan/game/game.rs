@@ -3,9 +3,9 @@ use crate::error::*;
 use crate::lan::game::{GameEndReason, LanGameInfo};
 use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
-use crate::types::NodeGameStatus;
 use flo_net::w3gs::W3GSPacket;
 use flo_state::Addr;
+use flo_types::node::NodeGameStatus;
 use flo_util::chat::{parse_chat_command, ChatCommand};
 #[cfg(feature = "blacklist")]
 use flo_w3c::blacklist;

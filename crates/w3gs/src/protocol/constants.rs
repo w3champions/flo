@@ -284,6 +284,7 @@ impl Default for GameSettingFlags {
     GameSettingFlags::SPEED_FAST
       | GameSettingFlags::TERRAIN_DEFAULT
       | GameSettingFlags::OBS_ENABLED
+      | GameSettingFlags::OBS_FULL
       | GameSettingFlags::TEAMS_TOGETHER
       | GameSettingFlags::TEAMS_FIXED
   }

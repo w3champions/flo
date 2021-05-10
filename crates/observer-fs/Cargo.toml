@@ -20,3 +20,6 @@ bytes = "1.0"
 flate2 = "1.0"
 tracing = "0.1"
 backoff = "0.3"
+
+[dev-dependencies]
+flo-log-subscriber = { path = "../log-subscriber" }

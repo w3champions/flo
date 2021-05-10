@@ -3,13 +3,16 @@ use crate::error::{Error, Result};
 use crate::lan::game::slot::{LanSlotInfo, SelfPlayer};
 use crate::platform::{OpenMap, Platform};
 use flo_lan::MdnsPublisher;
+use flo_observer::record::GameRecordData;
 use flo_state::{Actor, Addr};
+use flo_types::game::{PlayerSource, Slot};
 use flo_util::binary::SockAddr;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
-use flo_w3gs::protocol::game::{CountDownEnd, CountDownStart};
+use flo_w3gs::protocol::chat::ChatToHost;
+use flo_w3gs::protocol::game::{CountDownEnd, CountDownStart, PlayerLoaded};
 use flo_w3gs::protocol::join::{ReqJoin, SlotInfoJoin};
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::map::{MapCheck, MapSize};
@@ -17,6 +20,7 @@ use flo_w3gs::protocol::packet::ProtoBufPayload;
 use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMessage};
 use flo_w3map::MapChecksum;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
@@ -58,6 +62,7 @@ impl ObserverGameHost {
         checksum: map.checksum.xoro,
       },
     );
+
     let worker = Worker {
       ct: ct.clone(),
       map_checksum: map.checksum,
@@ -90,7 +95,10 @@ impl Drop for ObserverGameHost {
   }
 }
 
-enum Cmd {}
+#[derive(Debug)]
+enum Cmd {
+  PlayArchive { path: PathBuf },
+}
 
 struct Worker {
   ct: CancellationToken,
@@ -123,7 +131,7 @@ impl Worker {
       &self.info.slots,
     )?;
 
-    let stream: W3GSStream = loop {
+    let mut stream: W3GSStream = loop {
       tokio::select! {
         _ = self.ct.cancelled() => {
           tracing::debug!("cancelled");
@@ -142,6 +150,103 @@ impl Worker {
       }
     };
 
+    tracing::debug!("game loop");
+
+    loop {
+      tokio::select! {
+        _ = self.ct.cancelled() => {
+          tracing::debug!("cancelled");
+          break;
+        }
+        Some(cmd) = self.rx.recv() => {
+          self.handle_cmd(cmd, &slot_info, &mut stream).await?;
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  async fn handle_cmd(
+    &mut self,
+    cmd: Cmd,
+    slots: &LanSlotInfo,
+    stream: &mut W3GSStream,
+  ) -> Result<()> {
+    match cmd {
+      Cmd::PlayArchive { path } => {
+        use flo_observer_fs::GameDataArchiveReader;
+        let archive = GameDataArchiveReader::open(path).await?;
+
+        let (tx, mut rx) = channel(32);
+        let ct = self.ct.clone();
+        let mut handle = tokio::spawn(async move {
+          let mut records = archive.records();
+          while let Some(record) = records.next().await? {
+            match record {
+              GameRecordData::W3GS(pkt) => match pkt.type_id() {
+                PacketTypeId::IncomingAction => {
+                  if let Err(err) = tx.send(pkt).await {
+                    break;
+                  }
+                }
+                id => {
+                  tracing::debug!("send: {:?}", id);
+                }
+              },
+              GameRecordData::StartLag(_) => {}
+              GameRecordData::StopLag(_) => {}
+              GameRecordData::GameEnd => {}
+              _ => {}
+            }
+          }
+          Ok::<_, Error>(())
+        });
+
+        let mut loaded = false;
+
+        loop {
+          tokio::select! {
+            _ = ct.cancelled() => {
+              break;
+            },
+            res = &mut handle => {
+              res??;
+            }
+            Some(pkt) = rx.recv(), if loaded => {
+              stream.send(pkt).await?;
+            },
+            res = stream.recv() => {
+              if let Some(pkt) = res? {
+                match pkt.type_id() {
+                  PacketTypeId::OutgoingKeepAlive => {},
+                  PacketTypeId::ChatToHost => {
+                    let payload: ChatToHost = pkt.decode_simple()?;
+                    tracing::debug!("chat to host: {:?}", payload);
+                  },
+                  PacketTypeId::GameLoadedSelf => {
+                    tracing::debug!("self loaded");
+                    stream.send(Packet::simple(PlayerLoaded {
+                      player_id: slots.my_slot_player_id
+                    })?).await?;
+                    loaded = true;
+                  }
+                  PacketTypeId::LeaveReq => {
+                    stream.send(Packet::simple(LeaveAck)?).await?;
+                    break;
+                  }
+                  id => {
+                    tracing::debug!("recv: {:?}", id)
+                  }
+                }
+              } else {
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
     Ok(())
   }
 
@@ -173,9 +278,9 @@ impl Worker {
               stream.flush().await?;
               return Ok(false)
             },
-            PacketTypeId::RejectJoin => {
+            PacketTypeId::ReqJoin => {
               let req: ReqJoin = pkt.decode_simple()?;
-              self.handle_req_join(slot_info, stream).await?;
+              self.handle_req_join(req, slot_info, stream).await?;
             }
             PacketTypeId::MapSize => {
               let payload: MapSize = pkt.decode_simple()?;
@@ -235,20 +340,37 @@ impl Worker {
         }
       }
 
-      if num_profile == total_players && num_skins == 1 && num_skins == 1 {
+      if num_profile == total_players && num_skins == 1 && num_unk5 == 1 {
         break;
       }
     }
 
+    tracing::debug!("starting game");
     stream.send(Packet::simple(CountDownStart)?).await?;
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(6)).await;
     stream.send(Packet::simple(CountDownEnd)?).await?;
+    tracing::debug!("game started");
+
+    let loaded = slot_info
+      .player_infos
+      .iter()
+      .map(|s| {
+        Ok(Packet::simple(PlayerLoaded {
+          player_id: s.slot_player_id,
+        })?)
+      })
+      .collect::<Result<Vec<_>>>()?;
+
+    tracing::debug!("{:?}", loaded);
+
+    stream.send_all(loaded).await?;
 
     Ok(true)
   }
 
   async fn handle_req_join(
     &mut self,
+    req: ReqJoin,
     slot_info: &LanSlotInfo,
     stream: &mut W3GSStream,
   ) -> Result<()> {
@@ -307,6 +429,12 @@ impl Worker {
       ))?);
     }
 
+    let obs_player_id = slot_info.my_slot_player_id;
+    let obs_name = req.player_name.to_string_lossy();
+    player_profile_packets.push(Packet::simple(ProtoBufPayload::new(
+      PlayerProfileMessage::new(obs_player_id, &obs_name),
+    ))?);
+
     replies.extend(player_info_packets);
     replies.extend(player_skin_packets);
     replies.extend(player_profile_packets);
@@ -329,12 +457,15 @@ impl Worker {
   }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_obs_host() {
+  flo_log_subscriber::init_env_override("flo_client");
+
   use flo_state::Actor;
+  use flo_types::game::*;
   let platform = Platform::new(&Default::default()).await.unwrap().start();
 
-  let map_path = r#"maps\W3Champions\v7.1\w3c_Northshire_LV.w3x"#;
+  let map_path = r#"maps/W3Champions/v7.1/w3c_Amazonia.w3x"#;
   let map = platform
     .send(OpenMap {
       path: map_path.to_string(),
@@ -343,14 +474,97 @@ async fn test_obs_host() {
     .unwrap()
     .unwrap();
 
+  macro_rules! slot {
+    ($player_id:expr, $team:expr, $color:expr, $race:expr) => {
+      Slot {
+        player: Some(PlayerInfo {
+          id: $player_id,
+          name: format!("Player {}", $player_id),
+          source: PlayerSource::Api,
+        }),
+        settings: SlotSettings {
+          team: $team,
+          color: $color,
+          race: $race,
+          status: SlotStatus::Occupied,
+          ..Default::default()
+        },
+        ..Default::default()
+      }
+    };
+  }
+
   let host = ObserverGameHost::start(
     ObserverGameInfo {
       map_path: map_path.to_string(),
       map_sha1: map.checksum.sha1,
-      slots: vec![],
-      random_seed: 0,
+      slots: vec![
+        slot!(1, 0, 0, Race::Undead),
+        slot!(2, 1, 4, Race::Orc),
+        // slot!(3, 0, 4, Race::Random),
+        // slot!(4, 0, 7, Race::Random),
+        // slot!(5, 1, 1, Race::Undead),
+        // slot!(6, 1, 3, Race::Random),
+        // slot!(7, 1, 6, Race::Random),
+        // slot!(8, 1, 2, Race::Human),
+      ],
+      random_seed: -319861548,
     },
     platform.addr(),
   )
+  .await
   .unwrap();
+
+  host
+    .tx
+    .send(Cmd::PlayArchive {
+      path: flo_util::sample_path!("replay", "711553.gz"),
+    })
+    .await
+    .unwrap();
+
+  std::future::pending::<()>().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_reader() {
+  use flo_observer::record::GameRecordData;
+  use flo_observer_fs::GameDataArchiveReader;
+  use flo_w3gs::action::IncomingAction;
+  use flo_w3gs::constants::PacketTypeId;
+  let r = GameDataArchiveReader::open(flo_util::sample_path!("replay", "708030.gz"))
+    .await
+    .unwrap();
+  let records = r.records().collect_vec().await.unwrap();
+  println!("records = {}", records.len());
+  let mut max_len = 0;
+  let mut time = 0;
+  for record in records {
+    match record {
+      GameRecordData::W3GS(pkt) => {
+        if pkt.type_id() == PacketTypeId::IncomingAction {
+          let payload: IncomingAction = pkt.decode_payload().unwrap();
+          max_len = std::cmp::max(max_len, pkt.payload.len());
+          time += payload.0.time_increment_ms as u32;
+          if pkt.payload.len() > 5000 {
+            use std::collections::BTreeMap;
+            let mut map = BTreeMap::new();
+            for action in &payload.0.actions {
+              (*map.entry(action.player_id).or_insert_with(|| 0)) += action.data.len();
+            }
+            dbg!(map);
+          }
+          println!(
+            "len = {}, time = {:?}, tdiff = {}, n = {}",
+            pkt.payload.len(),
+            Duration::from_millis(time as _),
+            payload.0.time_increment_ms,
+            payload.0.actions.len()
+          );
+        }
+      }
+      _ => {}
+    }
+  }
+  println!("max_len = {}", max_len);
 }

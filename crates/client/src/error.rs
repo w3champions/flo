@@ -33,7 +33,7 @@ pub enum Error {
   #[error("Warcraft III not located")]
   War3NotLocated,
   #[error("Connection request rejected by server: {0:?}")]
-  ConnectionRequestRejected(crate::types::RejectReason),
+  ConnectionRequestRejected(flo_types::game::RejectReason),
   #[error("Local game info not yet received")]
   LocalGameInfoNotFound,
   #[error("Timeout: {0:?}")]

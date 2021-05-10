@@ -1,4 +1,4 @@
-use crate::types::Slot;
+use flo_types::game::Slot;
 
 #[derive(Debug)]
 pub struct ObserverGameInfo {

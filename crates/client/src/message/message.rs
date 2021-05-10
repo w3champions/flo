@@ -13,11 +13,11 @@ use flo_net::proto::flo_connect::{
 use crate::error::{Error, Result};
 use crate::ping::PingUpdate;
 use crate::platform::{PlatformStateError, StartTestGame};
-pub use crate::types::{
+pub use flo_types::game::{
   DisconnectReason, MapDetail, MapForceOwned, MapPlayerOwned, PlayerSession, PlayerSessionUpdate,
   RejectReason,
 };
-use crate::types::{GameInfo, GameStatusUpdate, PlayerInfo, Slot, SlotSettings};
+use flo_types::game::{GameInfo, GameStatusUpdate, PlayerInfo, Slot, SlotSettings};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]

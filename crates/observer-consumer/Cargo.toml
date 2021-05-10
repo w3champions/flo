@@ -10,7 +10,9 @@ flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-observer = { path = "../observer" }
 flo-observer-fs = { path = "../observer-fs" }
+flo-types = { path = "../types" }
 flo-state = "1.0"
+flo-grpc = { path = "../../deps/flo-grpc" }
 rusoto_core = "0.46.0"
 rusoto_kinesis = "0.46.0"
 thiserror = "1.0"

@@ -1,4 +1,4 @@
-pub use flo_types::node::*;
+use crate::node::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

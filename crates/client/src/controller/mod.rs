@@ -18,12 +18,12 @@ use crate::node::{
   self, GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
 };
 use crate::platform::{GetClientConfig, Platform};
-use crate::types::PlayerSession;
 use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_net::packet::FloPacket;
 use flo_net::packet::Frame;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner, RegistryRef, Service};
+use flo_types::game::PlayerSession;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

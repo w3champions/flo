@@ -35,7 +35,7 @@ impl GameSettings {
       map_checksum: map.checksum,
       map_sha1: map.sha1,
       map_path: map.path.into_c_string_lossy(),
-      host_name: CString::new("Flo").unwrap(),
+      host_name: CString::new("FLO").unwrap(),
     }
   }
 

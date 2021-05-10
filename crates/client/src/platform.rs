@@ -1,10 +1,10 @@
 use crate::error::{Error, Result};
-use crate::types::{MapDetail, MapForceOwned, MapPlayerOwned};
 use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
 use flo_platform::ClientPlatformInfo;
 use flo_state::{async_trait, Actor, Context, Handler, Message, RegistryRef, Service};
+use flo_types::game::{MapDetail, MapForceOwned, MapPlayerOwned};
 use flo_w3map::{MapChecksum, W3Map};
 use flo_w3storage::W3Storage;
 use futures::future::{abortable, AbortHandle};

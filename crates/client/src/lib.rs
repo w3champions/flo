@@ -7,7 +7,6 @@ mod node;
 mod observer;
 mod ping;
 mod platform;
-mod types;
 mod version;
 
 use crate::message::{GetPort, Listener};

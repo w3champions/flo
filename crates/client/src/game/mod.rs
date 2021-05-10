@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::types::{GameInfo, PlayerInfo, Slot};
+use flo_types::game::{GameInfo, PlayerInfo, Slot};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

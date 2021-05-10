@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 flo-net = { path = "../net" }
+flo-w3gs = { path = "../w3gs" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 
 s2-grpc-utils = "0.2"

@@ -53,6 +53,7 @@ bytes = "1.0"
 dotenv = "0.15"
 flo-log-subscriber = { path = "../log-subscriber" }
 flo-controller = { path = "../controller" }
+flo-observer-consumer = { path = "../observer-consumer" }
 
 [build-dependencies]
 flo-constants = { path = "../constants" }

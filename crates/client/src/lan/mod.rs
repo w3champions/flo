@@ -13,11 +13,11 @@ use crate::game::LocalGameInfo;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
 use crate::platform::{CalcMapChecksum, Platform};
-use crate::types::{NodeGameStatus, SlotClientStatus};
 use crate::StartConfig;
 use flo_state::{
   async_trait, Actor, Addr, Context, Deferred, Handler, Message, RegistryRef, Service,
 };
+use flo_types::node::{NodeGameStatus, SlotClientStatus};
 
 pub struct Lan {
   platform: Addr<Platform>,

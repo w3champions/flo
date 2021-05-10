@@ -1,7 +1,7 @@
 use flo_w3gs::slot::{RacePref, SlotData, SlotInfo};
 
 use crate::error::*;
-use crate::types::{Slot, SlotStatus};
+use flo_types::game::{Slot, SlotStatus};
 
 #[derive(Debug)]
 pub struct LanSlotInfo {
@@ -66,8 +66,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
         player_slots
           .iter()
           .filter(|(_, slot)| slot.settings.team != 24)
-          .count()
-          + if has_stream_obs_slot { 1 } else { 0 },
+          .count(),
       )
       .build()
   };
@@ -105,8 +104,6 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     slot.race = RacePref::RANDOM;
     slot.color = 0;
     slot.team = 24;
-    slot.handicap = 100;
-    slot.download_status = 100;
   };
 
   let player_infos = player_slots

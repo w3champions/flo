@@ -46,17 +46,13 @@ impl GameInfo {
         name,
         _unknown_byte: 0,
         settings: GameSettings {
-          game_setting_flags: GameSettingFlags::SPEED_FAST
-            | GameSettingFlags::TERRAIN_DEFAULT
-            | GameSettingFlags::OBS_ENABLED
-            | GameSettingFlags::TEAMS_TOGETHER
-            | GameSettingFlags::TEAMS_FIXED,
+          game_setting_flags: GameSettingFlags::default(),
           unk_1: 0,
           map_width: 0,
           map_height: 0,
           map_checksum,
           map_path: CString::new(map_path).map_err(|_| Error::NullByteInString)?,
-          host_name: CString::new("W3Champions").unwrap(),
+          host_name: CString::new("FLO").unwrap(),
           map_sha1,
         },
         slots_total: 24,

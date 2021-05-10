@@ -1,11 +1,11 @@
 use crate::error::Result;
 use crate::game::LocalGameInfo;
 use crate::lan::game::{LanGameInfo, LobbyAction, LobbyHandler};
-use crate::types::{
-  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotClientStatus, SlotSettings,
-  SlotStatus,
-};
 use flo_lan::MdnsPublisher;
+use flo_types::game::{
+  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus,
+};
+use flo_types::node::SlotClientStatus;
 use flo_util::binary::CString;
 use flo_w3gs::constants::GameSettingFlags;
 use flo_w3gs::game::GameSettings;
@@ -69,7 +69,7 @@ pub async fn run_test_lobby(
       map_height,
       map_checksum: 0xFFFFFFFF,
       map_path: CString::new(map_path).map_err(|_| flo_lan::error::Error::NullByteInString)?,
-      host_name: CString::new("Flo").unwrap(),
+      host_name: CString::new("FLO").unwrap(),
       map_sha1,
     },
   };
