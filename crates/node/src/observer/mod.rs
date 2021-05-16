@@ -1,7 +1,6 @@
 use crate::error::Result;
 use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
-use flo_net::proto::flo_node::Game;
 use flo_observer::{record::GameRecord, KINESIS_CLIENT};
 use flo_w3gs::packet::Packet;
 use std::cell::Cell;
@@ -50,10 +49,6 @@ pub struct ObserverPublisherHandle {
 }
 
 impl ObserverPublisherHandle {
-  pub fn push_game(&self, game: Game) {
-    self.push_record(GameRecord::new_game_info(game))
-  }
-
   pub fn push_w3gs(&self, game_id: i32, packet: Packet) {
     self.push_record(GameRecord::new_w3gs(game_id, packet))
   }

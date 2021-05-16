@@ -31,17 +31,22 @@ impl SyncMap {
   pub fn time(&self) -> u32 {
     self.time
   }
+  pub fn tick(&self) -> u32 {
+    self.tick
+  }
 
   #[must_use]
-  pub fn clock(&mut self, time_increment: u16) -> Option<Vec<PlayerTimeout>> {
+  pub fn clock(&mut self, time_increment: u16) -> ClockResult {
     let timeout_players = self.check_timeout(time_increment);
-    if timeout_players.is_none() {
+    if let Some(v) = timeout_players {
+      ClockResult::Lag(v)
+    } else {
       self.tick += 1;
       self.time += time_increment as u32;
       let id = self.pending_slab.insert(Pending::new(self.tick, self.time));
       self.pending_tick.insert(self.tick, id);
+      ClockResult::Tick
     }
-    timeout_players
   }
 
   fn check_timeout(&mut self, time_increment: u16) -> Option<Vec<PlayerTimeout>> {
@@ -177,6 +182,11 @@ impl SyncMap {
     }
     std::mem::replace(&mut self.desync_buf, vec![]).into()
   }
+}
+
+pub enum ClockResult {
+  Lag(Vec<PlayerTimeout>),
+  Tick,
 }
 
 pub struct AckResult {
@@ -389,7 +399,7 @@ fn test_sync_map() {
   let mut offset = 0;
   for tick in 0..(SIZE + 1/* timeout uss 1 iteration */) {
     let timeout = map.clock(5);
-    if let Some(items) = timeout {
+    if let ClockResult::Lag(items) = timeout {
       assert_eq!(items.len(), 1);
       assert_eq!(items[0].player_id, drop_player);
       let desync = map.remove_player(drop_player);

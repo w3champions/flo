@@ -537,7 +537,7 @@ impl Connection {
                   let (meta, pkt) = frame.try_into_w3gs()?;
 
                   match pkt.type_id() {
-                    W3GSPacketTypeId::IncomingAction => {
+                    W3GSPacketTypeId::IncomingAction | W3GSPacketTypeId::IncomingAction2 => {
                       let time = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
                       session.tick += 1;
                       session.time += time as u32;

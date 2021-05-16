@@ -9,7 +9,7 @@ pub struct LanSlotInfo {
   pub slot_info: SlotInfo,
   pub my_slot: SlotData,
   pub player_infos: Vec<LanSlotPlayerInfo>,
-  pub has_stream_obs_slot: bool,
+  pub stream_ob_slot: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -49,13 +49,21 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     return Err(Error::SlotNotResolved);
   }
 
-  let has_stream_obs_slot = if let SelfPlayer::StreamObserver = self_player {
+  let stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
     if player_slots.len() > 23 {
       return Err(Error::NoVacantSlotForObserver);
     }
-    true
+    Some(player_slots.len())
   } else {
-    false
+    let has_obs_player = slots
+      .iter()
+      .find(|s| s.settings.status == SlotStatus::Occupied && s.settings.team == 24)
+      .is_some();
+    if has_obs_player {
+      None
+    } else {
+      Some(player_slots.len())
+    }
   };
 
   let mut slot_info = {
@@ -95,9 +103,8 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     }
   }
 
-  if has_stream_obs_slot {
+  if let Some(idx) = stream_ob_slot.clone() {
     use flo_w3gs::slot::SlotStatus;
-    let idx = player_slots.len();
     let slot = slot_info.slot_mut(idx).expect("always has 24 slots");
     slot.player_id = index_to_player_id(idx);
     slot.slot_status = SlotStatus::Occupied;
@@ -137,7 +144,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     my_slot: slot_info.slots()[my_slot_index].clone(),
     slot_info,
     player_infos,
-    has_stream_obs_slot,
+    stream_ob_slot,
   })
 }
 

@@ -15,6 +15,7 @@ use flo_w3gs::protocol::ping::{PingFromHost, PongToHost};
 use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMessage};
 
 use crate::error::*;
+use crate::lan::game::slot::index_to_player_id;
 use crate::lan::game::LanGameInfo;
 use crate::node::stream::NodeStreamSender;
 use flo_types::node::{NodeGameStatus, SlotClientStatus};
@@ -55,8 +56,14 @@ impl<'a> LobbyHandler<'a> {
 
   pub async fn run(&mut self) -> Result<LobbyAction> {
     let initial_game_state = { self.status_rx.borrow().clone() };
-    let mut join_state =
-      JoinPacketRecvState::new(initial_game_state, self.info.slot_info.player_infos.len());
+    let mut join_state = JoinPacketRecvState::new(initial_game_state, {
+      self.info.slot_info.player_infos.len()
+        + if self.info.slot_info.stream_ob_slot.is_some() {
+          1
+        } else {
+          0
+        }
+    });
     let mut ping_interval = interval_at(
       (Instant::now() + LOBBY_PING_INTERVAL).into(),
       LOBBY_PING_INTERVAL,
@@ -203,6 +210,23 @@ impl<'a> LobbyHandler<'a> {
           );
           player_profile_packets.push(Packet::simple(ProtoBufPayload::new(
             PlayerProfileMessage::new(info.slot_player_id, &info.name),
+          ))?);
+        }
+
+        if let Some(ob_slot) = self.info.slot_info.stream_ob_slot.clone() {
+          let ob_player_id = index_to_player_id(ob_slot);
+          tracing::debug!("-> PlayerInfo: stream ob: {}", ob_player_id);
+          player_info_packets.push(Packet::simple(PlayerInfo::new(ob_player_id, "FLO"))?);
+
+          tracing::debug!("-> PlayerSkinsMessage: stream ob: {}", ob_player_id);
+          player_skin_packets.push(Packet::simple(ProtoBufPayload::new(PlayerSkinsMessage {
+            player_id: ob_player_id as u32,
+            ..Default::default()
+          }))?);
+
+          tracing::debug!("-> PlayerProfileMessage: obs: {}", ob_player_id);
+          player_profile_packets.push(Packet::simple(ProtoBufPayload::new(
+            PlayerProfileMessage::new(ob_player_id, "FLO"),
           ))?);
         }
 

@@ -54,8 +54,6 @@ impl GameSession {
     obs: ObserverPublisherHandle,
     g_event_sender: GlobalEventSender,
   ) -> Result<Self> {
-    obs.push_game(game.clone());
-
     let scope = SpawnScope::new();
     let game_id = game.id;
     let (tx, mut rx) = GameEvent::channel(32);

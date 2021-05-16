@@ -4,7 +4,6 @@ use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
 const MAP: &str = r#"maps\W3Champions\(10)dustwallowkeys.w3m"#;
-const MAP_CHECKSUM: u32 = 460415972;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
@@ -296,7 +295,7 @@ fn get_map() -> Result<Map> {
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;
   let map = Map {
     sha1: checksum.sha1.to_vec(),
-    checksum: MAP_CHECKSUM,
+    checksum: checksum.xoro,
     name: "FLO_CLI".to_string(),
     description: map.description().to_string(),
     author: map.author().to_string(),

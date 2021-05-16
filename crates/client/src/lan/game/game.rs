@@ -179,7 +179,6 @@ impl<'a> GameHandler<'a> {
   async fn handle_incoming_w3gs(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
     match pkt.type_id() {
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
-      IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
       ChatFromHost::PACKET_TYPE_ID => {
         if !self.muted_players.is_empty() {
@@ -230,7 +229,6 @@ impl<'a> GameHandler<'a> {
         }
       }
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
-      IncomingAction::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
       PacketTypeId::DropReq => {}
       PacketTypeId::LeaveReq => {
@@ -260,9 +258,6 @@ impl<'a> GameHandler<'a> {
 
   fn handle_chat_command(&mut self, cmd: ChatCommand) -> bool {
     match cmd.raw() {
-      "ping" => {
-        // disable ping command
-      }
       "flo" => {
         let messages = vec![
           "-game: print game information.".to_string(),

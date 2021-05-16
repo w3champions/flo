@@ -6,7 +6,7 @@ use super::sync::SyncMap;
 use crate::error::*;
 use crate::game::host::clock::Tick;
 use crate::game::host::stream::{PlayerStream, PlayerStreamCmd, PlayerStreamHandle};
-use crate::game::host::sync::PlayerDesync;
+use crate::game::host::sync::{ClockResult, PlayerDesync};
 use crate::game::{
   AckError, GameEvent, GameEventSender, PlayerBanType, PlayerSlot, SlotClientStatus,
   SlotClientStatusUpdateSource,
@@ -16,7 +16,7 @@ use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::ping::{PingMsg, PingStream};
 use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
 use flo_util::chat::{parse_chat_command, ChatCommand};
-use flo_w3gs::action::{IncomingAction, OutgoingKeepAlive};
+use flo_w3gs::action::{IncomingAction, IncomingAction2, OutgoingKeepAlive};
 use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction, TimeSlot};
 use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::constants::LeaveReason;
@@ -36,6 +36,8 @@ use tokio::sync::{oneshot, watch, Notify};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
+
+const DISPATCH_ACTIONS_MTU: usize = 1350 - 8;
 
 #[derive(Debug)]
 pub enum Cmd {
@@ -917,7 +919,7 @@ impl State {
           player.send_w3gs(pkt).ok();
         }
       }
-      "ping" => {
+      "ping" if debug => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
           .map
@@ -956,7 +958,7 @@ impl State {
           lock.private_message(player_id, msg);
         }
       }
-      "step" => match cmd.parse_arguments::<(u16,)>().ok() {
+      "step" if debug => match cmd.parse_arguments::<(u16,)>().ok() {
         Some((step,)) => {
           action_tx.send(ActionMsg::SetStep(step)).await.ok();
         }
@@ -967,6 +969,9 @@ impl State {
             .private_message(player_id, "Invalid syntax, usage: !step 30");
         }
       },
+      "sync" if debug => {
+        tracing::debug!("{}", self.shared.lock().sync.debug_pending());
+      }
       _ => return Ok(false),
     };
     Ok(true)
@@ -1017,12 +1022,63 @@ impl Shared {
   }
 
   #[must_use]
-  pub fn dispatch_action_tick(&mut self, tick: Tick) -> Result<DispatchResult> {
+  pub fn dispatch_action_tick(&mut self, mut tick: Tick) -> Result<DispatchResult> {
     let time_increment_ms = tick.time_increment_ms;
-    if let Some(timeouts) = self.sync.clock(time_increment_ms) {
+    if let ClockResult::Lag(timeouts) = self.sync.clock(time_increment_ms) {
       let player_ids: Vec<_> = timeouts.into_iter().map(|t| t.player_id).collect();
       if self.handle_lag(player_ids)? {
         return Ok(DispatchResult::Lag(tick));
+      }
+    }
+
+    if tick.actions_bytes_len > DISPATCH_ACTIONS_MTU {
+      tracing::debug!(
+        "over-sized actions: tick = {}, size = {}, len = {}",
+        self.sync.tick(),
+        tick.actions_bytes_len,
+        tick.actions.len(),
+      );
+      let mut remaining_size = tick.actions_bytes_len;
+      while remaining_size > DISPATCH_ACTIONS_MTU {
+        let mut actions_size = 0;
+        let mut time_slot = TimeSlot {
+          time_increment_ms: 0,
+          actions: vec![],
+        };
+        while let Some((action_player_id, size)) =
+          tick.actions.first().map(|a| (a.player_id, a.byte_len()))
+        {
+          if size > DISPATCH_ACTIONS_MTU {
+            tick.actions.remove(0);
+            remaining_size -= size;
+            tracing::warn!(
+              game_id = self.game_id,
+              action_player_id,
+              "over-sized action dropped: {}",
+              size
+            );
+            break;
+          }
+
+          if actions_size + size > DISPATCH_ACTIONS_MTU {
+            tracing::debug!(
+              "fragment actions: tick = {}, size = {}, len = {}, remaining_size = {}",
+              self.sync.tick(),
+              actions_size,
+              time_slot.actions.len(),
+              remaining_size
+            );
+            let action_packet = Packet::with_payload(IncomingAction2(time_slot))?;
+            self.obs.push_w3gs(self.game_id, action_packet.clone());
+            self.broadcast(action_packet, broadcast::Everyone)?;
+            break;
+          }
+
+          let action = tick.actions.remove(0);
+          remaining_size -= size;
+          actions_size += size;
+          time_slot.actions.push(action);
+        }
       }
     }
     let action_packet = Packet::with_payload(IncomingAction(TimeSlot {

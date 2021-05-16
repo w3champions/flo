@@ -5,12 +5,12 @@ use crate::platform::{OpenMap, Platform};
 use flo_lan::MdnsPublisher;
 use flo_observer::record::GameRecordData;
 use flo_state::{Actor, Addr};
-use flo_types::game::{PlayerSource, Slot};
 use flo_util::binary::SockAddr;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
+use flo_w3gs::protocol::action::OutgoingKeepAlive;
 use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::game::{CountDownEnd, CountDownStart, PlayerLoaded};
 use flo_w3gs::protocol::join::{ReqJoin, SlotInfoJoin};
@@ -173,6 +173,11 @@ impl Worker {
     slots: &LanSlotInfo,
     stream: &mut W3GSStream,
   ) -> Result<()> {
+    enum Msg {
+      TimeSlot(Packet),
+      Checksum { tick: u32, checksum: u32 },
+    }
+
     match cmd {
       Cmd::PlayArchive { path } => {
         use flo_observer_fs::GameDataArchiveReader;
@@ -180,13 +185,14 @@ impl Worker {
 
         let (tx, mut rx) = channel(32);
         let ct = self.ct.clone();
+
         let mut handle = tokio::spawn(async move {
           let mut records = archive.records();
           while let Some(record) = records.next().await? {
             match record {
               GameRecordData::W3GS(pkt) => match pkt.type_id() {
-                PacketTypeId::IncomingAction => {
-                  if let Err(err) = tx.send(pkt).await {
+                PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
+                  if tx.send(Msg::TimeSlot(pkt)).await.is_err() {
                     break;
                   }
                 }
@@ -197,6 +203,11 @@ impl Worker {
               GameRecordData::StartLag(_) => {}
               GameRecordData::StopLag(_) => {}
               GameRecordData::GameEnd => {}
+              GameRecordData::TickChecksum { tick, checksum } => {
+                if tx.send(Msg::Checksum { tick, checksum }).await.is_err() {
+                  break;
+                }
+              }
               _ => {}
             }
           }
@@ -204,6 +215,8 @@ impl Worker {
         });
 
         let mut loaded = false;
+        let mut tick = 0;
+        let mut checksums = vec![];
 
         loop {
           tokio::select! {
@@ -213,13 +226,30 @@ impl Worker {
             res = &mut handle => {
               res??;
             }
-            Some(pkt) = rx.recv(), if loaded => {
-              stream.send(pkt).await?;
+            Some(msg) = rx.recv(), if loaded => {
+              match msg {
+                Msg::TimeSlot(pkt) => {
+                  stream.send(pkt).await?;
+                }
+                Msg::Checksum { tick, checksum } => {
+                  checksums.push(checksum);
+                }
+              }
             },
             res = stream.recv() => {
               if let Some(pkt) = res? {
                 match pkt.type_id() {
-                  PacketTypeId::OutgoingKeepAlive => {},
+                  PacketTypeId::OutgoingKeepAlive => {
+                    let payload: OutgoingKeepAlive = pkt.decode_simple()?;
+                    let checksum = payload.checksum;
+                    tick += 1;
+                    if !checksums.is_empty() {
+                      let expected = checksums.remove(0);
+                      if expected != checksum {
+                        tracing::warn!("tick = {}, {} != {}", tick, expected, checksum);
+                      }
+                    }
+                  },
                   PacketTypeId::ChatToHost => {
                     let payload: ChatToHost = pkt.decode_simple()?;
                     tracing::debug!("chat to host: {:?}", payload);
@@ -532,7 +562,7 @@ async fn test_reader() {
   use flo_observer_fs::GameDataArchiveReader;
   use flo_w3gs::action::IncomingAction;
   use flo_w3gs::constants::PacketTypeId;
-  let r = GameDataArchiveReader::open(flo_util::sample_path!("replay", "708030.gz"))
+  let r = GameDataArchiveReader::open(flo_util::sample_path!("replay", "703450.gz"))
     .await
     .unwrap();
   let records = r.records().collect_vec().await.unwrap();

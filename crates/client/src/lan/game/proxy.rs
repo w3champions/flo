@@ -2,6 +2,7 @@ use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::lan::game::game::GameHandler;
 use crate::lan::game::lobby::{LobbyAction, LobbyHandler};
+use crate::lan::game::slot::index_to_player_id;
 use crate::lan::game::LanGameInfo;
 use crate::lan::LanEvent;
 use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamSender};
@@ -402,9 +403,16 @@ impl State {
                 GameLoadedSelf::PACKET_TYPE_ID => {
                   tracing::debug!("self loaded: {}", my_slot_player_id);
 
+                  if let Some(idx) = self.info.slot_info.stream_ob_slot.clone() {
+                    stream.send(Packet::simple(PlayerLoaded {
+                      player_id: index_to_player_id(idx)
+                    })?).await?;
+                  }
+
                   stream.send(Packet::simple(PlayerLoaded {
                     player_id: my_slot_player_id
                   })?).await?;
+
                   node_stream.report_slot_status(SlotClientStatus::Loaded).await?;
                 },
                 LeaveReq::PACKET_TYPE_ID => {

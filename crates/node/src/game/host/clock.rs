@@ -83,6 +83,7 @@ impl ActionTickStream {
 pub struct Tick {
   pub time_increment_ms: u16,
   pub actions: Vec<PlayerAction>,
+  pub actions_bytes_len: usize,
 }
 
 impl Stream for ActionTickStream {
@@ -101,14 +102,17 @@ impl Stream for ActionTickStream {
 
     let now = self.delay.deadline();
 
-    let delay = (tokio::time::Instant::now() - now).as_millis() as u16;
+    let delay = (tokio::time::Instant::now().saturating_duration_since(now)).as_millis() as u16;
 
     let next = now + self.step_duration;
     self.delay.as_mut().reset(next);
 
+    let actions = std::mem::replace(&mut self.actions, vec![]);
+    let actions_bytes_len = actions.iter().map(|a| a.byte_len()).sum();
     let tick = Tick {
       time_increment_ms: self.step + delay,
-      actions: std::mem::replace(&mut self.actions, vec![]),
+      actions,
+      actions_bytes_len,
     };
     Poll::Ready(Some(tick))
   }
