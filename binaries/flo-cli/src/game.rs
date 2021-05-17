@@ -252,6 +252,8 @@ pub async fn create_4v4_game(players: Vec<i32>) -> Result<i32> {
 pub async fn create_rpg_game(players: Vec<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
 
+  assert_eq!(players.len(), 2);
+
   let nodes = client.list_nodes(()).await?.into_inner().nodes;
   let node_id = nodes.first().unwrap().id;
 
@@ -260,21 +262,50 @@ pub async fn create_rpg_game(players: Vec<i32>) -> Result<i32> {
   let game_name = format!("GAME-{:x}", rand::random::<u32>());
   tracing::info!("game name = {}", game_name);
 
-  let slots = players
-    .into_iter()
-    .enumerate()
-    .map(|(i, player_id)| CreateGameSlot {
-      player_id: Some(player_id),
-      settings: Some(SlotSettings {
-        team: (i % 1) as _,
-        color: i as i32,
-        computer: 2,
-        handicap: 100,
-        status: 2,
-        race: 0,
+  let slots = (0..24)
+    .map(|i| match i {
+      0 => CreateGameSlot {
+        player_id: Some(players[0]),
+        settings: Some(SlotSettings {
+          team: 0,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
         ..Default::default()
-      }),
-      ..Default::default()
+      },
+      4 => CreateGameSlot {
+        player_id: Some(players[1]),
+        settings: Some(SlotSettings {
+          team: 1,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      8..=9 => CreateGameSlot {
+        settings: Some(SlotSettings {
+          team: i - 8,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      _ => CreateGameSlot {
+        settings: Some(Default::default()),
+        ..Default::default()
+      },
     })
     .collect();
 
@@ -326,7 +357,7 @@ fn get_map() -> Result<Map> {
 }
 
 fn get_rpg_map() -> Result<Map> {
-  let path = "maps/Legion_TD_3.45e_W3C_V2.w3x";
+  let path = "maps/W3Champions/Custom/Legion_TD_6.4_Team_OZE_W3C.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
   let map = Map {

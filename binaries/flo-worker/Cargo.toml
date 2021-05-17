@@ -1,6 +1,6 @@
 [package]
 name = "flo-worker"
-version = "0.9.11"
+version = "0.10.0"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 

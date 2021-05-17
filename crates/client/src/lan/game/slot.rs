@@ -36,6 +36,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
   random_seed: i32,
   slots: &[Slot],
 ) -> Result<LanSlotInfo> {
+  const FLO_OB_SLOT: usize = 23;
   let self_player: SelfPlayer = self_player.into();
 
   let player_slots: Vec<(usize, &Slot)> = slots
@@ -53,7 +54,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     if player_slots.len() > 23 {
       return Err(Error::NoVacantSlotForObserver);
     }
-    Some(player_slots.len())
+    Some(FLO_OB_SLOT)
   } else {
     let has_obs_player = slots
       .iter()
@@ -62,7 +63,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     if has_obs_player {
       None
     } else {
-      Some(player_slots.len())
+      Some(FLO_OB_SLOT)
     }
   };
 
@@ -134,7 +135,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
       .into_iter()
       .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
       .ok_or_else(|| Error::SlotNotResolved)?,
-    SelfPlayer::StreamObserver => slots.len(),
+    SelfPlayer::StreamObserver => FLO_OB_SLOT,
   };
 
   let my_slot_player_id = index_to_player_id(my_slot_index);
