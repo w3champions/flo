@@ -1214,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.9.11"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1703,7 +1703,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.9.11"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "embed-resource",
