@@ -1,9 +1,10 @@
 use crate::trigger_string::TriggerStringRef;
 use flo_util::binary::*;
 use flo_util::dword_string::DwordString;
-use flo_util::BinDecode;
+use flo_util::{BinDecode, BinEncode};
+use std::cmp::Ordering;
 
-#[derive(Debug, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, BinEncode, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
 #[bin(enum_repr(u32))]
 pub enum MapFormatVersion {
   #[bin(value = 18)]
@@ -48,7 +49,7 @@ pub struct MapInfo {
   #[bin(condition = "version >= MapFormatVersion::TFT")]
   pub env: Option<GameEnv>,
   #[bin(condition = "version >= MapFormatVersion::TFT131")]
-  pub code_format: u32,
+  pub code_format: Option<u32>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]
   pub _unknown_reforged_1: Option<u32>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]

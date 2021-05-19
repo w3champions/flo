@@ -200,6 +200,11 @@ impl DecodeInputReceiver {
         }
       };
     } else {
+      if condition.is_some() {
+        return quote::quote_spanned! {
+          ty.span() => compile_error!("#[bin(condition = \"expr\"] can only be used with Option<T>");
+        };
+      }
       self.gen_decode_as_ty(mod_path, field, ty)
     }
   }
@@ -522,6 +527,11 @@ impl EncodeInputReceiver {
         }
       };
     } else {
+      if condition.is_some() {
+        return quote::quote_spanned! {
+          ty.span() => compile_error!("#[bin(condition = \"expr\"] can only be used with Option<T>");
+        };
+      }
       if let Some(MetaType { ty }) = bitflags {
         return self.gen_encode_as_ty(
           mod_path,

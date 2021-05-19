@@ -357,9 +357,10 @@ fn get_map() -> Result<Map> {
 }
 
 fn get_rpg_map() -> Result<Map> {
-  let path = "maps/W3Champions/Custom/Legion_TD_6.4_Team_OZE_W3C.w3x";
+  let path = "maps/W3Champions/Custom_Hero_Footies_v4.1b.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
+  dbg!(&map);
   let map = Map {
     sha1: checksum.sha1.to_vec(),
     checksum: checksum.xoro,

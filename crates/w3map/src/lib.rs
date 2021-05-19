@@ -196,6 +196,10 @@ impl W3Map {
       })
       .collect()
   }
+
+  pub fn flags(&self) -> MapFlags {
+    MapFlags::from_bits_truncate(self.info.flags)
+  }
 }
 
 pub(crate) fn open_archive<P: AsRef<Path>>(path: P) -> Result<stormlib::Archive> {
@@ -386,10 +390,11 @@ fn test_open_storage_with_checksum() {
   let (_map, checksum) =
     W3Map::open_storage_with_checksum(&storage, "maps\\(2)bootybay.w3m").unwrap();
 
+  dbg!(_map);
+
   assert_eq!(
     checksum,
     MapChecksum {
-      #[cfg(feature = "xoro")]
       xoro: 2039165270,
       crc32: 1444344839,
       sha1: [
@@ -398,4 +403,15 @@ fn test_open_storage_with_checksum() {
       file_size: 0,
     }
   )
+}
+
+#[test]
+fn test_open_map_special() {
+  use crate::constants::MapFlags;
+  let map = W3Map::open(flo_util::sample_path!(
+    "map",
+    "Footmen_Frenzy_v5.8.0_W3C.w3x"
+  ))
+  .unwrap();
+  dbg!(map.flags());
 }
