@@ -249,7 +249,7 @@ pub async fn create_4v4_game(players: Vec<i32>) -> Result<i32> {
   Ok(res.into_inner().game.unwrap().id)
 }
 
-pub async fn create_rpg_game(players: Vec<i32>) -> Result<i32> {
+pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
 
   assert_eq!(players.len(), 2);
@@ -302,6 +302,26 @@ pub async fn create_rpg_game(players: Vec<i32>) -> Result<i32> {
         }),
         ..Default::default()
       },
+      23 => {
+        if let Some(id) = ob {
+          CreateGameSlot {
+            player_id: Some(id),
+            settings: SlotSettings {
+              team: 24,
+              color: 0,
+              status: 2,
+              handicap: 100,
+              ..Default::default()
+            }
+            .into(),
+          }
+        } else {
+          CreateGameSlot {
+            settings: Some(Default::default()),
+            ..Default::default()
+          }
+        }
+      }
       _ => CreateGameSlot {
         settings: Some(Default::default()),
         ..Default::default()
@@ -357,7 +377,7 @@ fn get_map() -> Result<Map> {
 }
 
 fn get_rpg_map() -> Result<Map> {
-  let path = "maps/W3Champions/Custom_Hero_Footies_v4.1b.w3x";
+  let path = "maps/W3Champions/xCHFv4.1c_Beta2.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
   dbg!(&map);

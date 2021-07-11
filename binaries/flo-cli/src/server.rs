@@ -32,6 +32,8 @@ pub enum Command {
   },
   RunRPGGame {
     players: Vec<i32>,
+    #[structopt(long)]
+    ob: Option<i32>,
   },
   StartGame {
     id: i32,
@@ -100,8 +102,8 @@ impl Command {
           .into_inner();
         tracing::info!("start game: {:?}", res);
       }
-      Command::RunRPGGame { players } => {
-        let game_id = create_rpg_game(players).await?;
+      Command::RunRPGGame { players, ob } => {
+        let game_id = create_rpg_game(players, ob).await?;
         tracing::info!(game_id);
         let res = client
           .start_game_as_bot(StartGameAsBotRequest { game_id })

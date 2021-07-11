@@ -179,3 +179,19 @@ fn test_parse_custom() {
   // assert_eq!(info.num_forces, 1);
   dbg!("{:#?}", info);
 }
+
+#[test]
+fn test_fixed_player() {
+  let mut map = crate::open_archive(flo_util::sample_path!(
+    "map",
+    "fixed_player.w3m"
+  ))
+  .unwrap();
+  let bytes = map.open_file("war3map.w3i").unwrap().read_all().unwrap();
+  let mut buf = bytes.as_slice();
+  let info = MapInfo::decode(&mut buf).unwrap();
+  // assert_eq!(info.version, MapFormatVersion::TFT);
+  // assert_eq!(info.num_players, 0);
+  // assert_eq!(info.num_forces, 1);
+  dbg!("{:#?}", info);
+}

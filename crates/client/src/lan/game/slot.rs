@@ -1,4 +1,5 @@
 use flo_w3gs::slot::{RacePref, SlotData, SlotInfo};
+use flo_w3map::MapInfo;
 
 use crate::error::*;
 use flo_types::game::{Slot, SlotStatus};
@@ -50,7 +51,7 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
     return Err(Error::SlotNotResolved);
   }
 
-  let stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
+  let mut stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
     if player_slots.len() > 23 {
       return Err(Error::NoVacantSlotForObserver);
     }
@@ -107,11 +108,17 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
   if let Some(idx) = stream_ob_slot.clone() {
     use flo_w3gs::slot::SlotStatus;
     let slot = slot_info.slot_mut(idx).expect("always has 24 slots");
-    slot.player_id = index_to_player_id(idx);
-    slot.slot_status = SlotStatus::Occupied;
-    slot.race = RacePref::RANDOM;
-    slot.color = 0;
-    slot.team = 24;
+
+    if slot.slot_status != SlotStatus::Open {
+      // do not add FLO observer if the slot status is not Open
+      stream_ob_slot.take();
+    } else {
+      slot.player_id = index_to_player_id(idx);
+      slot.slot_status = SlotStatus::Occupied;
+      slot.race = RacePref::RANDOM;
+      slot.color = 0;
+      slot.team = 24;
+    }
   };
 
   let player_infos = player_slots
@@ -135,7 +142,12 @@ pub fn build_player_slot_info<S: Into<SelfPlayer>>(
       .into_iter()
       .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
       .ok_or_else(|| Error::SlotNotResolved)?,
-    SelfPlayer::StreamObserver => FLO_OB_SLOT,
+    SelfPlayer::StreamObserver => slot_info
+      .slots()
+      .iter()
+      .rev()
+      .position(|s| s.team == 24)
+      .ok_or_else(|| Error::SlotNotResolved)?,
   };
 
   let my_slot_player_id = index_to_player_id(my_slot_index);

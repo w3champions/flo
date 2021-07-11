@@ -14,7 +14,7 @@ use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::leave::LeaveReq;
 use flo_w3gs::net::W3GSStream;
 use flo_w3gs::packet::*;
-use flo_w3gs::protocol::action::{IncomingAction, OutgoingAction, OutgoingKeepAlive};
+use flo_w3gs::protocol::action::{OutgoingAction, OutgoingKeepAlive};
 use flo_w3gs::protocol::chat::{ChatMessage, ChatToHost};
 use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
