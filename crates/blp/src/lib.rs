@@ -20,6 +20,12 @@ pub struct BLPImage {
   image: ImageBuffer<Rgba<u8>, Vec<u8>>,
 }
 
+impl BLPImage {
+  pub fn buffer(&self) -> &ImageBuffer<Rgba<u8>, Vec<u8>> {
+    &self.image
+  }
+}
+
 impl std::fmt::Debug for BLPImage {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(

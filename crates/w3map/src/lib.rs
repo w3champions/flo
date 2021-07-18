@@ -32,7 +32,7 @@ pub struct W3Map {
   suggested_players: String,
   file_size: usize,
   info: MapInfo,
-  image: BLPImage,
+  image: Option<BLPImage>,
   minimap_icons: MinimapIcons,
   trigger_strings: TriggerStringMap,
 }
@@ -88,7 +88,11 @@ impl W3Map {
   }
 
   pub fn render_preview_jpeg(&self) -> Vec<u8> {
-    let mut bg = self.image.clone();
+    let mut bg = if let Some(ref image) = self.image {
+      image.buffer().clone()
+    } else {
+      return vec![];
+    };
     for icon in self.minimap_icons.iter() {
       icon.draw_into(&mut bg);
     }
@@ -100,7 +104,11 @@ impl W3Map {
   }
 
   pub fn render_preview_png(&self) -> Vec<u8> {
-    let mut bg = self.image.clone();
+    let mut bg = if let Some(ref image) = self.image {
+      image.buffer().clone()
+    } else {
+      return vec![];
+    };
     for icon in self.minimap_icons.iter() {
       icon.draw_into(&mut bg);
     }
@@ -228,10 +236,11 @@ impl W3Map {
   }
 
   fn load_info(mut archive: Archive) -> Result<Self> {
-    let trigger_strings = match archive.read_file_all("war3map.wts") {
-      Ok(bytes) => {
+    let trigger_strings = match archive.read_file_all_opt("war3map.wts") {
+      Ok(Some(bytes)) => {
         TriggerStringMap::decode(&mut bytes.as_slice()).map_err(Error::ReadTriggerStrings)?
       }
+      Ok(None) => return Err(Error::StorageFileNotFound("war3map.wts".to_string())),
       Err(err) => {
         if Archive::is_err_file_not_found(&err) {
           TriggerStringMap::empty()
@@ -242,7 +251,9 @@ impl W3Map {
     };
 
     let info: MapInfo = {
-      let bytes = archive.read_file_all("war3map.w3i")?;
+      let bytes = archive
+        .read_file_all_opt("war3map.w3i")?
+        .ok_or_else(|| Error::StorageFileNotFound("war3map.w3i".to_string()))?;
       BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadInfo)?
     };
 
@@ -266,11 +277,15 @@ impl W3Map {
       file_size: archive.get_size()?,
       info,
       image: {
-        let bytes = archive.read_file_all("war3mapMap.blp")?;
-        BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadImage)?
+        archive
+          .read_file_all_opt("war3mapMap.blp")?
+          .map(|bytes| BLPImage::decode(&mut bytes.as_slice()).map_err(Error::ReadImage))
+          .transpose()?
       },
       minimap_icons: {
-        let bytes = archive.read_file_all("war3map.mmp")?;
+        let bytes = archive
+          .read_file_all_opt("war3map.mmp")?
+          .ok_or_else(|| Error::StorageFileNotFound("war3map.mmp".to_string()))?;
         BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadMinimapIcons)?
       },
       trigger_strings,
@@ -408,10 +423,6 @@ fn test_open_storage_with_checksum() {
 #[test]
 fn test_open_map_special() {
   use crate::constants::MapFlags;
-  let map = W3Map::open(flo_util::sample_path!(
-    "map",
-    "Footmen_Frenzy_v5.8.0_W3C.w3x"
-  ))
-  .unwrap();
+  let map = W3Map::open(flo_util::sample_path!("map", "W3CLTWR5.8aP.w3x")).unwrap();
   dbg!(map.flags());
 }

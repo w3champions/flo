@@ -150,3 +150,10 @@ fn test_inspect_time() {
   }
   println!("t = {}, n = {}, map = {:?}", t, n, map);
 }
+
+#[test]
+fn test_inspect_info() {
+  let path = r#"C:\Users\fluxx\OneDrive\Documents\Warcraft III\BattleNet\298266\Replays\r2.w3g"#;
+  let (info, _) = W3Replay::inspect(&path).unwrap();
+  dbg!(info);
+}
