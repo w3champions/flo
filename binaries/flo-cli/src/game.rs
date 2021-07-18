@@ -277,7 +277,7 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
         }),
         ..Default::default()
       },
-      4 => CreateGameSlot {
+      1 => CreateGameSlot {
         player_id: Some(players[1]),
         settings: Some(SlotSettings {
           team: 1,
@@ -290,9 +290,21 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
         }),
         ..Default::default()
       },
-      8..=9 => CreateGameSlot {
+      8 | 11 | 12 | 13 => CreateGameSlot {
         settings: Some(SlotSettings {
-          team: i - 8,
+          team: 0,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      9 | 10 | 14 | 15 => CreateGameSlot {
+        settings: Some(SlotSettings {
+          team: 1,
           color: i as i32,
           computer: 2,
           handicap: 100,
@@ -377,7 +389,7 @@ fn get_map() -> Result<Map> {
 }
 
 fn get_rpg_map() -> Result<Map> {
-  let path = "maps/W3Champions/xCHFv4.1c_Beta2.w3x";
+  let path = "maps/W3Champions/Legion_TD_7.0b_Team_OZE_W3C.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
   dbg!(&map);
