@@ -16,3 +16,5 @@ flo.toml
 
 # Config files
 *.json
+
+/.idea
