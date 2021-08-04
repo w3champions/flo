@@ -46,7 +46,9 @@ stormlib-sys = { git = "https://github.com/wc3tools/stormlib-rs.git" }
 casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
-s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
+# for some reason branch = "0.2" has commit reverting update prost to 0.7 (maybe for usage elsewhere)
+# this revision is exactly one what is working in lock file (suggestion: create new branch for flo on this project)
+s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", rev = "2fbaf10796f7a25ae458b7ec5f0d446efe2ba673" }
 #flo-state = { path = "../flo-state" }
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 async-dnssd = { git = "https://github.com/fluxxu/rust-async-dnssd.git" }

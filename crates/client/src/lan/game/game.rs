@@ -725,9 +725,11 @@ impl<'a> GameHandler<'a> {
   fn send_stats_to_self(&self, player_id: u8, targets: Vec<(String, u32)>, solo: bool) {
     let mut tx = self.w3gs_tx.clone();
     tokio::spawn(async move {
-      for (name, race) in &targets {
-        if let Ok(result) = get_stats(name.as_str(), *race, solo) {
-          send_chats_to_self(&mut tx, player_id, vec![result]).await
+      for (name, race) in targets {
+        if let Ok(Ok(target_stats_results)) =
+          tokio::task::spawn_blocking(move || get_stats(name.as_str(), race, solo)).await
+        {
+          send_chats_to_self(&mut tx, player_id, vec![target_stats_results]).await
         }
       }
     });
