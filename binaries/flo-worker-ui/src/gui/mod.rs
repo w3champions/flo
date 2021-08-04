@@ -8,7 +8,7 @@ use image::ImageFormat;
 
 use iced::{
   button, text_input, Application, Button, Column, Command, Container, Element,
-  HorizontalAlignment, Length, Row, Settings, Text,
+  HorizontalAlignment, Length, Row, Settings, Text, Clipboard
 };
 
 static WINDOW_ICON: &[u8] = include_bytes!("../../resources/flo.ico");
@@ -103,7 +103,7 @@ impl Application for Flo {
   fn scale_factor(&self) -> f64 {
     1.0
   }
-  fn update(&mut self, message: Message) -> Command<Message> {
+  fn update(&mut self, message: Message, _clipboard: &mut Clipboard) -> Command<Message> {
     match update::handle_message(self, message) {
       Ok(x) => x,
       Err(e) => Command::perform(async move { e.to_string() }, Message::Error),
