@@ -3,7 +3,7 @@ use image::{GenericImage, GenericImageView};
 use image::{ImageBuffer, Rgba};
 use lazy_static::lazy_static;
 
-#[derive(Debug, BinDecode)]
+#[derive(Debug, BinDecode, Default)]
 pub struct MinimapIcons {
   #[bin(eq = 0)]
   version: i32,

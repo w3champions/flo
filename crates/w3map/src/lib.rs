@@ -283,10 +283,12 @@ impl W3Map {
           .transpose()?
       },
       minimap_icons: {
-        let bytes = archive
-          .read_file_all_opt("war3map.mmp")?
-          .ok_or_else(|| Error::StorageFileNotFound("war3map.mmp".to_string()))?;
-        BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadMinimapIcons)?
+        let bytes = archive.read_file_all_opt("war3map.mmp")?;
+        if let Some(bytes) = bytes {
+          BinDecode::decode(&mut bytes.as_slice()).map_err(Error::ReadMinimapIcons)?
+        } else {
+          Default::default()
+        }
       },
       trigger_strings,
     })
@@ -423,6 +425,10 @@ fn test_open_storage_with_checksum() {
 #[test]
 fn test_open_map_special() {
   use crate::constants::MapFlags;
-  let map = W3Map::open(flo_util::sample_path!("map", "W3CLTWR5.8aP.w3x")).unwrap();
+  let map = W3Map::open(flo_util::sample_path!(
+    "map",
+    "Frostcraft Classic v2.00a_wc3_champions.w3x"
+  ))
+  .unwrap();
   dbg!(map.flags());
 }
