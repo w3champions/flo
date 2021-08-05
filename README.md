@@ -33,5 +33,6 @@ cargo build -p flo-node-service --release
 ## Credits
 
 - @nielsAD -- [GoWarcraft3](https://github.com/nielsAD/gowarcraft3)
+- Fingon -- Help in game mechanics and algorithms
 - @Josko -- [Aura Bot](https://github.com/Josko/aura-bot)
 - Varlock -- the author of the GHost++ bot
