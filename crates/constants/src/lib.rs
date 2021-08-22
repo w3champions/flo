@@ -10,6 +10,7 @@ pub const CLIENT_ORIGINS: &[&str] = &[
   "http://localhost:3000",
   "https://w3flo.com",
   "https://asia.w3flo.com",
+  "https://w3champions.com",
 ];
 pub const NODE_PORT: u16 = 3552;
 pub const NODE_ECHO_PORT: u16 = 3552;
