@@ -1,7 +1,7 @@
 on:
   push:
-    # tags:
-    #   - "v*"
+    tags:
+      - "v*"
 
 name: Release
 
@@ -14,9 +14,12 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v4.9
       - name: Set outputs
         id: vars
-        run: echo "::set-output name=release_file_name::flo-release-${GITHUB_REF#refs/heads/}-${{ runner.os }}.zip"
+        run: echo "::set-output name=release_file_name::flo-release-${{ steps.branch-name.outputs.tag }}-${{ runner.os }}.zip"
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
