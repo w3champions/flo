@@ -1,0 +1,69 @@
+on:
+  push:
+    tags:
+      - "v*"
+
+name: Release
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v4.9
+      - name: Set outputs
+        id: vars
+        run: echo "::set-output name=release_file_name::flo-release-${{ steps.branch-name.outputs.tag }}-${{ runner.os }}.zip"
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p flo-worker -p flo-ping
+
+      - name: Archive Release
+        uses: thedoctor0/zip-release@master
+        with:
+          type: 'zip'
+          filename: ${{ steps.vars.outputs.release_file_name }}
+          directory: target/release
+          exclusions: '.* build deps examples incremental *.pdb *.d *.rlib'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: flo-${{ matrix.os }}
+          path: target/release/*.zip
+          retention-days: 1
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
+      - name: Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: true
+          automatic_release_tag: latest
+          files: |
+            flo-windows-latest/*.zip
+            flo-macos-latest/*.zip
+            flo-ubuntu-latest/*.zip
