@@ -1,0 +1,44 @@
+on:
+  push:
+    tags:
+      - "v*"
+
+name: Release
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Build flo-ping
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --release -p flo-ping
+
+      - name: Archive Release
+        uses: thedoctor0/zip-release@master
+        with:
+          type: 'zip'
+          filename: 'flo-release-${{ GITHUB_REF##*/ }}-${{ RUNNER_OS }}.zip'
+          directory: target/release
+
+      - name: Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          files: |
+            target/release/*
