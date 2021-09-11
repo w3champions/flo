@@ -13,8 +13,9 @@ flo-observer-fs = { path = "../observer-fs" }
 flo-types = { path = "../types" }
 flo-state = "1.0"
 flo-grpc = { path = "../../deps/flo-grpc" }
-rusoto_core = "0.46.0"
-rusoto_kinesis = "0.46.0"
+rusoto_core = "0.47.0"
+rusoto_kinesis = "0.47.0"
+rusoto_s3 = "0.47.0"
 thiserror = "1.0"
 tokio = { version = "1.5.0", features = ["fs", "macros", "time", "rt-multi-thread"] }
 redis = { version = "0.20.0", features = ["tokio-comp", "connection-manager"] }
@@ -25,6 +26,9 @@ bytes = "1.0"
 flate2 = "1.0"
 tracing = "0.1"
 backoff = "0.3"
+md5 = "0.7.0"
+base64 = "0.13.0"
+futures = "0.3"
 
 [dev-dependencies]
 dotenv = "0.15"

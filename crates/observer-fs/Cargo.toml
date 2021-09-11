@@ -8,8 +8,8 @@ edition = "2018"
 flo-observer = { path = "../observer" }
 flo-util = { path = "../util" }
 
-rusoto_core = "0.46.0"
-rusoto_kinesis = "0.46.0"
+rusoto_core = "0.47.0"
+rusoto_kinesis = "0.47.0"
 thiserror = "1.0"
 tokio = { version = "1.5.0", features = ["fs", "macros", "time", "rt-multi-thread"] }
 redis = { version = "0.20.0", features = ["tokio-comp", "connection-manager"] }

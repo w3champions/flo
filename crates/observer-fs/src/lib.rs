@@ -16,7 +16,8 @@ const MAX_CHUNK_SIZE: usize = 16 * 1024;
 const CHUNK_PREFIX: &'static str = "chunk_";
 const CHUNK_TEMP_FILENAME: &'static str = "_chunk";
 const STATE_TEMP_FILENAME: &'static str = "_state";
-const ARCHIVE_FILE_NAME: &'static str = "archive.gz";
+const ARCHIVE_TEMP_FILENAME: &'static str = "_archive";
+const ARCHIVE_FILENAME: &'static str = "archive.gz";
 static DATA_FOLDER: Lazy<PathBuf> = Lazy::new(|| {
   let path = PathBuf::from("./data");
   std::fs::create_dir_all(&path).expect("create data folder");
@@ -34,6 +35,15 @@ pub struct GameDataWriter {
 }
 
 impl GameDataWriter {
+  pub const ARCHIVE_FILENAME: &'static str = ARCHIVE_FILENAME;
+  pub fn data_folder() -> &'static Path {
+    DATA_FOLDER.as_path()
+  }
+
+  pub fn data_dir(&self) -> &Path {
+    self.dir.as_path()
+  }
+
   pub async fn create_or_recover(game_id: i32) -> Result<Self> {
     let dir = DATA_FOLDER.join(game_id.to_string());
     let path = dir.join(CHUNK_TEMP_FILENAME);
@@ -91,21 +101,28 @@ impl GameDataWriter {
     Ok(r)
   }
 
-  pub async fn build_archive(&mut self, remove_chunks: bool) -> Result<()> {
+  pub async fn build_archive(&mut self, remove_chunks: bool) -> Result<PathBuf> {
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::prelude::*;
     self.flush_chunk().await?;
+    let archive_temp_file_path = self.dir.join(ARCHIVE_TEMP_FILENAME);
+    let archive_file_path = self.dir.join(ARCHIVE_FILENAME);
     tokio::task::block_in_place(|| {
-      let file = std::fs::File::create(self.dir.join(ARCHIVE_FILE_NAME))?;
-      let mut encoder = GzEncoder::new(file, Compression::default());
-      encoder.write_all(&FileHeader::new(self.game_id).bytes())?;
-      for i in 0..self.chunk_id {
-        let mut chunk_file = std::fs::File::open(self.dir.join(format!("{}{}", CHUNK_PREFIX, i)))?;
-        chunk_file.seek(SeekFrom::Start(4))?;
-        std::io::copy(&mut chunk_file, &mut encoder)?;
+      {
+        let file = std::fs::File::create(&archive_temp_file_path)?;
+        let mut encoder = GzEncoder::new(file, Compression::default());
+        encoder.write_all(&FileHeader::new(self.game_id).bytes())?;
+        for i in 0..self.chunk_id {
+          let mut chunk_file =
+            std::fs::File::open(self.dir.join(format!("{}{}", CHUNK_PREFIX, i)))?;
+          chunk_file.seek(SeekFrom::Start(4))?;
+          std::io::copy(&mut chunk_file, &mut encoder)?;
+        }
+        encoder.flush()?;
       }
-      encoder.flush()?;
+
+      std::fs::rename(archive_temp_file_path, &archive_file_path)?;
 
       if remove_chunks {
         for i in 0..self.chunk_id {
@@ -113,7 +130,7 @@ impl GameDataWriter {
         }
         std::fs::remove_file(self.dir.join(CHUNK_TEMP_FILENAME)).ok();
       }
-      Ok(())
+      Ok(archive_file_path)
     })
   }
 
@@ -388,7 +405,7 @@ async fn test_fs() {
   writer.build_archive(false).await.unwrap();
 
   fs::rename(
-    writer.dir.join(ARCHIVE_FILE_NAME),
+    writer.dir.join(ARCHIVE_FILENAME),
     writer.dir.join("_archive.gz"),
   )
   .await
@@ -400,7 +417,7 @@ async fn test_fs() {
 
   assert_eq!(
     fs::read(writer.dir.join("_archive.gz")).await.unwrap(),
-    fs::read(writer.dir.join(ARCHIVE_FILE_NAME)).await.unwrap(),
+    fs::read(writer.dir.join(ARCHIVE_FILENAME)).await.unwrap(),
   );
 
   // read
@@ -420,7 +437,7 @@ async fn test_fs() {
   assert_eq!(records.len(), N);
   validate_records(records);
 
-  let r = GameDataArchiveReader::open(writer.dir.join(ARCHIVE_FILE_NAME))
+  let r = GameDataArchiveReader::open(writer.dir.join(ARCHIVE_FILENAME))
     .await
     .unwrap();
   let records = r.records().collect_vec().await.unwrap();
