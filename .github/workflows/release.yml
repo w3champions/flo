@@ -14,10 +14,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: nelonoel/branch-name@v1.0.1
       - name: Set outputs
         id: vars
-        run: echo "::set-output name=release_file_name::flo-release-${BRANCH_NAME}-${{ runner.os }}.zip"
+        run: echo "::set-output name=release_file_name::flo-release-${GITHUB_REF#refs/heads/}-${{ runner.os }}.zip"
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
