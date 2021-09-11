@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Set outputs
         id: vars
-        run: echo ::set-output name=release_file_name::flo-release-${GITHUB_REF##*/}-${{ runner.os }}.zip
+        run: echo "::set-output name=release_file_name::flo-release-${GITHUB_REF##*/}-${{ runner.os }}.zip"
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
