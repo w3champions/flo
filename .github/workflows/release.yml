@@ -11,9 +11,11 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    env:
-      FLO_RELEASE_FILE_NAME: "flo-release-${GITHUB_REF##*/}-${{ runner.os }}.zip"
+
     steps:
+      - name: Set outputs
+        id: vars
+        run: echo ::set-output name=release_file_name::flo-release-${GITHUB_REF##*/}-${{ runner.os }}.zip
       - name: Checkout sources
         uses: actions/checkout@v2
         with:
@@ -36,7 +38,7 @@ jobs:
         uses: thedoctor0/zip-release@master
         with:
           type: 'zip'
-          filename: ${{ env.FLO_RELEASE_FILE_NAME }}
+          filename: ${{ steps.vars.outputs.release_file_name }}
           directory: target/release
 
       - name: Release
