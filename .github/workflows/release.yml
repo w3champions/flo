@@ -32,11 +32,22 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Build
+      - name: Build tools
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p flo-worker -p flo-ping
+          args: --release -p flo-ping
+
+      - name: Set flo-worker env
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          echo "BONJOUR_SDK_HOME=${{ github.workspace }}\deps\bonjour-sdk-windows" >> $env:GITHUB_ENV
+      - name: Build flo-worker
+        uses: actions-rs/cargo@v1
+        if: ${{ runner.os == 'Windows' || runner.os == 'macOS' }}
+        with:
+          command: build
+          args: --release -p flo-worker
 
       - name: Archive Release
         uses: thedoctor0/zip-release@master
@@ -62,7 +73,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: true
-          automatic_release_tag: latest
           files: |
             flo-windows-latest/*.zip
             flo-macos-latest/*.zip
