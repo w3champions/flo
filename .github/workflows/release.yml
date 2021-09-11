@@ -12,7 +12,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     env:
-      FLO_RELEASE_FILE_NAME: "flo-release-${GITHUB_REF##*/}-${{ env.RUNNER_OS }}.zip"
+      FLO_RELEASE_FILE_NAME: "flo-release-${GITHUB_REF##*/}-${{ RUNNER_OS }}.zip"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
