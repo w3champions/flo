@@ -10,7 +10,10 @@ name: Release
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Set outputs
@@ -42,11 +45,24 @@ jobs:
           directory: target/release
           exclusions: '.* build deps examples incremental *.pdb *.d *.rlib'
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: flo-${{ matrix.os }}
+          path: target/release/*.zip
+          retention-days: 1
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v2
       - name: Release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: false
-          automatic_release_tag: test
+          prerelease: true
+          automatic_release_tag: latest
           files: |
-            target/release/*.zip
+            flo-windows-latest/*.zip
+            flo-macos-latest/*.zip
+            flo-ubuntu-latest/*.zip
