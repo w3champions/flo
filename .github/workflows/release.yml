@@ -40,11 +40,13 @@ jobs:
           type: 'zip'
           filename: ${{ steps.vars.outputs.release_file_name }}
           directory: target/release
+          exclusions: '.* build deps examples incremental *.pdb *.d *.rlib'
 
       - name: Release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
+          automatic_release_tag: test
           files: |
-            target/release/*
+            target/release/*.zip
