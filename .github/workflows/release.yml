@@ -31,7 +31,7 @@ jobs:
       - name: Build flo-ping
         uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: build
           args: --release -p flo-ping
 
       - name: Archive Release
