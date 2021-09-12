@@ -67,12 +67,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Get branch name
+        id: branch-name
+        uses: tj-actions/branch-names@v4.9
       - uses: actions/download-artifact@v2
       - name: Release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: true
+          automatic_release_tag: ${{ steps.branch-name.outputs.tag }}
           files: |
             flo-windows-latest/*.zip
             flo-macos-latest/*.zip
