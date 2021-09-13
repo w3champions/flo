@@ -50,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: fluxxu/flo-controller:${{ github.sha }}
+          tags: fluxxu/flo-controller:${{ github.sha }},fluxxu/flo-controller:latest
           file: './build/controller.Dockerfile'
           context: './build'
 
@@ -58,7 +58,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: fluxxu/flo-node:${{ github.sha }}
+          tags: fluxxu/flo-node:${{ github.sha }},fluxxu/flo-node:latest
           file: './build/node.Dockerfile'
           context: './build'
 
@@ -66,6 +66,6 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: fluxxu/flo-observer:${{ github.sha }}
+          tags: fluxxu/flo-observer:${{ github.sha }},fluxxu/flo-observer:latest
           file: './build/observer.Dockerfile'
           context: './build'
