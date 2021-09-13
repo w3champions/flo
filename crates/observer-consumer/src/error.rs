@@ -27,6 +27,8 @@ pub enum Error {
   Io(#[from] std::io::Error),
   #[error("actor: {0}")]
   Actor(#[from] flo_state::error::Error),
+  #[error("invalid S3 credentials: {0}")]
+  InvalidS3Credentials(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

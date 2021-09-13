@@ -1,8 +1,13 @@
 mod cache;
 mod consumer;
 mod env;
+mod upload;
+
 pub mod error;
 pub use flo_observer_fs as fs;
+use fs::GameDataWriter;
+use futures::TryFutureExt;
+use upload::{Uploader, UploaderHandle};
 
 use crate::cache::Cache;
 use crate::consumer::StartShardConsumer;
@@ -12,7 +17,7 @@ use error::Result;
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
 use flo_state::{async_trait, Actor, Context, Handler, Message, Owner};
 use rusoto_kinesis::Kinesis;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 pub struct FloObserver;
 
@@ -27,6 +32,7 @@ impl FloObserver {
 #[derive(Debug)]
 pub(crate) struct ShardsMgr {
   cache: Cache,
+  uploader_handle: UploaderHandle,
   shard_ids: Vec<String>,
   shards: BTreeMap<String, Owner<ShardConsumer>>,
 }
@@ -36,6 +42,8 @@ impl ShardsMgr {
     use rusoto_kinesis::ListShardsInput;
 
     let cache = Cache::connect().await?;
+    let (uploader, uploader_handle) = Uploader::new(GameDataWriter::data_folder().to_owned())?;
+    tokio::spawn(uploader.serve());
 
     let shards = KINESIS_CLIENT
       .list_shards(ListShardsInput {
@@ -54,6 +62,7 @@ impl ShardsMgr {
 
     Ok(Self {
       cache,
+      uploader_handle,
       shard_ids,
       shards: Default::default(),
     })
@@ -67,7 +76,13 @@ impl ShardsMgr {
       .iter()
       .cloned()
       .map(|id| {
-        let actor = ShardConsumer::new(id.clone(), addr.clone(), self.cache.clone()).start();
+        let actor = ShardConsumer::new(
+          id.clone(),
+          addr.clone(),
+          self.cache.clone(),
+          self.uploader_handle.clone(),
+        )
+        .start();
         (id, actor)
       })
       .collect();

@@ -1,6 +1,7 @@
 use crate::cache::{Cache, CacheGameState};
 use crate::error::{Error, Result};
 use crate::fs::GameDataWriter;
+use crate::upload::UploaderHandle;
 use crate::{RemoveShard, ShardsMgr};
 use backoff::backoff::Backoff;
 use flo_observer::record::{GameRecordData, KMSRecord};
@@ -17,6 +18,7 @@ pub struct ShardConsumer {
   shard_id: String,
   parent: Addr<ShardsMgr>,
   cache: Cache,
+  uploader: UploaderHandle,
   games: BTreeMap<i32, GameEntry>,
   lost_games: BTreeSet<i32>,
   span: Span,
@@ -24,12 +26,18 @@ pub struct ShardConsumer {
 }
 
 impl ShardConsumer {
-  pub(crate) fn new(shard_id: String, parent: Addr<ShardsMgr>, cache: Cache) -> Self {
+  pub(crate) fn new(
+    shard_id: String,
+    parent: Addr<ShardsMgr>,
+    cache: Cache,
+    uploader: UploaderHandle,
+  ) -> Self {
     let span = tracing::info_span!("shard_consumer", shard_id = shard_id.as_str());
     Self {
       shard_id,
       parent,
       cache,
+      uploader,
       games: BTreeMap::new(),
       lost_games: BTreeSet::new(),
       span,
@@ -76,8 +84,14 @@ impl ShardConsumer {
       });
 
       for id in removed {
-        self.games.remove(&id);
+        let game = self.games.remove(&id);
         self.cache.remove_game(id).await?;
+        if let Some(game) = game {
+          self
+            .uploader
+            .add_folder(game.writer.data_dir().to_owned())
+            .await;
+        }
       }
     }
     let pause_time = Instant::now() - now;
