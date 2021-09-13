@@ -4,9 +4,7 @@ trigger:
 jobs:
 - job: server
   pool:
-    name: 'Flux Self-hosted'
-    demands:
-    - agent.os -equals Linux
+    vmImage: 'ubuntu-20.04'
   steps:
   - script: |
       curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
