@@ -32,3 +32,6 @@ pub static OBS_SOURCE: Lazy<ObserverRecordSource> = Lazy::new(|| {
     .and_then(|v| v.parse().ok())
     .unwrap_or(ObserverRecordSource::Test)
 });
+
+pub const RTT_STATS_REPORT_DELAY: Duration = std::time::Duration::from_secs(5);
+pub const RTT_STATS_REPORT_INTERVAL: Duration = std::time::Duration::from_secs(15);

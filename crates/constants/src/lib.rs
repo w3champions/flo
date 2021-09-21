@@ -1,5 +1,4 @@
 use crate::version::Version;
-
 pub mod version;
 
 pub const CONTROLLER_HOST: &str = "service.w3flo.com";

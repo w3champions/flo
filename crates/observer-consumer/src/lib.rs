@@ -6,7 +6,6 @@ mod upload;
 pub mod error;
 pub use flo_observer_fs as fs;
 use fs::GameDataWriter;
-use futures::TryFutureExt;
 use upload::{Uploader, UploaderHandle};
 
 use crate::cache::Cache;
@@ -17,7 +16,7 @@ use error::Result;
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
 use flo_state::{async_trait, Actor, Context, Handler, Message, Owner};
 use rusoto_kinesis::Kinesis;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap};
 
 pub struct FloObserver;
 

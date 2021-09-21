@@ -1,5 +1,4 @@
 use flo_w3gs::slot::{RacePref, SlotData, SlotInfo};
-use flo_w3map::MapInfo;
 
 use crate::error::*;
 use flo_types::game::{Slot, SlotStatus};
