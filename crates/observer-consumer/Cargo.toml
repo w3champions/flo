@@ -33,3 +33,5 @@ uluru = "3.0.0"
 
 [dev-dependencies]
 dotenv = "0.15"
+tempfile = "3.2.0"
+tracing-subscriber = "0.2"

@@ -5,8 +5,7 @@ use flo_observer_fs::GameDataWriter;
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
 use rusoto_s3::{S3Client, S3};
 use std::{env, io::ErrorKind, path::PathBuf, sync::Arc, time::SystemTime};
-use tokio::sync::{mpsc, oneshot};
-use uluru::LRUCache;
+use tokio::sync::{mpsc};
 
 mod part_stream;
 
@@ -92,7 +91,6 @@ impl Archiver {
   }
 
   async fn upload_and_remove(bucket: &str, s3_client: Arc<S3Client>, folder_path: PathBuf) {
-    use bytes::Bytes;
     use futures::stream;
     use rusoto_core::{ByteStream, RusotoError};
     use rusoto_s3::PutObjectRequest;

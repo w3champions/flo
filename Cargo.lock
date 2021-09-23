@@ -1520,9 +1520,11 @@ dependencies = [
  "rusoto_s3",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uluru",
 ]
 

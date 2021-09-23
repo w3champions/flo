@@ -1,3 +1,3 @@
 mod channel;
 
-pub use self::channel::GamePartSender;
+pub use self::channel::{GamePartSender, GamePartStream, channel};

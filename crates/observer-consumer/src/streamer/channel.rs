@@ -4,6 +4,20 @@ use std::collections::VecDeque;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
 
+const BUFFER_SIZE: usize = 10;
+
+pub fn channel(initial_parts: Vec<Bytes>) -> (GamePartSender, GamePartStream) {
+  let (tx, rx) = mpsc::channel(BUFFER_SIZE);
+  (
+    GamePartSender { tx },
+    GamePartStream {
+      ready: initial_parts.into_iter().collect(),
+      rx,
+      done: false,
+    },
+  )
+}
+
 pub struct GamePartStream {
   ready: VecDeque<Bytes>,
   rx: mpsc::Receiver<Item>,
@@ -12,13 +26,31 @@ pub struct GamePartStream {
 
 #[derive(Debug)]
 pub struct GamePartSender {
-  tx: mpsc::Receiver<Item>,
+  tx: mpsc::Sender<Item>,
+}
+
+impl GamePartSender {
+  pub fn send_or_drop<T: Into<Item>>(&self, item: T) -> bool {
+    self.tx.try_send(item.into()).is_ok()
+  }
 }
 
 #[derive(Debug)]
-enum Item {
+pub enum Item {
   Parts(Vec<Bytes>),
   Part(Bytes),
+}
+
+impl From<Bytes> for Item {
+  fn from(v: Bytes) -> Self {
+    Item::Part(v)
+  }
+}
+
+impl From<Vec<Bytes>> for Item {
+  fn from(v: Vec<Bytes>) -> Self {
+    Item::Parts(v)
+  }
 }
 
 impl Stream for GamePartStream {
