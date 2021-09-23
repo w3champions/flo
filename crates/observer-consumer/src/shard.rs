@@ -1,7 +1,8 @@
-use crate::cache::{Cache, CacheGameState};
+use crate::archiver::ArchiverHandle;
 use crate::error::{Error, Result};
 use crate::fs::GameDataWriter;
-use crate::upload::UploaderHandle;
+use crate::persist::{Persist, PersistGameState};
+use crate::streamer::GamePartSender;
 use crate::{RemoveShard, ShardsMgr};
 use backoff::backoff::Backoff;
 use flo_observer::record::{GameRecordData, KMSRecord};
@@ -17,8 +18,8 @@ use tracing::Span;
 pub struct ShardConsumer {
   shard_id: String,
   parent: Addr<ShardsMgr>,
-  cache: Cache,
-  uploader: UploaderHandle,
+  persist: Persist,
+  uploader: ArchiverHandle,
   games: BTreeMap<i32, GameEntry>,
   lost_games: BTreeSet<i32>,
   span: Span,
@@ -29,14 +30,14 @@ impl ShardConsumer {
   pub(crate) fn new(
     shard_id: String,
     parent: Addr<ShardsMgr>,
-    cache: Cache,
-    uploader: UploaderHandle,
+    persist: Persist,
+    uploader: ArchiverHandle,
   ) -> Self {
     let span = tracing::info_span!("shard_consumer", shard_id = shard_id.as_str());
     Self {
       shard_id,
       parent,
-      cache,
+      persist,
       uploader,
       games: BTreeMap::new(),
       lost_games: BTreeSet::new(),
@@ -55,7 +56,7 @@ impl ShardConsumer {
         .span
         .in_scope(|| tracing::debug!("flush max sequence number: {}", max_sequence_number));
       self
-        .cache
+        .persist
         .set_shard_finished_seq(&self.shard_id, &max_sequence_number)
         .await?;
     }
@@ -66,6 +67,9 @@ impl ShardConsumer {
     let mut removed = None;
     let now = Instant::now();
     for (id, entry) in self.games.iter_mut() {
+      if entry.part_sender.is_some() {
+        continue;
+      }
       if now.saturating_duration_since(entry.t) > Duration::from_secs(90) {
         let removed = removed.get_or_insert_with(|| vec![]);
         removed.push(*id);
@@ -85,7 +89,7 @@ impl ShardConsumer {
 
       for id in removed {
         let game = self.games.remove(&id);
-        self.cache.remove_game(id).await?;
+        self.persist.remove_game(id).await?;
         if let Some(game) = game {
           self
             .uploader
@@ -108,7 +112,7 @@ impl Actor for ShardConsumer {
 }
 
 pub struct StartShardConsumer {
-  pub recovered_games: Vec<CacheGameState>,
+  pub recovered_games: Vec<PersistGameState>,
 }
 
 impl Message for StartShardConsumer {
@@ -138,7 +142,7 @@ impl Handler<StartShardConsumer> for ShardConsumer {
     ctx.spawn(
       Scanner {
         shard_id: self.shard_id.clone(),
-        cache: self.cache.clone(),
+        cache: self.persist.clone(),
         addr: ctx.addr(),
         span: tracing::info_span!("scanner", shard_id = self.shard_id.as_str()),
       }
@@ -187,7 +191,7 @@ impl Handler<ImportChunk> for ShardConsumer {
         Err(Error::GameDataLost(_)) => {
           self.lost_games.insert(game_id);
           self.games.remove(&game_id);
-          self.cache.remove_game(game_id).await?;
+          self.persist.remove_game(game_id).await?;
         }
         Err(err) => return Err(err),
       }
@@ -258,7 +262,7 @@ impl Handler<Gc> for ShardConsumer {
 
 struct Scanner {
   shard_id: String,
-  cache: Cache,
+  cache: Persist,
   addr: Addr<ShardConsumer>,
   span: Span,
 }
@@ -463,10 +467,11 @@ impl ShardConsumer {
           });
           return Err(Error::GameDataLost(game_id));
         }
-        self.cache.add_game(game_id, &self.shard_id).await?;
+        self.persist.add_game(game_id, &self.shard_id).await?;
         entry.insert(GameEntry {
           t: Instant::now(),
           writer: GameDataWriter::create_or_recover(game_id).await?,
+          part_sender: None,
         })
       }
       Entry::Occupied(entry) => {
@@ -518,7 +523,7 @@ impl ShardConsumer {
     Ok(())
   }
 
-  async fn recover_entry(&mut self, game: CacheGameState) -> Result<()> {
+  async fn recover_entry(&mut self, game: PersistGameState) -> Result<()> {
     let writer = GameDataWriter::recover(game.id).await?;
     self
       .span
@@ -528,6 +533,7 @@ impl ShardConsumer {
       GameEntry {
         t: Instant::now(),
         writer,
+        part_sender: None,
       },
     );
     Ok(())
@@ -538,6 +544,7 @@ impl ShardConsumer {
 struct GameEntry {
   t: Instant,
   writer: GameDataWriter,
+  part_sender: Option<GamePartSender>,
 }
 
 #[tokio::test]

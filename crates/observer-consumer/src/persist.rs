@@ -10,11 +10,11 @@ static CLIENT: Lazy<Client> =
   Lazy::new(|| Client::open(&*crate::env::ENV.redis_url).expect("redis client open"));
 
 #[derive(Clone)]
-pub struct Cache {
+pub struct Persist {
   conn: ConnectionManager,
 }
 
-impl Cache {
+impl Persist {
   pub async fn connect() -> Result<Self> {
     let conn = CLIENT.get_tokio_connection_manager().await?;
     Ok(Self { conn })
@@ -106,7 +106,7 @@ impl Cache {
     Ok(list)
   }
 
-  pub async fn get_game_state(&mut self, game_id: i32) -> Result<Option<CacheGameState>> {
+  pub async fn get_game_state(&mut self, game_id: i32) -> Result<Option<PersistGameState>> {
     let key = format!("{}:{}", Self::GAME_HASH_PREFIX, game_id);
     let (shard_id, last_touch_timestamp): (Option<String>, Option<Vec<u8>>) = redis::cmd("HMGET")
       .arg(key)
@@ -122,7 +122,7 @@ impl Cache {
       None
     });
 
-    Ok(shard_id.map(|shard_id| CacheGameState {
+    Ok(shard_id.map(|shard_id| PersistGameState {
       id: game_id,
       shard_id,
       last_touch_timestamp,
@@ -149,14 +149,14 @@ impl Cache {
   }
 }
 
-impl Debug for Cache {
+impl Debug for Persist {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     f.debug_struct("Cache").finish()
   }
 }
 
 #[derive(Debug)]
-pub struct CacheGameState {
+pub struct PersistGameState {
   pub id: i32,
   pub shard_id: String,
   pub last_touch_timestamp: Option<u64>,
@@ -166,11 +166,11 @@ pub struct CacheGameState {
 async fn test_shared_finished_seq() {
   dotenv::dotenv().unwrap();
 
-  let mut c = Cache::connect().await.unwrap();
+  let mut c = Persist::connect().await.unwrap();
 
   redis::cmd("HDEL")
-    .arg(format!("{}:{}", Cache::SHARD_HASH_PREFIX, "FAKE"))
-    .arg(Cache::SHARD_HASH_FINISHED_SEQ_NUMBER)
+    .arg(format!("{}:{}", Persist::SHARD_HASH_PREFIX, "FAKE"))
+    .arg(Persist::SHARD_HASH_FINISHED_SEQ_NUMBER)
     .query_async::<_, ()>(&mut c.conn)
     .await
     .unwrap();
@@ -187,10 +187,10 @@ async fn test_shared_finished_seq() {
 async fn test_game_set() {
   dotenv::dotenv().unwrap();
 
-  let mut c = Cache::connect().await.unwrap();
+  let mut c = Persist::connect().await.unwrap();
 
   redis::cmd("DEL")
-    .arg(Cache::GAME_SET_KEY)
+    .arg(Persist::GAME_SET_KEY)
     .query_async::<_, ()>(&mut c.conn)
     .await
     .unwrap();
@@ -216,7 +216,7 @@ async fn test_game_state() {
   dotenv::dotenv().unwrap();
   let game_id = i32::MAX;
 
-  let mut c = Cache::connect().await.unwrap();
+  let mut c = Persist::connect().await.unwrap();
 
   c.remove_game(game_id).await.unwrap();
 

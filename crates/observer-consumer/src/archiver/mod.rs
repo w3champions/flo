@@ -1,20 +1,24 @@
 use crate::error::{Error, Result};
 use backoff::backoff::Backoff;
+use bytes::Bytes;
 use flo_observer_fs::GameDataWriter;
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
 use rusoto_s3::{S3Client, S3};
 use std::{env, io::ErrorKind, path::PathBuf, sync::Arc, time::SystemTime};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
+use uluru::LRUCache;
 
-pub struct Uploader {
+mod part_stream;
+
+pub struct Archiver {
   data_dir: PathBuf,
   s3_bucket: String,
   s3_client: S3Client,
   rx: mpsc::Receiver<Msg>,
 }
 
-impl Uploader {
-  pub fn new(data_dir: PathBuf) -> Result<(Self, UploaderHandle)> {
+impl Archiver {
+  pub fn new(data_dir: PathBuf) -> Result<(Self, ArchiverHandle)> {
     let s3_bucket = env::var("AWS_S3_BUCKET")
       .map_err(|_| Error::InvalidS3Credentials("missing env AWS_S3_BUCKET"))?;
     let s3_client = {
@@ -43,7 +47,7 @@ impl Uploader {
         s3_client,
         rx,
       },
-      UploaderHandle(tx),
+      ArchiverHandle(tx),
     ))
   }
 
@@ -162,9 +166,9 @@ impl Uploader {
 }
 
 #[derive(Debug, Clone)]
-pub struct UploaderHandle(mpsc::Sender<Msg>);
+pub struct ArchiverHandle(mpsc::Sender<Msg>);
 
-impl UploaderHandle {
+impl ArchiverHandle {
   pub async fn add_folder(&self, path: PathBuf) -> bool {
     self.0.send(Msg::AddFolder(path)).await.is_ok()
   }
@@ -173,7 +177,14 @@ impl UploaderHandle {
 #[derive(Debug)]
 enum Msg {
   AddFolder(PathBuf),
+  // FindArchive {
+  //   game_id: i32,
+  //   tx: oneshot::Sender<ArchiveInfo>,
+  // },
 }
+
+#[derive(Debug)]
+pub struct ArchiveInfo {}
 
 struct FsScanner {
   root: PathBuf,
@@ -231,4 +242,10 @@ impl FsScanner {
     .await
     .ok();
   }
+}
+
+#[derive(Debug)]
+pub struct ArchiveCache {
+  parts: Vec<Bytes>,
+  finished: bool,
 }
