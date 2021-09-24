@@ -4,6 +4,7 @@ mod mem_cache;
 mod persist;
 mod shard;
 mod streamer;
+mod token;
 
 pub mod error;
 use archiver::{Archiver, ArchiverHandle};

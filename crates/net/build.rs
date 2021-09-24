@@ -3,7 +3,11 @@ fn main() {
   prost_build.type_attribute(".", "#[derive(Serialize, Deserialize)]");
   prost_build
     .compile_protos(
-      &["src/proto/connect.proto", "src/proto/node.proto"],
+      &[
+        "src/proto/connect.proto",
+        "src/proto/node.proto",
+        "src/proto/observer.proto",
+      ],
       &["src"],
     )
     .unwrap();

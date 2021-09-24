@@ -29,6 +29,10 @@ pub enum Error {
   Actor(#[from] flo_state::error::Error),
   #[error("invalid S3 credentials: {0}")]
   InvalidS3Credentials(&'static str),
+  #[error("json web token: {0}")]
+  JsonWebToken(#[from] jsonwebtoken::errors::Error),
+  #[error("observer token expired")]
+  ObserverTokenExpired,
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use flate2::read::GzDecoder;
 use flo_observer::record::GameRecordData;
 use flo_util::binary::{BinDecode, BinEncode};
@@ -99,6 +99,18 @@ impl GameDataWriter {
     data.encode(&mut self.chunk_buf);
     self.next_record_id += 1;
     Ok(r)
+  }
+
+  pub async fn build_initial_part(&mut self) -> Result<Bytes> {
+    use tokio::io::{copy, AsyncSeekExt};
+    let mut buf = Vec::new();
+    for i in 0..self.chunk_id {
+      let mut chunk_file = File::open(self.dir.join(format!("{}{}", CHUNK_PREFIX, i))).await?;
+      chunk_file.seek(SeekFrom::Start(4)).await?;
+      copy(&mut chunk_file, &mut buf).await?;
+    }
+    buf.extend(self.chunk_buf.as_ref());
+    Ok(Bytes::from(buf))
   }
 
   pub async fn build_archive(&mut self, remove_chunks: bool) -> Result<PathBuf> {

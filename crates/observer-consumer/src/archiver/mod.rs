@@ -5,9 +5,7 @@ use flo_observer_fs::GameDataWriter;
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
 use rusoto_s3::{S3Client, S3};
 use std::{env, io::ErrorKind, path::PathBuf, sync::Arc, time::SystemTime};
-use tokio::sync::{mpsc};
-
-mod part_stream;
+use tokio::sync::mpsc;
 
 pub struct Archiver {
   data_dir: PathBuf,

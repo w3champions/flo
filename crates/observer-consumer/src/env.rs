@@ -6,6 +6,7 @@ use std::env;
 pub struct Env {
   pub redis_url: String,
   pub record_source: ObserverRecordSource,
+  pub jwt_secret_base64: String,
 }
 
 pub static ENV: Lazy<Env> = Lazy::new(|| Env {
@@ -14,4 +15,5 @@ pub static ENV: Lazy<Env> = Lazy::new(|| Env {
     .ok()
     .and_then(|v| v.parse().ok())
     .unwrap_or(ObserverRecordSource::Test),
+  jwt_secret_base64: env::var("JWT_SECRET_BASE64").expect("env JWT_SECRET_BASE64"),
 });

@@ -1,0 +1,52 @@
+syntax = "proto3";
+package flo_observer;
+
+import "proto/common.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+
+message PacketObserverConnect {
+  flo_common.Version version = 1;
+  string token = 2;
+}
+
+message PacketObserverConnectAccept {
+  flo_common.Version version = 1;
+  GameInfo game = 2;
+}
+
+message PacketObserverConnectReject {
+  ObserverConnectRejectReason reason = 1;
+  google.protobuf.Timestamp delay_ends_at = 2;
+}
+
+enum ObserverConnectRejectReason {
+  ObserverConnectRejectReasonUnknown = 0;
+  ObserverConnectRejectReasonObserverVersionTooOld = 1;
+  ObserverConnectRejectReasonInvalidToken = 2;
+  ObserverConnectRejectReasonDelayNotOver = 3;
+}
+
+message GameInfo {
+  int32 id = 1;
+  string name = 2;
+  Map map = 3;
+  repeated Slot slots = 4;
+  int32 random_seed = 5;
+}
+
+message Map {
+  bytes sha1 = 1;
+  uint32 checksum = 2;
+  string path = 3;
+}
+
+message Slot {
+  PlayerInfo player = 1;
+  flo_common.SlotSettings settings = 2;
+}
+
+message PlayerInfo {
+  int32 id = 1;
+  string name = 2;
+}

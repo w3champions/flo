@@ -2,9 +2,9 @@ use crate::archiver::ArchiverHandle;
 use crate::error::{Error, Result};
 use crate::fs::GameDataWriter;
 use crate::persist::{Persist, PersistGameState};
-use crate::streamer::GamePartSender;
 use crate::{RemoveShard, ShardsMgr};
 use backoff::backoff::Backoff;
+use bytes::{Bytes, BytesMut};
 use flo_observer::record::{GameRecordData, KMSRecord};
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
@@ -12,6 +12,7 @@ use rusoto_kinesis::Kinesis;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
 use tracing::Span;
 
 #[derive(Debug)]
@@ -260,6 +261,30 @@ impl Handler<Gc> for ShardConsumer {
   }
 }
 
+struct Connect {
+  game_id: i32,
+}
+
+impl Message for Connect {
+  type Result = Result<Option<(Bytes, mpsc::Receiver<Bytes>)>>;
+}
+
+#[async_trait]
+impl Handler<Connect> for ShardConsumer {
+  async fn handle(
+    &mut self,
+    _ctx: &mut Context<Self>,
+    Connect { game_id }: Connect,
+  ) -> Result<Option<(Bytes, mpsc::Receiver<Bytes>)>> {
+    let entry = match self.games.get_mut(&game_id) {
+      Some(entry) => entry,
+      None => return Ok(None),
+    };
+
+    Ok(entry.connect_parts_channel().await?.into())
+  }
+}
+
 struct Scanner {
   shard_id: String,
   cache: Persist,
@@ -485,6 +510,7 @@ impl ShardConsumer {
               min_seq_id
             );
           });
+          entry.part_sender.take();
           return Err(Error::GameDataLost(game_id));
         }
         entry.t = Instant::now();
@@ -492,19 +518,49 @@ impl ShardConsumer {
       }
     };
 
-    assert_eq!(min_seq_id + records.len() as u32, max_seq_id + 1);
+    if min_seq_id + records.len() as u32 != max_seq_id + 1 {
+      self.span.in_scope(|| {
+        tracing::warn!(
+          game_id,
+          "game data lost: non-continuous record ids: {} + {} != {}",
+          min_seq_id,
+          records.len(),
+          max_seq_id + 1
+        );
+      });
+      entry.part_sender.take();
+      return Err(Error::GameDataLost(game_id));
+    }
 
     let mut max_discard_id = None;
     let mut start_write_id = None;
+    let mut send_parts = entry.part_sender.as_mut().map(|s| (s, BytesMut::new()));
     for (idx, record) in records.into_iter().enumerate() {
       let record_id = min_seq_id + idx as u32;
       if entry.writer.next_record_id() == record_id {
         if start_write_id.is_none() {
           start_write_id.replace(record_id);
         }
+        if let Some((_, buf)) = send_parts.as_mut() {
+          record.encode(buf);
+        }
         entry.writer.write_record(record).await?;
       } else {
         max_discard_id.replace(record_id);
+      }
+    }
+
+    if let Some((s, buf)) = send_parts {
+      let drop_sender = if !buf.is_empty() {
+        s.send(buf.freeze().into()).await.is_err()
+      } else {
+        false
+      };
+      if drop_sender {
+        entry.part_sender.take();
+        self.span.in_scope(|| {
+          tracing::warn!(game_id, "game part sender dropped");
+        });
       }
     }
 
@@ -544,7 +600,16 @@ impl ShardConsumer {
 struct GameEntry {
   t: Instant,
   writer: GameDataWriter,
-  part_sender: Option<GamePartSender>,
+  part_sender: Option<mpsc::Sender<Bytes>>,
+}
+
+impl GameEntry {
+  async fn connect_parts_channel(&mut self) -> Result<(Bytes, mpsc::Receiver<Bytes>)> {
+    let part = self.writer.build_initial_part().await?;
+    let (tx, rx) = mpsc::channel(32);
+    self.part_sender.replace(tx);
+    Ok((part, rx))
+  }
 }
 
 #[tokio::test]
