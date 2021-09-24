@@ -11,8 +11,6 @@ use tokio::fs::{self, File};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use uluru::LRUCache;
 
-
-// const MAX_IN_MEM_GAME: usize = 300;
 const SWAP_EVICT_AFTER: Duration = Duration::from_secs(3600);
 const GC_INTERVAL: Duration = Duration::from_secs(600);
 

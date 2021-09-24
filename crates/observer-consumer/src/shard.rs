@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::Span;
 
-#[derive(Debug)]
 pub struct ShardConsumer {
   shard_id: String,
   parent: Addr<ShardsMgr>,

@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 pub struct Archiver {
   data_dir: PathBuf,
   s3_bucket: String,
-  s3_client: S3Client,
+  s3_client: Arc<S3Client>,
   rx: mpsc::Receiver<Msg>,
 }
 
@@ -18,7 +18,7 @@ impl Archiver {
   pub fn new(data_dir: PathBuf) -> Result<(Self, ArchiverHandle)> {
     let s3_bucket = env::var("AWS_S3_BUCKET")
       .map_err(|_| Error::InvalidS3Credentials("missing env AWS_S3_BUCKET"))?;
-    let s3_client = {
+    let s3_client = Arc::new({
       let provider = StaticProvider::new(
         env::var("AWS_ACCESS_KEY_ID")
           .map_err(|_| Error::InvalidS3Credentials("missing env AWS_ACCESS_KEY_ID"))?,
@@ -33,18 +33,22 @@ impl Archiver {
         .parse()
         .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
       S3Client::new_with(client, provider, region)
-    };
+    });
 
     let (tx, rx) = mpsc::channel(10);
 
     Ok((
       Self {
         data_dir,
-        s3_bucket,
-        s3_client,
+        s3_bucket: s3_bucket.clone(),
+        s3_client: s3_client.clone(),
         rx,
       },
-      ArchiverHandle(tx),
+      ArchiverHandle {
+        tx,
+        s3_bucket,
+        s3_client
+      },
     ))
   }
 
@@ -55,7 +59,6 @@ impl Archiver {
       s3_client,
       mut rx,
     } = self;
-    let s3_client = Arc::new(s3_client);
     let (fs_tx, mut fs_rx) = mpsc::channel(1);
 
     tokio::spawn(
@@ -161,12 +164,44 @@ impl Archiver {
   }
 }
 
-#[derive(Debug, Clone)]
-pub struct ArchiverHandle(mpsc::Sender<Msg>);
+#[derive(Clone)]
+pub struct ArchiverHandle {
+  tx: mpsc::Sender<Msg>,
+  s3_bucket: String,
+  s3_client: Arc<S3Client>,
+}
 
 impl ArchiverHandle {
   pub async fn add_folder(&self, path: PathBuf) -> bool {
-    self.0.send(Msg::AddFolder(path)).await.is_ok()
+    self.tx.send(Msg::AddFolder(path)).await.is_ok()
+  }
+
+  pub async fn fetch(&self, game_id: i32) -> Result<Option<Vec<Bytes>>> {
+    use rusoto_s3::GetObjectRequest;
+    use futures::stream::StreamExt;
+    use rusoto_core::RusotoError;
+    use rusoto_s3::GetObjectError;
+  
+    let key = game_id.to_string();
+  
+    let req = GetObjectRequest {
+      key: key.clone(),
+      bucket: self.s3_bucket.clone(),
+      ..Default::default()
+    };
+    let parts = match self.s3_client.get_object(req).await {
+      Ok(res) => {
+        if let Some(stream) = res.body {
+          stream.collect::<Vec<_>>().await.into_iter().collect::<Result<Vec<_>, _>>()?
+        } else {
+          return Ok(None)
+        }
+      },
+      Err(RusotoError::Service(GetObjectError::NoSuchKey(_))) => return Ok(None),
+      Err(err) => return Err(err.into()),
+    };
+    
+    Ok(Some(parts))
   }
 }
 

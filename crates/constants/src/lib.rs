@@ -25,3 +25,5 @@ pub const MIN_FLO_VERSION: version::Version = Version {
   minor: 9,
   patch: 2,
 };
+pub const OBSERVER_GRPC_PORT: u16 = 3556;
+pub const OBSERVER_SOCKET_PORT: u16 = 3557;

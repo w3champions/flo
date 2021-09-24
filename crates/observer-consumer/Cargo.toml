@@ -11,8 +11,9 @@ flo-util = { path = "../util" }
 flo-observer = { path = "../observer" }
 flo-observer-fs = { path = "../observer-fs" }
 flo-types = { path = "../types" }
-flo-state = "1.0"
 flo-grpc = { path = "../../deps/flo-grpc" }
+flo-constants = { path = "../constants" }
+flo-state = "1.0"
 rusoto_core = "0.47.0"
 rusoto_kinesis = "0.47.0"
 rusoto_s3 = "0.47.0"

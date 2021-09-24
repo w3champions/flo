@@ -33,6 +33,8 @@ pub enum Error {
   JsonWebToken(#[from] jsonwebtoken::errors::Error),
   #[error("observer token expired")]
   ObserverTokenExpired,
+  #[error("get archived object: {0}")]
+  GetArchivedObject(#[from] RusotoError<rusoto_s3::GetObjectError>),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

@@ -31,7 +31,6 @@ impl FloObserver {
   }
 }
 
-#[derive(Debug)]
 pub(crate) struct ShardsMgr {
   cache: Persist,
   uploader_handle: ArchiverHandle,
