@@ -1420,6 +1420,7 @@ dependencies = [
  "once_cell",
  "prost",
  "prost-build",
+ "prost-types",
  "serde",
  "thiserror",
  "tokio",

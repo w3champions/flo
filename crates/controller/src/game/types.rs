@@ -30,6 +30,7 @@ pub struct Game {
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
   pub mask_player_names: bool,
+  pub game_version: Option<String>,
 }
 
 impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {

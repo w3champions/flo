@@ -1,20 +1,20 @@
 //! LRU cache with unlimited filesystem swap space
 
 use crate::error::Result;
-use crate::streamer::{GamePartStream, GamePartSender, self};
+use crate::streamer::{self, GamePartSender, GamePartStream};
 use bytes::Bytes;
-use flo_state::{Actor, Handler, Message, async_trait};
+use flo_state::{async_trait, Actor, Handler, Message};
 use std::collections::{BTreeMap, BinaryHeap};
 use std::path::PathBuf;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 use tokio::fs::{self, File};
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uluru::LRUCache;
 
 const SWAP_EVICT_AFTER: Duration = Duration::from_secs(3600);
 const GC_INTERVAL: Duration = Duration::from_secs(600);
 
-pub struct MemCacheMgr<const IN_MEMORY_NODES: usize>  {
+pub struct MemCacheMgr<const IN_MEMORY_NODES: usize> {
   mem_store: LRUCache<MemNode, IN_MEMORY_NODES>,
   subs_map: BTreeMap<i32, Vec<GamePartSender>>,
   swap_base_path: PathBuf,
@@ -44,30 +44,37 @@ impl IntoPartsIter for Vec<Bytes> {
 impl<const N: usize> MemCacheMgr<N> {
   pub fn new(swap_base_path: PathBuf) -> Self {
     Self {
-        mem_store: LRUCache::default(),
-        subs_map: BTreeMap::new(),
-        swap_base_path,
-        swap_store: BTreeMap::new(),
-        swap_touched_heap: BinaryHeap::new(),
+      mem_store: LRUCache::default(),
+      subs_map: BTreeMap::new(),
+      swap_base_path,
+      swap_store: BTreeMap::new(),
+      swap_touched_heap: BinaryHeap::new(),
     }
   }
 
   pub async fn subscribe(&mut self, game_id: i32) -> Result<Option<GamePartStream>> {
-    let stream = if let Some(mem) = self.mem_store.lookup(|v| {
-      v.data_of(game_id).map(|v| {
-        v.parts.clone()
-      })
-    }) {
+    let stream = if let Some(mem) = self
+      .mem_store
+      .lookup(|v| v.data_of(game_id).map(|v| v.parts.clone()))
+    {
       tracing::debug!(game_id, "subscribing: mem, parts = {}", mem.len());
       let (tx, rx) = streamer::channel(mem);
-      self.subs_map.entry(game_id).or_insert_with(|| vec![]).push(tx);
+      self
+        .subs_map
+        .entry(game_id)
+        .or_insert_with(|| vec![])
+        .push(tx);
       Some(rx)
     } else {
       if let Some(node) = self.swap_store.remove(&game_id) {
         let bytes = self.move_to_mem(game_id, node.file).await?;
         tracing::debug!(game_id, "subscribing: swap, bytes len = {}", bytes.len());
         let (tx, rx) = streamer::channel(vec![bytes]);
-        self.subs_map.entry(game_id).or_insert_with(|| vec![]).push(tx);
+        self
+          .subs_map
+          .entry(game_id)
+          .or_insert_with(|| vec![])
+          .push(tx);
         Some(rx)
       } else {
         None
@@ -81,9 +88,7 @@ impl<const N: usize> MemCacheMgr<N> {
     let iter = parts.into_parts_iter();
     let remove_subs_entry = if let Some(senders) = self.subs_map.get_mut(&game_id) {
       let parts = iter.clone().collect::<Vec<_>>();
-      senders.retain(move |sender| {
-        sender.send_or_drop(parts.clone())
-      });
+      senders.retain(move |sender| sender.send_or_drop(parts.clone()));
       senders.is_empty()
     } else {
       false
@@ -140,9 +145,7 @@ impl<const N: usize> MemCacheMgr<N> {
     MemCacheMgrMetrics {
       mem_count: self.mem_store.iter().filter(|v| !v.is_vacant()).count(),
       swap_count: self.swap_store.len(),
-      subcriptions: self.subs_map.iter().map(|(k, v)| {
-        (*k, v.len())
-      }).collect(),
+      subcriptions: self.subs_map.iter().map(|(k, v)| (*k, v.len())).collect(),
     }
   }
 
@@ -155,7 +158,13 @@ impl<const N: usize> MemCacheMgr<N> {
       file.write_all(&part).await?;
     }
     let last_touched_at = Instant::now();
-    self.swap_store.insert(data.game_id, SwapNode { file, last_touched_at });
+    self.swap_store.insert(
+      data.game_id,
+      SwapNode {
+        file,
+        last_touched_at,
+      },
+    );
     self.swap_touched_heap.push(SwapTouchedHeapNode {
       game_id,
       last_touched_at,
@@ -175,7 +184,7 @@ impl<const N: usize> MemCacheMgr<N> {
     let bytes = Bytes::from(buffer);
     let data = Data {
       game_id,
-      parts: vec![bytes.clone()]
+      parts: vec![bytes.clone()],
     };
     if let Some(MemNode::Data(removed)) = self.mem_store.insert(MemNode::Data(data)) {
       self.move_to_swap(removed).await?;
@@ -189,6 +198,7 @@ impl<const N: usize> MemCacheMgr<N> {
     }
     let path = self.swap_base_path.join(game_id.to_string());
     fs::remove_file(path).await?;
+    self.subs_map.remove(&game_id);
     Ok(())
   }
 
@@ -196,15 +206,20 @@ impl<const N: usize> MemCacheMgr<N> {
     let now = Instant::now();
     let mut evicted = 0;
     while let Some(node) = self.swap_touched_heap.pop() {
-      if self.swap_store.get(&node.game_id).map(|v| v.last_touched_at == node.last_touched_at).unwrap_or_default() {
+      if self
+        .swap_store
+        .get(&node.game_id)
+        .map(|v| v.last_touched_at == node.last_touched_at)
+        .unwrap_or_default()
+      {
         if now - node.last_touched_at > SWAP_EVICT_AFTER {
           match self.evict_swap(node.game_id).await {
             Ok(_) => {
               evicted += 1;
-            },
+            }
             Err(err) => {
               self.swap_touched_heap.push(node);
-              return Err(err)
+              return Err(err);
             }
           }
         } else {
@@ -240,11 +255,13 @@ impl MemNode {
   fn data_of(&mut self, id: i32) -> Option<&mut Data> {
     match *self {
       MemNode::Vacant => None,
-      MemNode::Data(ref mut data) => if data.game_id == id {
-        Some(data)
-      } else {
-        None
-      },
+      MemNode::Data(ref mut data) => {
+        if data.game_id == id {
+          Some(data)
+        } else {
+          None
+        }
+      }
     }
   }
 }
@@ -322,8 +339,8 @@ pub struct MemCacheMgrMetrics {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::path::PathBuf;
   use once_cell::sync::Lazy;
+  use std::path::PathBuf;
   use tempfile::TempDir;
   static TEMP_DIR: Lazy<TempDir> = Lazy::new(|| {
     let dir = tempfile::tempdir().unwrap();
@@ -338,8 +355,8 @@ mod tests {
 
   #[tokio::test]
   async fn test_mem_cache() {
-    use tokio::sync::mpsc;
     use futures::stream::StreamExt;
+    use tokio::sync::mpsc;
 
     tracing_subscriber::fmt::init();
 
@@ -348,10 +365,12 @@ mod tests {
 
     let mut mgr = MemCacheMgr::<1>::new(SWAP_DIR.clone());
     let initial = Bytes::copy_from_slice(&[0]);
-    let parts: Vec<_> = (1..10_i32).map(|v| {
-      let bytes = v.to_be_bytes();
-      Bytes::copy_from_slice(bytes.as_ref())
-    }).collect();
+    let parts: Vec<_> = (1..10_i32)
+      .map(|v| {
+        let bytes = v.to_be_bytes();
+        Bytes::copy_from_slice(bytes.as_ref())
+      })
+      .collect();
 
     fn flatten(parts: Vec<Bytes>) -> Bytes {
       let mut b = vec![];
@@ -400,8 +419,6 @@ mod tests {
       assert_eq!(m.swap_count, 1);
     }
 
-
-    
     {
       let s = mgr.subscribe(1).await.unwrap().unwrap();
       let task = tokio::spawn(make_collector(1, s));
@@ -433,9 +450,9 @@ mod tests {
           map.entry(id).or_insert_with(|| vec![]).push(parts);
         }
         assert_eq!(map.keys().cloned().collect::<Vec<_>>(), vec![1, 2]);
-        for (_, results) in map {
+        for (id, results) in map {
           for r in results {
-            assert_eq!(flatten(r), expected);
+            assert_eq!(flatten(r), expected, "game: {}", id);
           }
         }
       });
@@ -454,6 +471,10 @@ mod tests {
 
     drop(tx);
 
-    futures::future::join_all(tasks).await.into_iter().collect::<Result<Vec<_>, _>>().unwrap();
+    futures::future::join_all(tasks)
+      .await
+      .into_iter()
+      .collect::<Result<Vec<_>, _>>()
+      .unwrap();
   }
 }

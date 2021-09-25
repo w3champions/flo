@@ -33,6 +33,10 @@ impl GamePartSender {
   pub fn send_or_drop<T: Into<Item>>(&self, item: T) -> bool {
     self.tx.try_send(item.into()).is_ok()
   }
+
+  pub fn is_closed(&self) -> bool {
+    self.tx.is_closed()
+  }
 }
 
 #[derive(Debug)]

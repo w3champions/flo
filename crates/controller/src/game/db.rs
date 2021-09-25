@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use diesel::dsl::sql;
 use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
@@ -597,6 +598,25 @@ pub fn update_status(conn: &DbConn, update: &GameStatusUpdate) -> Result<()> {
     diesel::update(game::table.find(update.game_id))
       .set(game::dsl::status.eq(game_status))
       .execute(conn)?;
+
+    match game_status {
+      GameStatus::Running => {
+        diesel::update(
+          game::table.filter(game::id.eq(update.game_id).and(game::started_at.is_null())),
+        )
+        .set(game::dsl::started_at.eq(sql("now()")))
+        .execute(conn)?;
+      }
+      GameStatus::Ended => {
+        diesel::update(
+          game::table.filter(game::id.eq(update.game_id).and(game::ended_at.is_null())),
+        )
+        .set(game::dsl::ended_at.eq(sql("now()")))
+        .execute(conn)?;
+      }
+      _ => {}
+    }
+
     for (player_id, status) in &update.updated_player_game_client_status_map {
       diesel::update(
         game_used_slot::table.filter(
@@ -982,6 +1002,7 @@ pub struct GameRowWithRelated {
   pub updated_at: DateTime<Utc>,
   pub random_seed: i32,
   pub mask_player_names: bool,
+  pub game_version: Option<String>,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -1002,6 +1023,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::updated_at,
   game::dsl::random_seed,
   game::dsl::mask_player_names,
+  game::dsl::game_version,
 );
 
 impl GameRowWithRelated {
@@ -1024,6 +1046,7 @@ impl GameRowWithRelated {
       game::dsl::updated_at,
       game::dsl::random_seed,
       game::dsl::mask_player_names,
+      game::dsl::game_version,
     )
   }
 
@@ -1048,6 +1071,7 @@ impl GameRowWithRelated {
       updated_at: self.updated_at,
       random_seed: self.random_seed,
       mask_player_names: self.mask_player_names,
+      game_version: self.game_version,
     })
   }
 }

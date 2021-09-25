@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use futures::future::poll_fn;
 use futures::sink::SinkExt;
 use futures::stream::TryStreamExt;
@@ -157,6 +158,15 @@ impl FloStream {
     poll_fn(|ctx| Pin::new(&mut self.transport).poll_close(ctx)).await?;
     self.transport.get_mut().shutdown().await?;
     Ok(())
+  }
+
+  pub async fn downgrade_to_binary_stream(self) -> Result<(Bytes, TcpStream)> {
+    let parts = self.transport.into_parts();
+    let mut stream = parts.io;
+    if !parts.write_buf.is_empty() {
+      stream.write_all(parts.write_buf.as_ref()).await?;
+    }
+    Ok((parts.read_buf.freeze(), stream))
   }
 }
 

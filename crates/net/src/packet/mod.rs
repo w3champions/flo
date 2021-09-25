@@ -276,7 +276,7 @@ pub enum PacketTypeId {
   #[bin(value = 0x51)]
   NodeGameStatusUpdateBulk,
 
-  // Controller <-> Observer
+  // Client <-> Observer
   #[bin(value = 0x60)]
   ObserverConnect,
   #[bin(value = 0x61)]

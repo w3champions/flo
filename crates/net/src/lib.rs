@@ -38,7 +38,17 @@ pub mod proto {
 
     include!(concat!(env!("OUT_DIR"), "/flo_node.rs"));
   }
+
+  pub mod flo_observer {
+    #[allow(unused)]
+    use serde::{Deserialize, Serialize};
+
+    pub use super::flo_common::{SlotSettings, Version};
+
+    include!(concat!(env!("OUT_DIR"), "/flo_observer.rs"));
+  }
 }
 
 pub mod connect;
 pub mod node;
+pub mod observer;
