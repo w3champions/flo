@@ -564,9 +564,10 @@ impl<'a> GameHandler<'a> {
               return true;
             }
             1 => {
-              self.muted_players.insert(targets[0].0);
+              let (slot_player_id, name, player_id) = &targets[0];
+              self.muted_players.insert(*slot_player_id);
               if forever {
-                self.save_mute(targets[0].2, targets[0].1.to_string(), true);
+                self.save_mute(*player_id, name.to_string(), true);
               } else {
                 self.send_chats_to_self(
                   self.info.slot_info.my_slot_player_id,
@@ -590,6 +591,14 @@ impl<'a> GameHandler<'a> {
             &cmd["mute ".len()..]
           };
           if let Ok(id) = id.parse::<u8>() {
+            if id == self.info.slot_info.my_slot_player_id {
+              self.send_chats_to_self(
+                self.info.slot_info.my_slot_player_id,
+                vec![format!("You cannot mute yourself.")],
+              );
+              return true;
+            }
+
             if let Some(info) = self
               .info
               .slot_info
