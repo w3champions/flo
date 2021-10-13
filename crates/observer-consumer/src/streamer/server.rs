@@ -41,7 +41,11 @@ impl StreamServer {
         mem_cache: self.mem_cache.addr(),
         transport,
       };
-      tokio::spawn(handler.run());
+      tokio::spawn(async move {
+        if let Err(err) = handler.run().await {
+          tracing::error!("stream handler: {}", err);
+        }
+      });
     }
     Ok(())
   }
@@ -55,11 +59,22 @@ struct Handler {
 }
 
 impl Handler {
-  async fn run(mut self) {}
+  async fn run(mut self) -> Result<()> {
+    let game_id = match self.accept().await? {
+      Some(game_id) => game_id,
+      None => {
+        return Ok(());
+      }
+    };
+    Ok(())
+  }
 
-  async fn accept(&mut self) -> Result<Option<ObserverToken>> {
+  async fn accept(&mut self) -> Result<Option<i32>> {
     use flo_grpc::controller::GetGameRequest;
-    use flo_net::observer::{PacketObserverConnect, PacketObserverConnectAccept};
+    use flo_net::observer::{
+      GameInfo, Map, PacketObserverConnect, PacketObserverConnectAccept, PlayerInfo, Slot,
+      SlotSettings, Version,
+    };
     let connect: PacketObserverConnect = self.transport.recv().await?;
     let token = match crate::token::validate_observer_token(&connect.token) {
       Ok(v) => v,
@@ -95,6 +110,15 @@ impl Handler {
       return Ok(None);
     };
 
+    let game_version = if let Some(ref v) = game.game_version {
+      v.clone()
+    } else {
+      self
+        .reject(ObserverConnectRejectReason::GameNotReady, None)
+        .await?;
+      return Ok(None);
+    };
+
     let start_time = game.started_at.as_ref().map(|v| v.seconds).or_else(|| {
       use flo_grpc::game::GameStatus;
       match game.status() {
@@ -123,7 +147,50 @@ impl Handler {
         .await?;
       return Ok(None);
     }
-    Ok(Some(token))
+
+    let game = GameInfo {
+      id: game.id,
+      name: game.name,
+      map: game.map.map(|v| Map {
+        sha1: v.sha1,
+        checksum: v.checksum,
+        path: v.path,
+      }),
+      slots: game
+        .slots
+        .into_iter()
+        .map(|slot| Slot {
+          player: slot.player.map(|v| PlayerInfo {
+            id: v.id,
+            name: v.name,
+          }),
+          settings: slot.settings.map(|v| SlotSettings {
+            team: v.team,
+            color: v.color,
+            computer: v.computer,
+            handicap: v.handicap,
+            status: v.status,
+            race: v.race,
+          }),
+        })
+        .collect(),
+      random_seed: game.random_seed,
+      game_version,
+    };
+
+    self
+      .transport
+      .send(PacketObserverConnectAccept {
+        version: Some(Version {
+          major: crate::version::FLO_OBSERVER_VERSION.major,
+          minor: crate::version::FLO_OBSERVER_VERSION.minor,
+          patch: crate::version::FLO_OBSERVER_VERSION.patch,
+        }),
+        game: Some(game),
+      })
+      .await?;
+
+    Ok(Some(token.game_id))
   }
 
   async fn reject(

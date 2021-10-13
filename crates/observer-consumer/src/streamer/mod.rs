@@ -1,4 +1,5 @@
 mod channel;
 mod server;
+mod stream;
 
-pub use self::channel::{GamePartSender, GamePartStream, channel};
+pub use self::channel::{channel, GamePartSender, GamePartStream};
