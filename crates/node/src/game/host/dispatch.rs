@@ -15,6 +15,7 @@ use crate::observer::ObserverPublisherHandle;
 use flo_net::packet::{Frame, PacketTypeId};
 use flo_net::ping::{PingMsg, PingStream};
 use flo_net::w3gs::{W3GSFrameExt, W3GSMetadata, W3GSPacket, W3GSPacketTypeId};
+use flo_observer::record::{RTTStats, RTTStatsItem};
 use flo_util::chat::{parse_chat_command, ChatCommand};
 use flo_w3gs::action::{IncomingAction, IncomingAction2, OutgoingKeepAlive};
 use flo_w3gs::protocol::action::{OutgoingAction, PlayerAction, TimeSlot};
@@ -33,7 +34,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::{oneshot, watch, Notify};
-use tokio::time::sleep;
+use tokio::time::{interval_at, sleep, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
@@ -64,6 +65,10 @@ enum PeerMsg {
     player_id: i32,
     leave_reason: Option<LeaveReason>,
   },
+  Pong {
+    player_id: i32,
+    rtt: u32,
+  },
 }
 
 impl PeerMsg {
@@ -72,6 +77,7 @@ impl PeerMsg {
       PeerMsg::Incoming { player_id, .. } => player_id,
       PeerMsg::Closed { player_id, .. } => player_id,
       PeerMsg::Shutdown { player_id, .. } => player_id,
+      PeerMsg::Pong { player_id, .. } => player_id,
     }
   }
 }
@@ -244,6 +250,30 @@ impl Dispatcher {
       let mut tick_stream = ActionTickStream::new(*crate::constants::GAME_DEFAULT_STEP_MS);
       let pause_timeout = sleep(Duration::from_secs(0));
       tokio::pin!(pause_timeout);
+
+      {
+        let ct = ct.clone();
+        let shared = shared.clone();
+        tokio::spawn(async move {
+          let base_time = tokio::time::Instant::from_std(Instant::now());
+          let mut stream = interval_at(
+            base_time + crate::constants::RTT_STATS_REPORT_DELAY,
+            crate::constants::RTT_STATS_REPORT_INTERVAL,
+          );
+          stream.set_missed_tick_behavior(MissedTickBehavior::Skip);
+          loop {
+            tokio::select! {
+              _ = ct.cancelled() => {
+                break;
+              }
+              now = stream.tick() => {
+                let time = now.saturating_duration_since(base_time).as_millis();
+                shared.lock().push_rtt_stats(time as _);
+              }
+            }
+          }
+        });
+      }
 
       loop {
         tokio::select! {
@@ -604,8 +634,16 @@ impl State {
           }
         }
       }
+      PeerMsg::Pong { player_id, rtt } => {
+        self.handle_pong(player_id, rtt);
+      }
     }
     Ok(())
+  }
+
+  fn handle_pong(&mut self, player_id: i32, rtt: u32) {
+    let mut shared = self.shared.lock();
+    shared.get_player(player_id).map(|info| info.push_rtt(rtt));
   }
 
   async fn dispatch_incoming_w3gs(
@@ -919,7 +957,7 @@ impl State {
           player.send_w3gs(pkt).ok();
         }
       }
-      "ping" if debug => {
+      "rtt" => {
         let mut lock = self.shared.lock();
         let msgs: Vec<_> = lock
           .map
@@ -928,15 +966,20 @@ impl State {
             format!(
               "{}: {}",
               v.player_name(),
-              match v.action_rtt() {
-                Some(v) => format!("{}ms", v.as_millis() / 2),
+              match v.rtt() {
+                Some(v) => format!(
+                  "{:.1}ms (min: {}, max: {}, samples: {})",
+                  v.avg, v.min, v.max, v.ticks
+                ),
                 None => "N/A".to_string(),
               }
             )
           })
           .collect();
-        for msg in msgs {
-          lock.broadcast_message(msg);
+        if let Some(player) = lock.get_player(player_id) {
+          for msg in msgs {
+            player.send_private_message(&msg);
+          }
         }
       }
       "conn" if debug => {
@@ -1088,6 +1131,23 @@ impl Shared {
     self.obs.push_w3gs(self.game_id, action_packet.clone());
     self.broadcast(action_packet, broadcast::Everyone)?;
     Ok(DispatchResult::Continue)
+  }
+
+  fn push_rtt_stats(&mut self, time: u32) {
+    let items = self.map.iter_mut().map(|(id, info)| {
+      let stats = info.take_rtt();
+      RTTStatsItem {
+        player_id: *id,
+        ticks: stats.ticks,
+        min: stats.min,
+        max: stats.max,
+        avg: stats.avg,
+      }
+    });
+
+    self
+      .obs
+      .push_rtt_stat(self.game_id, RTTStats::new(time, items))
   }
 
   fn handle_lag(&mut self, add_player_ids: Vec<i32>) -> Result<bool> {
@@ -1423,9 +1483,6 @@ impl Shared {
         };
       }
     };
-    self
-      .get_player(player_id)
-      .map(|p| p.set_action_rtt(res.rtt));
     let has_desync = res.desync.is_some();
     if let Some(desync) = res.desync {
       self.handle_desync(desync)?;
@@ -1541,9 +1598,7 @@ impl PeerWorker {
     );
     let mut last_status = *self.status_rx.borrow();
 
-    if last_status == DispatchStatus::Pending {
-      ping.start();
-    }
+    ping.start();
 
     loop {
       tokio::select! {
@@ -1568,12 +1623,8 @@ impl PeerWorker {
           if status != last_status {
             last_status = status;
             match status {
-              DispatchStatus::Paused => {
-                ping.start();
-              },
-              DispatchStatus::Running => {
-                ping.stop();
-              },
+              DispatchStatus::Paused => {},
+              DispatchStatus::Running => {},
               _ => {}
             }
           }
@@ -1584,7 +1635,14 @@ impl PeerWorker {
               match frame.type_id {
                 PingStream::PONG_TYPE_ID => {
                   if ping.started() {
-                    ping.capture_pong(frame);
+                    if let Some(rtt) = ping.capture_pong(frame) {
+                      if self.dispatcher_tx.send(PeerMsg::Pong {
+                        player_id,
+                        rtt
+                      }).await.is_err() {
+                        break;
+                      }
+                    }
                   }
                   continue;
                 },

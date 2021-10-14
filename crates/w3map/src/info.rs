@@ -2,7 +2,6 @@ use crate::trigger_string::TriggerStringRef;
 use flo_util::binary::*;
 use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
-use std::cmp::Ordering;
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
 #[bin(enum_repr(u32))]

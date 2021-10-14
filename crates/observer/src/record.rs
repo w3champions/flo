@@ -1,8 +1,7 @@
 use bytes::{Buf, BufMut};
-use flo_net::proto::flo_node::Game;
 use flo_util::binary::{BinDecode, BinEncode};
+use flo_util::{BinDecode, BinEncode};
 use flo_w3gs::protocol::packet::{Header as W3GSHeader, Packet};
-use prost::Message;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use thiserror::Error;
@@ -21,6 +20,8 @@ pub enum RecordError {
   DecodeGameInfo(prost::DecodeError),
   #[error("decode w3gs header: {0}")]
   DecodeW3GSHeader(flo_util::error::BinDecodeError),
+  #[error("decode rtt stats record: {0}")]
+  DecodeRTTStatsRecord(flo_util::error::BinDecodeError),
   #[error("decode w3gs: {0}")]
   DecodeW3GS(flo_w3gs::error::Error),
 }
@@ -100,45 +101,73 @@ pub struct GameRecord {
 
 #[derive(Debug, Clone)]
 pub enum GameRecordData {
-  GameInfo(Game),
   W3GS(Packet),
   StartLag(Vec<i32>),
   StopLag(i32),
   GameEnd,
   TickChecksum { tick: u32, checksum: u32 },
+  RTTStats(RTTStats),
+}
+
+#[derive(Debug, Clone, BinEncode, BinDecode)]
+pub struct RTTStats {
+  pub time: u32,
+  items_len: u8,
+  #[bin(repeat = "items_len")]
+  pub items: Vec<RTTStatsItem>,
+}
+
+impl RTTStats {
+  pub fn new(time: u32, items: impl Iterator<Item = RTTStatsItem>) -> Self {
+    let items: Vec<_> = items.into_iter().take(u8::MAX as usize).collect();
+    Self {
+      time,
+      items_len: items.len() as _,
+      items,
+    }
+  }
+}
+
+#[derive(Debug, Clone, BinEncode, BinDecode)]
+pub struct RTTStatsItem {
+  pub player_id: i32,
+  pub ticks: u16,
+  pub min: u16,
+  pub max: u16,
+  pub avg: f32,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum DataTypeId {
-  GameInfo = 0,
   W3GS = 1,
   StartLag = 2,
   StopLag = 3,
   GameEnd = 4,
   TickChecksum = 5,
+  RTTStat = 6,
 }
 
 impl GameRecordData {
   pub fn type_id(&self) -> DataTypeId {
     match *self {
-      GameRecordData::GameInfo(_) => DataTypeId::GameInfo,
       GameRecordData::W3GS(_) => DataTypeId::W3GS,
       GameRecordData::StartLag(_) => DataTypeId::StartLag,
       GameRecordData::StopLag(_) => DataTypeId::StopLag,
       GameRecordData::GameEnd => DataTypeId::GameEnd,
       GameRecordData::TickChecksum { .. } => DataTypeId::TickChecksum,
+      GameRecordData::RTTStats { .. } => DataTypeId::RTTStat,
     }
   }
 
   fn data_encode_len(&self) -> usize {
     match *self {
-      GameRecordData::GameInfo(ref msg) => 2 + msg.encoded_len(),
       GameRecordData::W3GS(ref pkt) => 1 + pkt.payload.len(),
       GameRecordData::StartLag(ref ids) => 1 + 4 * ids.len(),
       GameRecordData::StopLag(_) => 4,
       GameRecordData::GameEnd => 0,
       GameRecordData::TickChecksum { .. } => 4 + 4,
+      GameRecordData::RTTStats(ref data) => 4 + 1 + (data.items.len() * RTTStatsItem::MIN_SIZE),
     }
   }
 
@@ -152,12 +181,6 @@ impl GameRecordData {
       GameRecordData::W3GS(ref pkt) => {
         pkt.header.encode(&mut buf);
         buf.put(pkt.payload.as_ref())
-      }
-      GameRecordData::GameInfo(ref msg) => {
-        let len = msg.encoded_len();
-        assert!(len <= u16::MAX as usize);
-        buf.put_u16(len as u16);
-        msg.encode(&mut buf).expect("unbounded buffer")
       }
       GameRecordData::StartLag(ref ids) => {
         assert!(ids.len() < u8::MAX as usize);
@@ -174,6 +197,9 @@ impl GameRecordData {
         buf.put_u32(tick);
         buf.put_u32(checksum);
       }
+      GameRecordData::RTTStats(ref data) => {
+        data.encode(&mut buf);
+      }
     }
   }
 
@@ -182,27 +208,15 @@ impl GameRecordData {
       return Err(RecordError::UnexpectedEndOfBuffer);
     }
     let data_type = match buf.get_u8() {
-      0 => DataTypeId::GameInfo,
       1 => DataTypeId::W3GS,
       2 => DataTypeId::StartLag,
       3 => DataTypeId::StopLag,
       4 => DataTypeId::GameEnd,
       5 => DataTypeId::TickChecksum,
+      6 => DataTypeId::RTTStat,
       other => return Err(RecordError::UnknownDataTypeId(other)),
     };
     Ok(match data_type {
-      DataTypeId::GameInfo => {
-        if buf.remaining() <= 2 {
-          return Err(RecordError::UnexpectedEndOfBuffer);
-        }
-        let size = buf.get_u16() as usize;
-        if buf.remaining() < size {
-          return Err(RecordError::UnexpectedEndOfBuffer);
-        }
-        let mut sub = buf.take(size);
-        let game = Game::decode(&mut sub).map_err(RecordError::DecodeGameInfo)?;
-        Self::GameInfo(game)
-      }
       DataTypeId::W3GS => {
         if buf.remaining() < 1 {
           return Err(RecordError::UnexpectedEndOfBuffer);
@@ -245,18 +259,14 @@ impl GameRecordData {
           checksum: buf.get_u32(),
         }
       }
+      DataTypeId::RTTStat => {
+        Self::RTTStats(RTTStats::decode(&mut buf).map_err(RecordError::DecodeRTTStatsRecord)?)
+      }
     })
   }
 }
 
 impl GameRecord {
-  pub fn new_game_info(msg: Game) -> Self {
-    Self {
-      game_id: msg.id,
-      data: GameRecordData::GameInfo(msg),
-    }
-  }
-
   pub fn new_w3gs(game_id: i32, pkt: Packet) -> Self {
     Self {
       game_id,
@@ -289,6 +299,13 @@ impl GameRecord {
     Self {
       game_id,
       data: GameRecordData::TickChecksum { tick, checksum },
+    }
+  }
+
+  pub fn new_rtt_stats(game_id: i32, stats: RTTStats) -> Self {
+    Self {
+      game_id,
+      data: GameRecordData::RTTStats(stats),
     }
   }
 
@@ -327,18 +344,6 @@ fn test_encode_decode() {
     assert!(!buf.has_remaining());
     r
   }
-
-  let record = encode_then_decode(&GameRecord::new_game_info(Game {
-    id: 1234,
-    ..Default::default()
-  }));
-  assert_eq!(record.game_id, 1234);
-  assert_eq!(record.data.type_id(), DataTypeId::GameInfo);
-  let inner = match record.data {
-    GameRecordData::GameInfo(msg) => msg,
-    _ => unreachable!(),
-  };
-  assert_eq!(inner.id, 1234);
 
   let record = encode_then_decode(&GameRecord::new_w3gs(
     1234,
@@ -383,4 +388,56 @@ fn test_encode_decode() {
     _ => unreachable!(),
   };
   assert_eq!(inner, 5678);
+
+  let record = encode_then_decode(&GameRecord::new_rtt_stats(
+    1234,
+    RTTStats {
+      time: 3333,
+      items_len: 3,
+      items: vec![
+        RTTStatsItem {
+          player_id: 1,
+          ticks: 1,
+          min: 1,
+          max: 1,
+          avg: 1.0,
+        },
+        RTTStatsItem {
+          player_id: 2,
+          ticks: 2,
+          min: 2,
+          max: 2,
+          avg: 2.0,
+        },
+        RTTStatsItem {
+          player_id: 3,
+          ticks: 3,
+          min: 3,
+          max: 3,
+          avg: 3.0,
+        },
+      ],
+    },
+  ));
+  assert_eq!(record.game_id, 1234);
+  assert_eq!(record.data.type_id(), DataTypeId::RTTStat);
+  let inner = match record.data {
+    GameRecordData::RTTStats(inner) => inner,
+    _ => unreachable!(),
+  };
+  assert_eq!(inner.items_len, 3);
+  for i in 1..=3 {
+    let RTTStatsItem {
+      player_id,
+      ticks,
+      min,
+      max,
+      avg,
+    } = inner.items[i - 1];
+    assert_eq!(player_id, i as i32);
+    assert_eq!(ticks, i as u16);
+    assert_eq!(min, i as u16);
+    assert_eq!(max, i as u16);
+    assert_eq!(avg, i as f32);
+  }
 }

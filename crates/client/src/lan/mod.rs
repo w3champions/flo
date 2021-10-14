@@ -231,8 +231,8 @@ pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
     static ref HASHER: HashIds = HashIds::builder().with_salt("FLO").finish();
   }
   let mut value = [0_u8; 8];
-  &value[0..4].copy_from_slice(&game_id.to_le_bytes());
-  &value[4..8].copy_from_slice(&player_id.to_le_bytes());
+  value[0..4].copy_from_slice(&game_id.to_le_bytes());
+  value[4..8].copy_from_slice(&player_id.to_le_bytes());
   format!(
     "GAME#{}-{}",
     game_id,

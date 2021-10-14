@@ -1,7 +1,7 @@
 use crate::error::Result;
 use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
-use flo_observer::{record::GameRecord, KINESIS_CLIENT};
+use flo_observer::{record::GameRecord, record::RTTStats, KINESIS_CLIENT};
 use flo_w3gs::packet::Packet;
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
@@ -67,6 +67,10 @@ impl ObserverPublisherHandle {
 
   pub fn push_tick_checksum(&self, game_id: i32, tick: u32, checksum: u32) {
     self.push_record(GameRecord::new_tick_checksum(game_id, tick, checksum))
+  }
+
+  pub fn push_rtt_stat(&self, game_id: i32, stats: RTTStats) {
+    self.push_record(GameRecord::new_rtt_stats(game_id, stats))
   }
 
   fn push_record(&self, record: GameRecord) {

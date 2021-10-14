@@ -20,8 +20,9 @@ pub struct PlayerDispatchInfo {
   lag_start: Option<Instant>,
   lag_slot_ids: BTreeSet<u8>,
   delay: Option<Duration>,
-  action_rtt: Option<Duration>,
   last_disconnect: Option<Instant>,
+  rtt_stats: PlayerRTTStats,
+  last_rtt_stats: Option<PlayerRTTStats>,
 }
 
 impl PlayerDispatchInfo {
@@ -37,8 +38,9 @@ impl PlayerDispatchInfo {
       lag_start: None,
       lag_slot_ids: BTreeSet::new(),
       delay: None,
-      action_rtt: None,
       last_disconnect: None,
+      rtt_stats: PlayerRTTStats::default(),
+      last_rtt_stats: None,
     }
   }
 
@@ -208,12 +210,69 @@ impl PlayerDispatchInfo {
     Ok(())
   }
 
-  pub fn set_action_rtt(&mut self, value: Duration) {
-    self.action_rtt.replace(value);
+  pub fn push_rtt(&mut self, rtt: u32) {
+    if self.rtt_stats.ticks == u16::MAX {
+      tracing::error!("rtt ticks overflow");
+      return;
+    }
+
+    let value = if rtt > (u16::MAX as u32) {
+      u16::MAX
+    } else {
+      rtt as u16
+    };
+
+    self.rtt_stats.total += value as f64;
+    self.rtt_stats.ticks += 1;
+    if let Some(ref mut range) = self.rtt_stats.range {
+      if value < range[0] {
+        range[0] = value
+      } else if value > range[1] {
+        range[1] = value
+      }
+    } else {
+      self.rtt_stats.range.replace([value, value]);
+    }
   }
 
-  pub fn action_rtt(&self) -> Option<Duration> {
-    self.action_rtt.clone()
+  pub fn rtt(&self) -> Option<PlayerRTTSnapshot> {
+    let merged = if let Some(ref last) = self.last_rtt_stats {
+      last.merge(&self.rtt_stats)
+    } else {
+      self.rtt_stats.clone()
+    };
+    if merged.ticks > 0 {
+      merged.range.map(|[min, max]| PlayerRTTSnapshot {
+        ticks: merged.ticks,
+        avg: (merged.total / (merged.ticks as f64)) as _,
+        min,
+        max,
+      })
+    } else {
+      None
+    }
+  }
+
+  pub fn take_rtt(&mut self) -> PlayerRTTSnapshot {
+    let (min, max) = if let Some([min, max]) = self.rtt_stats.range {
+      (min, max)
+    } else {
+      (0, 0)
+    };
+    let data = PlayerRTTSnapshot {
+      ticks: self.rtt_stats.ticks,
+      min,
+      max,
+      avg: if self.rtt_stats.ticks > 0 {
+        (self.rtt_stats.total / (self.rtt_stats.ticks as f64)) as _
+      } else {
+        0.0
+      },
+    };
+    self
+      .last_rtt_stats
+      .replace(std::mem::replace(&mut self.rtt_stats, Default::default()));
+    data
   }
 }
 
@@ -222,4 +281,39 @@ pub enum PlayerSendError {
   Closed(Frame),
   ChannelFull,
   AckQueueFull,
+}
+
+#[derive(Debug)]
+pub struct PlayerRTTSnapshot {
+  pub ticks: u16,
+  pub avg: f32,
+  pub min: u16,
+  pub max: u16,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PlayerRTTStats {
+  total: f64,
+  ticks: u16,
+  range: Option<[u16; 2]>,
+}
+
+impl PlayerRTTStats {
+  fn merge(&self, other: &Self) -> Self {
+    let ticks = self.ticks.saturating_add(other.ticks);
+    let total = self.total + other.total;
+    let range = match (self.range, other.range) {
+      (None, None) => None,
+      (None, Some(range)) => Some(range),
+      (Some(range), None) => Some(range),
+      (Some([min, max]), Some([min2, max2])) => {
+        Some([std::cmp::min(min, min2), std::cmp::max(max, max2)])
+      }
+    };
+    Self {
+      total,
+      ticks,
+      range,
+    }
+  }
 }
