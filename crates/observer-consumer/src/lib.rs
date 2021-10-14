@@ -11,7 +11,6 @@ pub mod error;
 use archiver::{Archiver, ArchiverHandle};
 pub use flo_observer_fs as fs;
 use fs::GameDataWriter;
-use upload::{Uploader, UploaderHandle};
 
 use crate::error::Error;
 use crate::persist::Persist;
@@ -20,10 +19,11 @@ use error::Result;
 use flo_observer::{KINESIS_CLIENT, KINESIS_STREAM_NAME};
 use flo_state::{async_trait, Actor, Context, Handler, Message, Owner};
 use rusoto_kinesis::Kinesis;
-<<<<<<< HEAD
-use std::{collections::BTreeMap};
-=======
+use shard::ShardConsumer;
 use std::collections::BTreeMap;
+
+pub struct FloObserver;
+
 impl FloObserver {
   pub async fn serve() -> Result<()> {
     let _actor = ShardsMgr::init().await?.start();
