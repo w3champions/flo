@@ -19,7 +19,7 @@ pub struct ShardConsumer {
   shard_id: String,
   parent: Addr<ShardsMgr>,
   persist: Persist,
-  uploader: ArchiverHandle,
+  uploader: Option<ArchiverHandle>,
   games: BTreeMap<i32, GameEntry>,
   lost_games: BTreeSet<i32>,
   span: Span,
@@ -31,7 +31,7 @@ impl ShardConsumer {
     shard_id: String,
     parent: Addr<ShardsMgr>,
     persist: Persist,
-    uploader: ArchiverHandle,
+    uploader: Option<ArchiverHandle>,
   ) -> Self {
     let span = tracing::info_span!("shard_consumer", shard_id = shard_id.as_str());
     Self {
@@ -91,10 +91,11 @@ impl ShardConsumer {
         let game = self.games.remove(&id);
         self.persist.remove_game(id).await?;
         if let Some(game) = game {
-          self
-            .uploader
-            .add_folder(game.writer.data_dir().to_owned())
-            .await;
+          if let Some(ref uploader) = self.uploader {
+            uploader
+              .add_folder(game.writer.data_dir().to_owned())
+              .await;
+          }
         }
       }
     }
