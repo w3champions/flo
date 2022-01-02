@@ -20,6 +20,7 @@ pub use self::minimap::*;
 pub use self::trigger_string::*;
 
 pub use flo_blp::BLPImage;
+#[cfg(feature = "w3storage")]
 use flo_w3storage::W3Storage;
 
 use self::error::{Error, Result};
@@ -46,6 +47,7 @@ impl W3Map {
     Self::load_info(Self::open_archive_memory(bytes)?)
   }
 
+  #[cfg(feature = "w3storage")]
   pub fn open_storage(storage: &W3Storage, path: &str) -> Result<Self> {
     use flo_w3storage::Data;
     let file = storage
@@ -57,6 +59,7 @@ impl W3Map {
     }
   }
 
+  #[cfg(feature = "w3storage")]
   pub fn open_storage_with_checksum(
     storage: &W3Storage,
     path: &str,
@@ -69,11 +72,12 @@ impl W3Map {
       Data::Path(ref path) => Self::open_archive_file(path),
       Data::Bytes(ref bytes) => Self::open_archive_memory(bytes),
     }?;
-    let checksum = MapChecksum::compute(&storage, &mut archive)?;
+    let checksum = MapChecksum::compute(&mut archive)?;
     let map = Self::load_info(archive)?;
     Ok((map, checksum))
   }
 
+  #[cfg(feature = "w3storage")]
   pub fn calc_checksum(storage: &W3Storage, path: &str) -> Result<MapChecksum> {
     use flo_w3storage::Data;
     let file = storage
@@ -83,7 +87,7 @@ impl W3Map {
       Data::Path(ref path) => Self::open_archive_file(path),
       Data::Bytes(ref bytes) => Self::open_archive_memory(bytes),
     }?;
-    let checksum = MapChecksum::compute(&storage, &mut archive)?;
+    let checksum = MapChecksum::compute(&mut archive)?;
     Ok(checksum)
   }
 
@@ -380,6 +384,7 @@ fn test_open_map() {
   }
 }
 
+#[cfg(feature = "w3storage")]
 #[test]
 fn test_open_storage() {
   let storage = W3Storage::from_env().unwrap();
@@ -400,8 +405,8 @@ fn test_open_storage() {
   dbg!(_map.info);
 }
 
+#[cfg(feature = "w3storage")]
 #[test]
-#[ignore] // xoro doesn't work
 fn test_open_storage_with_checksum() {
   let storage = W3Storage::from_env().unwrap();
   let (_map, checksum) =
@@ -417,14 +422,13 @@ fn test_open_storage_with_checksum() {
       sha1: [
         201, 228, 110, 214, 86, 255, 142, 141, 140, 96, 141, 57, 3, 110, 63, 27, 250, 11, 28, 194,
       ],
-      file_size: 0,
+      file_size: checksum.file_size,
     }
   )
 }
 
 #[test]
 fn test_open_map_special() {
-  use crate::constants::MapFlags;
   let map = W3Map::open(flo_util::sample_path!(
     "map",
     "Frostcraft Classic v2.00a_wc3_champions.w3x"

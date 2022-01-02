@@ -7,6 +7,7 @@ pub enum Error {
   MapScriptNotFound,
   #[error("storage file not found: {0}")]
   StorageFileNotFound(String),
+  #[cfg(feature = "w3storage")]
   #[error("storage: {0}")]
   Storage(#[from] flo_w3storage::error::Error),
   #[error("stormlib: {0}")]

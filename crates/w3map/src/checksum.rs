@@ -1,6 +1,5 @@
 use crate::error::{Error, Result};
 use crate::Archive;
-use flo_w3storage::W3Storage;
 use std::io::{BufReader, Read};
 
 const CHUNK_SIZE: usize = 200 * 1024;
@@ -14,7 +13,7 @@ pub struct MapChecksum {
 }
 
 impl MapChecksum {
-  pub(crate) fn compute(_storage: &W3Storage, archive: &mut Archive) -> Result<Self> {
+  pub(crate) fn compute(archive: &mut Archive) -> Result<Self> {
     let mut sha1 = sha1::Sha1::new();
     let mut crc32 = crc32fast::Hasher::new();
     let file_size;

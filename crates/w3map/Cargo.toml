@@ -5,12 +5,14 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [features]
-xoro = []
+w3storage = [
+  "flo-w3storage"
+]
 
 [dependencies]
 flo-util = { path = "../util" }
 flo-blp = { path = "../blp" }
-flo-w3storage = { path = "../w3storage" }
+flo-w3storage = { path = "../w3storage", optional = true }
 
 stormlib = "0.1"
 thiserror = "1"

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 flo-lan = { path = "../lan" }
 flo-w3storage = { path = "../w3storage" }
-flo-w3map = { path = "../w3map" }
+flo-w3map = { path = "../w3map", features = ["w3storage"] }
 flo-w3gs = { path = "../w3gs" }
 flo-net = { path = "../net" }
 
