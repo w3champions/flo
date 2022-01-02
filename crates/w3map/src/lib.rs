@@ -43,6 +43,13 @@ impl W3Map {
     Self::load_info(Self::open_archive_file(path)?)
   }
 
+  pub fn open_with_checksum<P: AsRef<Path>>(path: P) -> Result<(Self, MapChecksum)> {
+    let mut archive = Self::open_archive_file(path)?;
+    let checksum = MapChecksum::compute(&mut archive)?;
+    let map = Self::load_info(archive)?;
+    Ok((map, checksum))
+  }
+
   pub fn open_memory(bytes: &[u8]) -> Result<Self> {
     Self::load_info(Self::open_archive_memory(bytes)?)
   }
