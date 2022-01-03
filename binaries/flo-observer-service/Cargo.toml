@@ -11,6 +11,6 @@ flo-observer-consumer = { path = "../../crates/observer-consumer" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 
 dotenv = "0.15"
-tokio = { version = "1.5", features = ["time", "sync", "macros", "rt-multi-thread"] }
+tokio = { version = "1.15.0", features = ["time", "sync", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.5", features = ["time"] }
 tracing = "0.1"

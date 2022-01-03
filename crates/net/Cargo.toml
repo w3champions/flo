@@ -10,14 +10,14 @@ flo-constants = { path = "../constants" }
 flo-w3gs = { path = "../w3gs" }
 flo-state = "1"
 
-bytes = "1.0"
+bytes = "1.1.0"
 thiserror = "1"
 prost = "0.7"
 prost-types = "0.7"
-tokio = { version = "1.5", features = ["time", "net", "macros", "sync"] }
+tokio = { version = "1.15.0", features = ["time", "net", "macros", "sync"] }
 tokio-stream = { version = "0.1.5", features = ["time", "net"] }
 tokio-util = { version = "0.6", features = ["codec", "net"] }
-futures = "0.3"
+futures = "0.3.19"
 tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 bitflags = "1.2"

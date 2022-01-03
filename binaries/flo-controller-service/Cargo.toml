@@ -11,5 +11,5 @@ flo-controller = { path = "../../crates/controller" }
 tracing = "0.1"
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 dotenv = "0.15"
-tokio = { version = "1.5", features = ["time", "sync", "macros", "signal", "rt-multi-thread"] }
+tokio = { version = "1.15.0", features = ["time", "sync", "macros", "signal", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.5", features = ["time"] }

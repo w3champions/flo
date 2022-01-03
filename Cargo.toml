@@ -26,6 +26,7 @@ members = [
   "crates/node",
   "crates/observer-consumer",
   "crates/client",
+  "crates/streamer",
 
   "binaries/flo",
   "binaries/flo-cli",
