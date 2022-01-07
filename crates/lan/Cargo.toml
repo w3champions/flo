@@ -18,7 +18,7 @@ tokio-stream = { version = "0.1.5", features = ["time"] }
 hostname = "^0.3"
 pretty-hex = "0.1"
 bytes = "1.1.0"
-prost = "0.7"
+prost = "0.9"
 base64 = "0.12"
 thiserror = "1"
 lazy_static = "1"
@@ -29,4 +29,4 @@ futures = "0.3.19"
 async-dnssd = "0.5.0-rc.1"
 
 [build-dependencies]
-prost-build = "0.7"
+prost-build = "0.9"

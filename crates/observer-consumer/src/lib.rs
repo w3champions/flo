@@ -1,9 +1,7 @@
 mod archiver;
 mod env;
-mod mem_cache;
 mod persist;
 mod shard;
-mod streamer;
 mod token;
 mod version;
 

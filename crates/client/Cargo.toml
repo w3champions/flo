@@ -32,7 +32,7 @@ s2-grpc-utils = "0.2"
 tokio = { version = "1.15.0", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.5", features = ["time", "net"] }
 tokio-util = "0.6"
-async-tungstenite = { version = "0.11", features = ["tokio-runtime"], optional = true }
+async-tungstenite = { version = "0.16.1", features = ["tokio-runtime"], optional = true }
 tracing = "0.1"
 tracing-futures = "0.2"
 thiserror = "1.0"

@@ -1,0 +1,18 @@
+[package]
+name = "flo-kinesis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flo-observer = { path = "../observer" }
+tokio = { version = "1.15.0", features = ["macros", "time", "rt-multi-thread"] }
+tokio-stream = "0.1.8"
+rusoto_core = "0.47.0"
+rusoto_kinesis = "0.47.0"
+thiserror = "1.0"
+backoff = "0.3"
+tracing = "0.1"
+
+[dev-dependencies]
+dotenv = "0.15"
+flo-log-subscriber = { path = "../log-subscriber"}

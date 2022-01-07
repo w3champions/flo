@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::env;
 use std::sync::Arc;
-use tonic::{metadata::MetadataValue, Interceptor, Request, Status};
+use tonic::{metadata::MetadataValue, service::Interceptor, Request, Status};
 
 use crate::error::*;
 
@@ -62,7 +62,7 @@ impl Handler<Reload> for ConfigStorage {
 
 pub struct GetInterceptor;
 impl Message for GetInterceptor {
-  type Result = Interceptor;
+  type Result = FloGrpcInterceptor;
 }
 
 #[async_trait]
@@ -72,7 +72,9 @@ impl Handler<GetInterceptor> for ConfigStorage {
     _: &mut Context<Self>,
     _: GetInterceptor,
   ) -> <GetInterceptor as Message>::Result {
-    self.as_interceptor()
+    FloGrpcInterceptor {
+      api_client_map: self.api_client_map.clone()
+    }
   }
 }
 
@@ -80,34 +82,38 @@ pub const REQUEST_META_SECRET: &str = "x-flo-secret";
 pub const REQUEST_META_API_CLIENT_ID: &str = "x-flo-api-client-id-bin";
 pub const REQUEST_META_API_PLAYER_ID: &str = "x-flo-api-player-id-bin";
 
-impl ConfigStorage {
-  pub fn as_interceptor(&self) -> Interceptor {
-    let map = self.api_client_map.clone();
-    Interceptor::new(move |mut req| {
-      let secret = req.metadata().get(REQUEST_META_SECRET);
-      match secret {
-        Some(secret) => match map.load().get(secret.as_bytes()) {
-          Some(client) => {
-            let meta = req.metadata_mut();
-            meta.insert_bin(
-              REQUEST_META_API_CLIENT_ID,
-              MetadataValue::from_bytes(&client.id.to_le_bytes()),
-            );
-            meta.insert_bin(
-              REQUEST_META_API_PLAYER_ID,
-              MetadataValue::from_bytes(&client.player_id.to_le_bytes()),
-            );
-            Ok(req)
-          }
-          None => Err(Status::unauthenticated("invalid secret")),
-        },
-        None => Err(Status::unauthenticated(
-          "`x-flo-secret` metadata was not found",
-        )),
-      }
-    })
-  }
+#[derive(Clone)]
+pub struct FloGrpcInterceptor {
+  api_client_map: Arc<ArcSwap<BTreeMap<Vec<u8>, ApiClient>>>,
+}
 
+impl Interceptor for FloGrpcInterceptor {
+  fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
+    let secret = req.metadata().get(REQUEST_META_SECRET);
+    match secret {
+      Some(secret) => match self.api_client_map.load().get(secret.as_bytes()) {
+        Some(client) => {
+          let meta = req.metadata_mut();
+          meta.insert_bin(
+            REQUEST_META_API_CLIENT_ID,
+            MetadataValue::from_bytes(&client.id.to_le_bytes()),
+          );
+          meta.insert_bin(
+            REQUEST_META_API_PLAYER_ID,
+            MetadataValue::from_bytes(&client.player_id.to_le_bytes()),
+          );
+          Ok(req)
+        }
+        None => Err(Status::unauthenticated("invalid secret")),
+      },
+      None => Err(Status::unauthenticated(
+        "`x-flo-secret` metadata was not found",
+      )),
+    }
+  }
+}
+
+impl ConfigStorage {
   async fn load_map(db: &ExecutorRef) -> Result<BTreeMap<Vec<u8>, ApiClient>> {
     let mut map = BTreeMap::new();
 
