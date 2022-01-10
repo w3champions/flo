@@ -6,9 +6,9 @@ pub struct Services {
 }
 
 impl Services {
-  pub fn env() -> Self {
+  pub fn from_env() -> Self {
     Self {
-      controller: Controller::env(),
+      controller: Controller::from_env(),
     }
   }
 }

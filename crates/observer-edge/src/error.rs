@@ -4,12 +4,22 @@ use thiserror::Error;
 pub enum Error {
   #[error("game not ready: {0}")]
   GameNotReady(String),
+  #[error("game not found: {0}")]
+  GameNotFound(i32),
   #[error("invalid game id: {0}")]
   InvalidGameId(i32),
+  #[error("unexpected game records: {expected} << {range:?} {len}")]
+  UnexpectedGameRecords {
+    expected: u32,
+    range: [u32; 2],
+    len: usize,
+  },
   #[error("controller service: {0}")]
   ControllerService(tonic::Status),
   #[error("kinesis: {0}")]
   Kinesis(#[from] flo_kinesis::error::Error),
+  #[error("w3gs: {0}")]
+  W3GS(#[from] flo_w3gs::error::Error),
   #[error("io: {0}")]
   Io(#[from] std::io::Error),
   #[error("actor: {0}")]

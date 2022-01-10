@@ -4,7 +4,6 @@ use flo_grpc::{
 };
 use s2_grpc_utils::S2ProtoUnpack;
 use tonic::{service::Interceptor, metadata::{MetadataValue, Ascii}, codegen::InterceptedService};
-use once_cell::sync::Lazy;
 use crate::error::{Result, Error};
 use crate::game::Game;
 
@@ -16,7 +15,7 @@ pub struct Controller {
 }
 
 impl Controller {
-  pub fn env() -> Self {
+  pub fn from_env() -> Self {
     let chan = Channel::from_static(crate::env::ENV.controller_url.as_str());
     let secret = crate::env::ENV.controller_secret.parse().unwrap();
     Self {
@@ -61,7 +60,7 @@ impl Interceptor for WithSecretInterceptor {
 #[tokio::test]
 async fn test_ctrlr_client() -> anyhow::Result<()> {
   dotenv::dotenv().unwrap();
-  let client = Controller::env();
+  let client = Controller::from_env();
   let game = client.fetch_game(2048816).await?;
   dbg!(game);
   Ok(())

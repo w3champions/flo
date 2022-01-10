@@ -211,7 +211,7 @@ impl Scanner {
       }
       let record = KMSRecord::decode(bytes)?;
       for (seq_id, r) in record.records {
-        let entry = map.entry(r.game_id).or_insert_with(|| Records {
+        let entry = map.entry(r.game_id).or_insert_with(|| GameChunk {
           approximate_arrival_timestamp,
           min_seq_id: seq_id,
           max_seq_id: u32::MAX,
@@ -312,11 +312,11 @@ pub enum Item {
 pub struct Chunk {
   pub max_sequence_number: String,
   pub millis_behind_latest: Option<i64>,
-  pub game_records: BTreeMap<i32, Records>,
+  pub game_records: BTreeMap<i32, GameChunk>,
 }
 
 #[derive(Debug)]
-pub struct Records {
+pub struct GameChunk {
   pub approximate_arrival_timestamp: f64,
   pub min_seq_id: u32,
   pub max_seq_id: u32,

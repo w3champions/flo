@@ -538,12 +538,12 @@ impl State {
     }) {
       self.status = NodeGameStatus::Ended;
       tracing::debug!("all player left, end game");
+      self.obs.push_game_end(self.game_id);
       self
         .g_event_sender
         .send(GlobalEvent::GameEnded(self.game_id))
         .await
         .ok();
-      self.obs.push_game_end(self.game_id);
       true
     } else {
       false

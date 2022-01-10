@@ -125,6 +125,14 @@ impl Packet {
         found: self.header.type_id,
       });
     }
+    self.decode_payload_bytes()
+  }
+
+  #[inline]
+  pub fn decode_payload_bytes<T>(&self) -> Result<T>
+  where
+    T: PacketPayloadDecode,
+  {
     let mut buf = self.payload.clone();
     let payload = T::decode(&mut buf)?;
     if buf.has_remaining() {
