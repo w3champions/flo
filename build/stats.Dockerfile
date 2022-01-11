@@ -20,4 +20,4 @@ EXPOSE 3558/tcp
 
 COPY release/flo-stats-service flo-stats-service
 
-CMD ["/flo/flo-obsestatsrver-service"]
+CMD ["/flo/flo-stats-service"]
