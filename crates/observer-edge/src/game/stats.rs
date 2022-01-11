@@ -8,6 +8,7 @@ const APM_COLLECT_INTERVAL_MS: u32 = 15 * 1000;
 
 #[derive(Debug)]
 pub struct GameStats {
+  _game_id: i32,
   time: u32,
   ping: Vec<PingStats>,
   action: Vec<ActionStats>,
@@ -17,11 +18,16 @@ pub struct GameStats {
 impl GameStats {
   pub fn new(game: &Game) -> Self {
     Self {
+      _game_id: game.id,
       time: 0,
       ping: vec![],
       action: vec![],
       apm_collect: ApmCollect::new(game),
     }
+  }
+
+  pub fn time(&self) -> u32 {
+    self.time
   }
 
   pub fn put_rtt(&mut self, item: record::RTTStats) -> PingStats {
@@ -42,11 +48,13 @@ impl GameStats {
   }
 
   pub fn put_actions(&mut self, time_increment: u16, actions: &[PlayerAction]) -> Option<ActionStats> {
-    if time_increment == 0 {
-      return None;
-    }
     self.time += time_increment as u32;
-    self.apm_collect.put_actions(self.time, actions)
+    if let Some(item) = self.apm_collect.try_collect(self.time, actions) {
+      self.action.push(item.clone());
+      Some(item)
+    } else {
+      None
+    }
   }
 
   pub fn make_snapshot(&self) -> GameStatsSnapshot {
@@ -59,6 +67,7 @@ impl GameStats {
 
 #[derive(Debug)]
 struct ApmCollect {
+  _game_id: i32,
   time: u32,
   player_slots: [Option<Action>; 24],
 }
@@ -82,29 +91,38 @@ impl ApmCollect {
       }
     }
     Self {
+      _game_id: game.id,
       time: 0,
       player_slots,
     }
   }
 
-  fn put_actions(&mut self, now: u32, actions: &[PlayerAction]) -> Option<ActionStats> {
+  fn try_collect(&mut self, now: u32, actions: &[PlayerAction]) -> Option<ActionStats> {
     for action in actions {
-      if let Some(Some(ref mut item)) = self.player_slots.get_mut(action.player_id as usize) {
-        item.total += 1;
+      if let Some(action_id) = action.peek_action_id() {
+        // Only track certain action types
+        // https://github.com/PBug90/w3gjs/blob/14582c54f78f304993c23ac04e38db59d2fe960e/src/Player.ts#L326
+        if [0x17, 0x18, 0x1C, 0x1D, 0x66, 0x67, 0x1E, 0x61].contains(&action_id) {
+          if let Some(Some(ref mut item)) = self.player_slots.get_mut(action.player_id.saturating_sub(1) as usize) {
+            item.total += 1;
+          }
+        }
       }
     }
 
     let d = now.saturating_sub(self.time);
+
     if d < APM_COLLECT_INTERVAL_MS {
       return None;
     }
+
     self.time = now;
     Some(ActionStats {
       time: now,
       data: self.player_slots.iter_mut().filter_map(|item| {
         let item = item.as_mut()?;
         let v = Action {
-          apm: item.total as f32 / d as f32,
+          apm: item.total as f32 / d as f32 * 60. * 1000.,
           ..item.clone()
         };
         item.reset();

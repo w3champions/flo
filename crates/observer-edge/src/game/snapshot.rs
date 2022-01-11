@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use async_graphql::SimpleObject;
 use super::stats::{PingStats, ActionStats, GameStatsSnapshot};
-use super::{event::*, GameMeta};
+use super::{event::*, GameMeta, PlayerLeaveReason};
 use super::{Race, Game};
 use crate::error::{Result, Error};
 
@@ -63,6 +63,12 @@ impl GameSnapshotMap {
   pub fn insert_game_action_stats(&mut self, game_id: i32, item: ActionStats) {
     self.send_game_update_event(game_id, || {
       GameUpdateEvent::action_stats(game_id, item)
+    })
+  }
+
+  pub fn insert_game_player_left(&mut self, game_id: i32, time: u32, player_id: i32, reason: PlayerLeaveReason) {
+    self.send_game_update_event(game_id, || {
+      GameUpdateEvent::player_left(game_id, time, player_id, reason)
     })
   }
 
@@ -135,11 +141,14 @@ impl GameSnapshot {
         return None
       }
       if let Some(ref player) = slot.player {
+        let left = meta.player_left_reason_map.get(&player.id);
         Some(Player {
           id: player.id,
           name: player.name.clone(),
           race: slot.settings.race,
           team: slot.settings.team,
+          left_at: left.as_ref().map(|(time, _)| *time),
+          leave_reason: left.as_ref().map(|(_, reason)| *reason),
         })
       } else {
         None
@@ -165,6 +174,8 @@ pub struct Player {
   pub name: String,
   pub race: Race,
   pub team: i32,
+  pub left_at: Option<u32>,
+  pub leave_reason: Option<PlayerLeaveReason>,
 }
 
 #[derive(Debug, Clone, SimpleObject)]

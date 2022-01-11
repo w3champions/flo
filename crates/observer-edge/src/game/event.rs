@@ -1,13 +1,13 @@
-use super::{snapshot::GameSnapshot, stats::{PingStats, ActionStats}};
+use super::{
+  snapshot::GameSnapshot,
+  stats::{ActionStats, PingStats},
+  PlayerLeaveReason,
+};
 use async_graphql::{SimpleObject, Union};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tokio_stream::{
-  Stream,
-  StreamExt,
-  wrappers::BroadcastStream
-};
+use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 
 #[derive(Clone, SimpleObject)]
 pub struct GameUpdateEvent {
@@ -45,6 +45,13 @@ impl GameUpdateEvent {
       data: GameUpdateEventData::ActionStats(item),
     }
   }
+
+  pub fn player_left(game_id: i32, time: u32, player_id: i32, reason: PlayerLeaveReason) -> Self {
+    GameUpdateEvent {
+      game_id,
+      data: GameUpdateEventData::PlayerLeft(GameUpdateEventDataPlayerLeft { time, player_id, reason }),
+    }
+  }
 }
 
 #[derive(Clone, Union)]
@@ -53,6 +60,7 @@ pub enum GameUpdateEventData {
   Removed(GameUpdateEventDataRemoved),
   PingStats(PingStats),
   ActionStats(ActionStats),
+  PlayerLeft(GameUpdateEventDataPlayerLeft),
 }
 
 #[derive(Clone, SimpleObject)]
@@ -64,6 +72,13 @@ pub struct GameUpdateEventDataEnded {
 #[derive(Clone, SimpleObject)]
 pub struct GameUpdateEventDataRemoved {
   pub snapshot: Arc<GameSnapshot>,
+}
+
+#[derive(Clone, SimpleObject)]
+pub struct GameUpdateEventDataPlayerLeft {
+  pub time: u32,
+  pub player_id: i32,
+  pub reason: PlayerLeaveReason,
 }
 
 #[derive(Clone, Union)]

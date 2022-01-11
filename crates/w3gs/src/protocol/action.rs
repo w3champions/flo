@@ -314,6 +314,14 @@ impl PlayerAction {
       data: { buf.split_to(data_len) },
     })
   }
+
+  pub fn peek_action_id(&self) -> Option<u8> {
+    if self.data.len() >= 1 {
+      Some(self.data.as_ref().get_u8())
+    } else {
+      None
+    }
+  }
 }
 
 #[derive(Debug, PartialEq, BinDecode, BinEncode)]

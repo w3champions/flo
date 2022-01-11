@@ -23,8 +23,17 @@ impl FloObserverEdge {
     let dispatcher = Dispatcher::new(services).start();
     let data_stream = DataStream::from_env();
     let iter_type = ShardIteratorType::at_timestamp_backward(Duration::from_secs(3600));
+
+    tracing::debug!("creating iterator...");
+
     let iter = data_stream.into_iter(iter_type).await?;
+
+    tracing::debug!("iterator created.");
+
     dispatcher.send(AddIterator(iter)).await?;
+
+    tracing::debug!("iterator added.");
+
     Ok(Self {
       dispatcher,
     })
