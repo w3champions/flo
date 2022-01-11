@@ -1,9 +1,10 @@
 [package]
-name = "flo-live-service"
+name = "flo-stats-service"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+flo-constants = { path = "../../crates/constants" }
 flo-observer-edge = { path = "../../crates/observer-edge" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 

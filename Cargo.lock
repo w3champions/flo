@@ -1679,21 +1679,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flo-live-service"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "async-graphql-axum",
- "axum",
- "dotenv",
- "flo-log-subscriber",
- "flo-observer-edge",
- "tokio",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
 name = "flo-log"
 version = "0.1.0"
 dependencies = [
@@ -1935,6 +1920,22 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "flo-stats-service"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-graphql-axum",
+ "axum",
+ "dotenv",
+ "flo-constants",
+ "flo-log-subscriber",
+ "flo-observer-edge",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]

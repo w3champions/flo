@@ -37,7 +37,7 @@ members = [
   "binaries/flo-worker",
   "binaries/flo-worker-ui",
   "binaries/flo-ping",
-  "binaries/flo-live-service",
+  "binaries/flo-stats-service",
 
   "deps/flo-grpc"
 ]

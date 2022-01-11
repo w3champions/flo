@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   {
     dotenv::dotenv()?;
     flo_log_subscriber::init_env_override(
-      "flo_live_service=debug,flo_observer_edge=debug,flo_observer=debug",
+      "flo_stats_service=debug,flo_observer_edge=debug,flo_observer=debug",
     );
   }
 
@@ -48,9 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       .route("/ws", GraphQLSubscription::new(schema.clone()))
       .layer(AddExtensionLayer::new(schema));
 
-  println!("Playground: http://localhost:8080");
+  let bind = format!("0.0.0.0:{}", flo_constants::OBSERVER_GRAPHQL_PORT);
+  
+  tracing::info!("running at {}", bind);
 
-  Server::bind(&"0.0.0.0:8080".parse().unwrap())
+  Server::bind(&bind.parse().unwrap())
       .serve(app.into_make_service())
       .await?;
   Ok(())
