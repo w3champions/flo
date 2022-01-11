@@ -15,9 +15,12 @@ pub struct Archiver {
 }
 
 impl Archiver {
-  pub fn new(data_dir: PathBuf) -> Result<(Self, ArchiverHandle)> {
-    let s3_bucket = env::var("AWS_S3_BUCKET")
-      .map_err(|_| Error::InvalidS3Credentials("missing env AWS_S3_BUCKET"))?;
+  pub fn new(data_dir: PathBuf) -> Result<Option<(Self, ArchiverHandle)>> {
+    let s3_bucket = if let Ok(value) = env::var("AWS_S3_BUCKET") {
+      value
+    } else {
+      return Ok(None);
+    };
     let s3_client = Arc::new({
       let provider = StaticProvider::new(
         env::var("AWS_ACCESS_KEY_ID")
@@ -49,7 +52,7 @@ impl Archiver {
         s3_bucket,
         s3_client
       },
-    ))
+    ).into())
   }
 
   pub async fn serve(self) {

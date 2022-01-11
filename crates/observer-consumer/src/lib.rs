@@ -1,9 +1,7 @@
 mod archiver;
 mod env;
-mod mem_cache;
 mod persist;
 mod shard;
-mod streamer;
 mod token;
 mod version;
 
@@ -34,7 +32,7 @@ impl FloObserver {
 
 pub(crate) struct ShardsMgr {
   cache: Persist,
-  uploader_handle: ArchiverHandle,
+  uploader_handle: Option<ArchiverHandle>,
   shard_ids: Vec<String>,
   shards: BTreeMap<String, Owner<ShardConsumer>>,
 }
@@ -44,8 +42,14 @@ impl ShardsMgr {
     use rusoto_kinesis::ListShardsInput;
 
     let cache = Persist::connect().await?;
-    let (uploader, uploader_handle) = Archiver::new(GameDataWriter::data_folder().to_owned())?;
-    tokio::spawn(uploader.serve());
+    let uploader_handle = if let Some((uploader, uploader_handle)) =
+      Archiver::new(GameDataWriter::data_folder().to_owned())?
+    {
+      tokio::spawn(uploader.serve());
+      Some(uploader_handle)
+    } else {
+      None
+    };
 
     let shards = KINESIS_CLIENT
       .list_shards(ListShardsInput {

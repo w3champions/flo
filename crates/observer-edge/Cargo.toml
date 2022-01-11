@@ -1,0 +1,37 @@
+[package]
+name = "flo-observer-edge"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flo-net = { path = "../net" }
+flo-w3gs = { path = "../w3gs" }
+flo-util = { path = "../util" }
+flo-observer = { path = "../observer" }
+flo-types = { path = "../types" }
+flo-grpc = { path = "../../deps/flo-grpc" }
+flo-constants = { path = "../constants" }
+flo-kinesis = { path = "../kinesis" }
+flo-state = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.15.0", features = ["macros", "time", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.8", features = ["sync"] }
+bytes = "1.1.0"
+tracing = "0.1"
+futures = "0.3.19"
+lru = "0.7.2"
+chrono = { version = "0.4", features = ["serde"] }
+once_cell = "1.7"
+backoff = { version = "0.4" }
+jsonwebtoken = "7.2"
+tonic = "0.6"
+s2-grpc-utils = "0.2"
+async-graphql = { version = "3.0.20", features = ["chrono"] }
+
+[dev-dependencies]
+dotenv = "0.15"
+anyhow = "1.0"
+flo-log-subscriber = { path = "../log-subscriber" }
+
+[build-dependencies]
+flo-constants = { path = "../constants" }

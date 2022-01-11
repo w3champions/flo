@@ -885,7 +885,6 @@ pub fn select_node(conn: &DbConn, id: i32, player_id: i32, node_id: Option<i32>)
 }
 
 fn end_game(conn: &DbConn, id: i32, status: GameStatus) -> Result<()> {
-  use diesel::dsl::sql;
   use game::dsl;
   conn.transaction(|| -> Result<_> {
     diesel::update(game::table.find(id))

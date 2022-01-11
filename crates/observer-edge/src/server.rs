@@ -9,7 +9,6 @@ use futures::stream::TryStreamExt;
 use tempfile::{tempdir, TempDir};
 
 const MAX_IN_MEM_GAME: usize = 300;
-type MemCacheMgr = crate::mem_cache::MemCacheMgr<MAX_IN_MEM_GAME>;
 
 pub struct StreamServer {
   swap_dir: TempDir,
