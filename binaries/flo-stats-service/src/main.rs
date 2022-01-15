@@ -43,6 +43,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       .data(edge.handle())
       .finish();
 
+  tokio::spawn(async move {
+    if let Err(err) = edge.serve().await {
+      tracing::error!("stream server: {}", err);
+    }
+  });
+
   let app = Router::new()
       .route("/", get(graphql_playground).post(graphql_handler))
       .route("/ws", GraphQLSubscription::new(schema.clone()))

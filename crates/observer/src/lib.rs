@@ -1,5 +1,7 @@
 mod kinesis;
 pub mod record;
+pub mod error;
+pub mod token;
 
 use once_cell::sync::Lazy;
 

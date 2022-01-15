@@ -1,30 +1,35 @@
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
+use flo_net::observer::GameInfo;
 use lru::LruCache;
 use flo_state::{Actor, async_trait, Context, Addr, Message, Handler};
 use flo_kinesis::data_stream::{DataStreamIterator};
 use flo_kinesis::iterator::{Chunk};
+use crate::constants::FLO_STATS_MAX_IN_MEMORY_GAMES;
 use crate::error::{Result, Error};
-use crate::game::event::{GameEventReceiver, GameUpdateEvent, GameListUpdateEvent};
+use crate::broadcast::{BroadcastReceiver};
 use crate::game::snapshot::{GameSnapshotMap, GameSnapshot, GameSnapshotWithStats};
-use crate::game::{GameHandler, Game};
+use crate::game::stream::{GameStreamMap, GameStream};
+use crate::game::{GameHandler, Game, GameMeta};
+use crate::server::peer::GameStreamServer;
 use crate::services::Services;
+use crate::game::event::{GameUpdateEvent, GameListUpdateEvent};
 use tokio_stream::StreamExt;
-
-const MAX_GAMES: usize = 100;
 
 pub struct Dispatcher {
   services: Services,
   slots: LruCache<i32, Slot>,
   snapshots: GameSnapshotMap,
+  streams: GameStreamMap,
 }
 
 impl Dispatcher {
   pub fn new(services: Services) -> Self {
     Self {
       services,
-      slots: LruCache::new(MAX_GAMES),
+      slots: LruCache::new(*FLO_STATS_MAX_IN_MEMORY_GAMES),
       snapshots: GameSnapshotMap::new(),
+      streams: GameStreamMap::new(),
     }
   }
 
@@ -38,6 +43,8 @@ impl Dispatcher {
 
   fn handle_chunk(&mut self, ctx: &mut Context<Self>, chunk: Chunk) {
     for (game_id, game_chunk) in chunk.game_records {
+      self.streams.dispatch_game_records(game_id, &game_chunk);
+
       let mut should_remove = false;
       match self.slots.get_mut(&game_id) {
         Some(Slot::Active(handler)) => {
@@ -152,17 +159,39 @@ impl Handler<ListGames> for Dispatcher {
   }
 }
 
+pub struct GetGameInfo {
+  pub game_id: i32,
+}
+
+impl Message for GetGameInfo {
+  type Result = Result<(GameMeta, GameInfo)>;
+}
+
+#[async_trait]
+impl Handler<GetGameInfo> for Dispatcher {
+  async fn handle(&mut self, _: &mut Context<Self> , GetGameInfo { game_id }: GetGameInfo) -> Result<(GameMeta, GameInfo)> {
+    let info = self.slots.get(&game_id)
+      .and_then(|slot| if let Slot::Active(ref handler) = slot {
+        Some(handler.make_game_info())
+      } else {
+        None
+      })
+      .ok_or_else(|| Error::GameNotFound(game_id))??;
+    Ok(info)
+  }
+}
+
 pub struct SubscribeGameUpdate {
   pub game_id: i32,
 }
 
 impl Message for SubscribeGameUpdate {
-  type Result = Result<(GameSnapshotWithStats, GameEventReceiver<GameUpdateEvent>)>;
+  type Result = Result<(GameSnapshotWithStats, BroadcastReceiver<GameUpdateEvent>)>;
 }
 
 #[async_trait]
 impl Handler<SubscribeGameUpdate> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , msg: SubscribeGameUpdate) -> Result<(GameSnapshotWithStats, GameEventReceiver<GameUpdateEvent>)> {
+  async fn handle(&mut self, _: &mut Context<Self> , msg: SubscribeGameUpdate) -> Result<(GameSnapshotWithStats, BroadcastReceiver<GameUpdateEvent>)> {
     let snapshot = self.slots.get(&msg.game_id)
       .and_then(|slot| if let Slot::Active(ref handler) = slot {
         Some(handler.make_snapshot_with_stats())
@@ -177,14 +206,37 @@ impl Handler<SubscribeGameUpdate> for Dispatcher {
 pub struct SubscribeGameListUpdate;
 
 impl Message for SubscribeGameListUpdate {
-  type Result = Result<(Vec<GameSnapshot>, GameEventReceiver<GameListUpdateEvent>)>;
+  type Result = Result<(Vec<GameSnapshot>, BroadcastReceiver<GameListUpdateEvent>)>;
 }
 
 #[async_trait]
 impl Handler<SubscribeGameListUpdate> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , _: SubscribeGameListUpdate) -> Result<(Vec<GameSnapshot>, GameEventReceiver<GameListUpdateEvent>)> {
+  async fn handle(&mut self, _: &mut Context<Self> , _: SubscribeGameListUpdate) -> Result<(Vec<GameSnapshot>, BroadcastReceiver<GameListUpdateEvent>)> {
     let snapshots = self.snapshots.list_snapshots();
     Ok((snapshots, self.snapshots.subscribe_game_list_updates()))
+  }
+}
+
+pub struct CreateGameStreamServer {
+  pub game_id: i32,
+}
+
+impl Message for CreateGameStreamServer {
+  type Result = Result<GameStreamServer>;
+}
+
+#[async_trait]
+impl Handler<CreateGameStreamServer> for Dispatcher {
+  async fn handle(&mut self, _: &mut Context<Self> , CreateGameStreamServer { game_id }: CreateGameStreamServer) -> Result<GameStreamServer> {
+    match self.slots.get(&game_id) {
+      Some(Slot::Active(handler)) => {
+        let (snapshot, rx) = self.streams.subscribe(game_id, handler.records());
+        Ok(GameStreamServer::new(game_id, snapshot, rx))
+      },
+      _ => {
+        return Err(Error::GameNotFound(game_id));
+      }
+    }
   }
 }
 

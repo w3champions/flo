@@ -277,9 +277,3 @@ impl FsScanner {
     .ok();
   }
 }
-
-#[derive(Debug)]
-pub struct ArchiveCache {
-  parts: Vec<Bytes>,
-  finished: bool,
-}

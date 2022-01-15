@@ -1,6 +1,7 @@
-pub mod event;
 pub mod snapshot;
 pub mod stats;
+pub mod event;
+pub mod stream;
 
 use self::snapshot::{GameSnapshot, GameSnapshotMap, GameSnapshotWithStats};
 use self::stats::GameStats;
@@ -9,6 +10,7 @@ use crate::services::Services;
 use async_graphql::{Enum, SimpleObject};
 use chrono::{DateTime, TimeZone, Utc};
 use flo_kinesis::iterator::GameChunk;
+use flo_net::observer::GameInfo;
 use flo_observer::record::{GameRecordData, RTTStats};
 use flo_w3gs::action::PlayerAction;
 use flo_w3gs::protocol;
@@ -23,6 +25,7 @@ pub struct GameHandler {
   meta: GameMeta,
   game: FetchGameState,
   next_record_id: u32,
+  initial_arrival_time: f64,
   last_arrival_timestamp: Option<f64>,
   records: Vec<GameRecordData>,
   span: Span,
@@ -48,6 +51,7 @@ impl GameHandler {
       meta,
       game: FetchGameState::new(),
       next_record_id: records.max_seq_id + 1,
+      initial_arrival_time: records.approximate_arrival_timestamp,
       last_arrival_timestamp: None,
       records: records.records,
       span,
@@ -106,6 +110,53 @@ impl GameHandler {
     }
   }
 
+  pub fn make_game_info(&self) -> Result<(GameMeta, GameInfo)> {
+    use flo_net::observer::{Map, PlayerInfo, Slot, SlotSettings};
+    let game = self.game.get()?;
+
+    Ok((
+      self.meta.clone(),
+      GameInfo {
+        id: game.id,
+        name: game.name.clone(),
+        map: Map {
+          sha1: game.map.sha1.clone(),
+          checksum: game.map.checksum,
+          path: game.map.path.clone(),
+        }
+        .into(),
+        slots: game
+          .slots
+          .iter()
+          .map(|slot| Slot {
+            player: slot.player.as_ref().map(|v| PlayerInfo {
+              id: v.id,
+              name: v.name.clone(),
+            }),
+            settings: {
+              let mut msg = SlotSettings {
+                team: slot.settings.team,
+                color: slot.settings.color,
+                computer: slot.settings.computer,
+                handicap: slot.settings.handicap,
+                status: slot.settings.status,
+                ..Default::default()
+              };
+              msg.set_race(slot.settings.race.into_proto_enum());
+              msg
+            }
+            .into(),
+          })
+          .collect(),
+        random_seed: game.random_seed,
+        game_version: game
+          .game_version
+          .clone()
+          .ok_or_else(|| Error::GameVersionUnknown)?,
+      },
+    ))
+  }
+
   pub fn handle_chunk(
     &mut self,
     chunk: GameChunk,
@@ -140,9 +191,13 @@ impl GameHandler {
     Ok(())
   }
 
+  pub fn records(&self) -> &[GameRecordData] {
+    &self.records
+  }
+
   fn handle_records(
     &mut self,
-    t: f64,
+    approx_arrival_time: f64,
     records: Vec<GameRecordData>,
     snapshot_map: &mut GameSnapshotMap,
   ) -> Result<()> {
@@ -183,7 +238,10 @@ impl GameHandler {
                   });
                 }
                 let time = self.game.time();
-                self.meta.player_left_reason_map.insert(player_id, (time, reason));
+                self
+                  .meta
+                  .player_left_reason_map
+                  .insert(player_id, (time, reason));
                 snapshot_map.insert_game_player_left(self.meta.id, time, player_id, reason);
               }
             } else {
@@ -201,7 +259,7 @@ impl GameHandler {
         GameRecordData::StartLag(_) => {}
         GameRecordData::StopLag(_) => {}
         GameRecordData::GameEnd => {
-          let ended_at = Utc.timestamp_millis((t * 1000.) as i64);
+          let ended_at = Utc.timestamp_millis((approx_arrival_time * 1000.) as i64);
           let duration = ended_at.signed_duration_since(self.meta.started_at);
           self.meta.ended_at.replace(ended_at);
           self.meta.duration = duration.to_std().ok();
@@ -216,7 +274,7 @@ impl GameHandler {
           return Ok(());
         }
       }
-      self.records.push(record);
+      self.records.push(record)
     }
     Ok(())
   }
@@ -232,6 +290,7 @@ fn is_delayed_game_end_record(records: &GameChunk) -> bool {
   false
 }
 
+#[derive(Debug, Clone)]
 pub struct GameMeta {
   pub id: i32,
   pub started_at: DateTime<Utc>,
@@ -365,7 +424,7 @@ pub struct Player {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, S2ProtoEnum, Enum)]
-#[s2_grpc(proto_enum_type(flo_grpc::game::Race,))]
+#[s2_grpc(proto_enum_type(flo_grpc::game::Race, flo_net::proto::flo_common::Race))]
 pub enum Race {
   Human,
   Orc,

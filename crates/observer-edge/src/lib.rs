@@ -4,17 +4,25 @@ pub mod game;
 mod error;
 mod services;
 mod dispatcher;
+mod constants;
+mod server;
+mod version;
+mod broadcast;
 
 use std::time::Duration;
 use flo_kinesis::{data_stream::DataStream, iterator::ShardIteratorType};
 use flo_state::{Owner, Addr, Actor};
 use dispatcher::{Dispatcher, AddIterator, ListGames, SubscribeGameListUpdate, SubscribeGameUpdate};
 use error::Result;
-use game::{snapshot::{GameSnapshot, GameSnapshotWithStats}, event::{GameEventReceiver, GameListUpdateEvent, GameUpdateEvent}};
+use game::{snapshot::{GameSnapshot, GameSnapshotWithStats}};
+use server::StreamServer;
 use services::Services;
+use crate::broadcast::{BroadcastReceiver};
+use game::event::{GameListUpdateEvent, GameUpdateEvent};
 
 pub struct FloObserverEdge {
   dispatcher: Owner<Dispatcher>,
+  stream_server: StreamServer,
 }
 
 impl FloObserverEdge {
@@ -34,9 +42,19 @@ impl FloObserverEdge {
 
     tracing::debug!("iterator added.");
 
+    let stream_server = StreamServer::new(dispatcher.addr()).await?;
+
+    tracing::debug!("server listening on {}", flo_constants::OBSERVER_SOCKET_PORT);
+
+
     Ok(Self {
       dispatcher,
+      stream_server,
     })
+  }
+
+  pub async fn serve(self) -> Result<()> {
+    self.stream_server.serve().await
   }
 
   pub fn handle(&self) -> FloObserverEdgeHandle {
@@ -52,11 +70,11 @@ impl FloObserverEdgeHandle {
     self.0.send(ListGames).await.map_err(Into::into)
   }
 
-  pub async fn subscribe_game_list_updates(&self) -> Result<(Vec<GameSnapshot>, GameEventReceiver<GameListUpdateEvent>)> {
+  pub async fn subscribe_game_list_updates(&self) -> Result<(Vec<GameSnapshot>, BroadcastReceiver<GameListUpdateEvent>)> {
     self.0.send(SubscribeGameListUpdate).await?
   }
 
-  pub async fn subscribe_game_updates(&self, game_id: i32) -> Result<(GameSnapshotWithStats, GameEventReceiver<GameUpdateEvent>)> {
+  pub async fn subscribe_game_updates(&self, game_id: i32) -> Result<(GameSnapshotWithStats, BroadcastReceiver<GameUpdateEvent>)> {
     self.0.send(SubscribeGameUpdate {
       game_id
     }).await?
