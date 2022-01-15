@@ -1,6 +1,6 @@
+pub mod event;
 pub mod snapshot;
 pub mod stats;
-pub mod event;
 pub mod stream;
 
 use self::snapshot::{GameSnapshot, GameSnapshotMap, GameSnapshotWithStats};
@@ -78,6 +78,9 @@ impl GameHandler {
               }
               DeferredOp::PushRTTStats(item) => {
                 snapshot_map.insert_game_rtt_stats(game_id, stats.put_rtt(item));
+              }
+              DeferredOp::PushPlayerLeft { time, slot, reason } => {
+                insert_game_player_left(&game, &mut self.meta, snapshot_map, time, slot, reason);
               }
             }
           }
@@ -215,35 +218,30 @@ impl GameHandler {
           }
           PacketTypeId::PlayerLeft => {
             let payload: protocol::leave::PlayerLeft = packet.decode_simple()?;
+            let reason = PlayerLeaveReason::from(payload.reason);
+
+            if let PlayerLeaveReason::LeaveUnknown = reason {
+              self.span.in_scope(|| {
+                tracing::error!(
+                  player_id = payload.player_id,
+                  "unknown left reason: reason: {:?}",
+                  payload.reason
+                );
+              })
+            } else {
+              self.span.in_scope(|| {
+                tracing::info!(player_id = payload.player_id, "left: {:?}", reason);
+              });
+            }
+
             if payload.player_id != 0 {
-              let player_id = self
-                .game
-                .get()?
-                .slots
-                .get(payload.player_id as usize - 1)
-                .and_then(|slot| slot.player.as_ref().map(|player| player.id));
-              if let Some(player_id) = player_id {
-                let reason = PlayerLeaveReason::from(payload.reason);
-                if let PlayerLeaveReason::LeaveUnknown = reason {
-                  self.span.in_scope(|| {
-                    tracing::error!(
-                      player_id = payload.player_id,
-                      "unknown left reason: reason: {:?}",
-                      payload.reason
-                    );
-                  })
-                } else {
-                  self.span.in_scope(|| {
-                    tracing::info!(player_id = payload.player_id, "left: {:?}", reason);
-                  });
-                }
-                let time = self.game.time();
-                self
-                  .meta
-                  .player_left_reason_map
-                  .insert(player_id, (time, reason));
-                snapshot_map.insert_game_player_left(self.meta.id, time, player_id, reason);
-              }
+              self.game.push_player_left(
+                self.game.time(),
+                (payload.player_id - 1) as usize,
+                reason,
+                &mut self.meta,
+                snapshot_map,
+              )?;
             } else {
               self.span.in_scope(|| {
                 tracing::error!(
@@ -361,11 +359,60 @@ impl FetchGameState {
       FetchGameState::Failed(ref e) => Err(Error::GameNotReady(e.to_string())),
     }
   }
+
+  fn push_player_left(
+    &mut self,
+    time: u32,
+    slot: usize,
+    reason: PlayerLeaveReason,
+    meta: &mut GameMeta,
+    snapshot_map: &mut GameSnapshotMap,
+  ) -> Result<()> {
+    match self {
+      FetchGameState::Loading { ref mut deferred } => {
+        deferred.push(DeferredOp::PushPlayerLeft { time, slot, reason });
+        Ok(())
+      }
+      FetchGameState::Loaded { ref game, .. } => {
+        insert_game_player_left(game, meta, snapshot_map, time, slot, reason);
+        Ok(())
+      }
+      FetchGameState::Failed(ref e) => Err(Error::GameNotReady(e.to_string())),
+    }
+  }
+}
+
+fn insert_game_player_left(
+  game: &Game,
+  meta: &mut GameMeta,
+  snapshot_map: &mut GameSnapshotMap,
+  time: u32,
+  slot: usize,
+  reason: PlayerLeaveReason,
+) {
+  let game_id = game.id;
+  let player_id = game
+    .slots
+    .get(slot)
+    .and_then(|slot| slot.player.as_ref().map(|player| player.id));
+  if let Some(player_id) = player_id {
+    meta
+      .player_left_reason_map
+      .insert(player_id, (time, reason));
+    snapshot_map.insert_game_player_left(meta.id, time, player_id, reason);
+  } else {
+    tracing::error!(game_id, "invalid left player slot: {}", slot);
+  }
 }
 
 enum DeferredOp {
   PushAction(u16, Vec<PlayerAction>),
   PushRTTStats(RTTStats),
+  PushPlayerLeft {
+    time: u32,
+    slot: usize,
+    reason: PlayerLeaveReason,
+  },
 }
 
 #[derive(Debug, S2ProtoUnpack)]
