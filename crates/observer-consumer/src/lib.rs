@@ -2,8 +2,6 @@ mod archiver;
 mod env;
 mod persist;
 mod shard;
-mod token;
-mod version;
 
 pub mod error;
 use archiver::{Archiver, ArchiverHandle};

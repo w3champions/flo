@@ -31,8 +31,6 @@ pub enum Error {
   InvalidS3Credentials(&'static str),
   #[error("json web token: {0}")]
   JsonWebToken(#[from] jsonwebtoken::errors::Error),
-  #[error("observer token expired")]
-  ObserverTokenExpired,
   #[error("get archived object: {0}")]
   GetArchivedObject(#[from] RusotoError<rusoto_s3::GetObjectError>),
   #[error("net: {0}")]

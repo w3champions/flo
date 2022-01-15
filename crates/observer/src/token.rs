@@ -10,6 +10,10 @@ use crate::error::*;
 const TOKEN_EXPIRATION_SECS: i64 = 60 * 15;
 const TOKEN_SUB: &str = "flo-observer";
 
+static JWT_SECRET_BASE64: Lazy<String> = Lazy::new(|| {
+  std::env::var("JWT_SECRET_BASE64").expect("env JWT_SECRET_BASE64")
+});
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObserverToken {
   pub sub: String,
@@ -20,7 +24,7 @@ pub struct ObserverToken {
 
 pub fn create_observer_token(game_id: i32, delay_secs: Option<usize>) -> Result<String> {
   static ENCODING_KEY: Lazy<EncodingKey> = Lazy::new(|| {
-    EncodingKey::from_base64_secret(&crate::env::ENV.jwt_secret_base64)
+    EncodingKey::from_base64_secret(&JWT_SECRET_BASE64)
       .expect("DecodingKey::from_base64_secret")
   });
 
@@ -35,7 +39,7 @@ pub fn create_observer_token(game_id: i32, delay_secs: Option<usize>) -> Result<
 }
 
 pub fn validate_observer_token(token: &str) -> Result<ObserverToken> {
-  let decoding_key = DecodingKey::from_base64_secret(&crate::env::ENV.jwt_secret_base64)?;
+  let decoding_key = DecodingKey::from_base64_secret(&JWT_SECRET_BASE64)?;
   decode(token, &decoding_key, &Validation::default())
     .map(|data| data.claims)
     .map_err(|e| match e.kind() {

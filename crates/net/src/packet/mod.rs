@@ -45,6 +45,13 @@ impl Frame {
     }
   }
 
+  pub fn new_bytes(type_id: PacketTypeId, bytes: Bytes) -> Self {
+    Frame {
+      type_id,
+      payload: FramePayload::Bytes(bytes),
+    }
+  }
+
   pub fn new_empty(type_id: PacketTypeId) -> Self {
     use once_cell::sync::Lazy;
     static EMPTY_PAYLOAD: Lazy<Bytes> = Lazy::new(|| Bytes::new());
@@ -285,6 +292,8 @@ pub enum PacketTypeId {
   ObserverConnectReject,
   #[bin(value = 0x63)]
   ObserverData,
+  #[bin(value = 0x64)]
+  ObserverDataEnd,
 
   #[bin(value = 0xF7)]
   W3GS,

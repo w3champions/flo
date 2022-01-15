@@ -1772,13 +1772,16 @@ name = "flo-observer"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chrono",
  "flo-net",
  "flo-util",
  "flo-w3gs",
+ "jsonwebtoken",
  "once_cell",
  "prost",
  "rusoto_core",
  "rusoto_kinesis",
+ "serde",
  "thiserror",
  "tracing",
 ]
@@ -1840,7 +1843,6 @@ dependencies = [
  "flo-util",
  "flo-w3gs",
  "futures 0.3.19",
- "jsonwebtoken",
  "lru",
  "once_cell",
  "s2-grpc-utils",
