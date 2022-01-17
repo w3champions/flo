@@ -6,6 +6,7 @@ mod game;
 mod grpc;
 mod lan;
 mod server;
+mod observer;
 
 pub use anyhow::Result;
 
@@ -23,6 +24,10 @@ enum Opt {
   Lan {
     #[structopt(subcommand)]
     cmd: lan::Command,
+  },
+  Observer {
+    #[structopt(subcommand)]
+    cmd: observer::Command,
   },
 }
 
@@ -42,6 +47,9 @@ async fn main() -> Result<()> {
       cmd.run().await?;
     }
     Opt::Lan { cmd } => {
+      cmd.run().await?;
+    }
+    Opt::Observer { cmd } => {
       cmd.run().await?;
     }
   }

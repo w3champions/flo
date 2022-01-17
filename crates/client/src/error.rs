@@ -16,7 +16,9 @@ pub enum Error {
   NodeConnectionRejected(flo_net::proto::flo_node::ClientConnectRejectReason, String),
   #[error("Map checksum mismatch")]
   MapChecksumMismatch,
-  #[error("no vacant slot for observer")]
+  #[error("Game version mismatch")]
+  GameVersionMismatch,
+  #[error("No vacant slot for observer")]
   NoVacantSlotForObserver,
   #[error("Unexpected w3gs packet: {0:?}")]
   UnexpectedW3GSPacket(flo_w3gs::packet::Packet),
@@ -28,12 +30,16 @@ pub enum Error {
   ControllerDisconnected,
   #[error("Invalid map info")]
   InvalidMapInfo,
+  #[error("Invalid observer data frame")]
+  InvalidObserverDataFrame,
   #[error("Ping: {0}")]
   Ping(#[from] PingError),
   #[error("Warcraft III not located")]
   War3NotLocated,
   #[error("Connection request rejected by server: {0:?}")]
   ConnectionRequestRejected(flo_types::game::RejectReason),
+  #[error("Connection request rejected by server: {0:?}")]
+  ObserverConnectionRequestRejected(flo_net::observer::ObserverConnectRejectReason),
   #[error("Local game info not yet received")]
   LocalGameInfoNotFound,
   #[error("Timeout: {0:?}")]
@@ -42,6 +48,8 @@ pub enum Error {
   TaskCancelled(anyhow::Error),
   #[error("Lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
+  #[error("Observer record: {0}")]
+  ObserverRecord(#[from] flo_observer::record::RecordError),
   #[error("Observer fs: {0}")]
   ObserverFs(#[from] flo_observer_fs::error::Error),
   #[error("Invalid node addr: {0}")]

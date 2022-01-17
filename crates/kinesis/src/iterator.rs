@@ -162,7 +162,7 @@ impl Scanner {
               break 'main;
             };
             if records.is_empty() {
-              self.span.in_scope(|| tracing::debug!("shard ex"));
+              self.span.in_scope(|| tracing::debug!("shard exhausted"));
               tokio::time::sleep(Self::WAIT_RECORD_TIMEOUT).await;
             }
           }

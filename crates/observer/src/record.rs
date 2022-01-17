@@ -137,7 +137,7 @@ pub struct RTTStatsItem {
   pub avg: f32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum DataTypeId {
   W3GS = 1,
@@ -162,7 +162,7 @@ impl GameRecordData {
 
   fn data_encode_len(&self) -> usize {
     match *self {
-      GameRecordData::W3GS(ref pkt) => 1 + pkt.payload.len(),
+      GameRecordData::W3GS(ref pkt) => 1 + pkt.get_encode_len(),
       GameRecordData::StartLag(ref ids) => 1 + 4 * ids.len(),
       GameRecordData::StopLag(_) => 4,
       GameRecordData::GameEnd => 0,

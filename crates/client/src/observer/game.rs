@@ -1,17 +1,20 @@
-use super::types::ObserverGameInfo;
+use super::send_queue::SendQueue;
 use crate::error::{Error, Result};
 use crate::lan::game::slot::{LanSlotInfo, SelfPlayer};
-use crate::platform::{OpenMap, Platform};
+use crate::platform::{GetClientPlatformInfo, OpenMap, Platform};
 use flo_lan::MdnsPublisher;
 use flo_observer::record::GameRecordData;
-use flo_state::{Actor, Addr};
+use flo_state::Addr;
+use flo_types::observer::GameInfo;
 use flo_util::binary::SockAddr;
+use flo_w3gs::action::IncomingAction;
+use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
+use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
 use flo_w3gs::protocol::action::OutgoingKeepAlive;
-use flo_w3gs::protocol::chat::ChatToHost;
 use flo_w3gs::protocol::game::{CountDownEnd, CountDownStart, PlayerLoaded};
 use flo_w3gs::protocol::join::{ReqJoin, SlotInfoJoin};
 use flo_w3gs::protocol::leave::LeaveAck;
@@ -19,43 +22,54 @@ use flo_w3gs::protocol::map::{MapCheck, MapSize};
 use flo_w3gs::protocol::packet::ProtoBufPayload;
 use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMessage};
 use flo_w3map::MapChecksum;
+use futures::Stream;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::time::Duration;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::Instrument;
+use tokio_stream::StreamExt;
 
-pub struct ObserverGameHost {
-  ct: CancellationToken,
-  tx: Sender<Cmd>,
-  port: u16,
+const DESYNC_GRACE_PERIOD_TICKS: usize = 30;
+
+pub struct ObserverGameHost<S> {
+  map_checksum: MapChecksum,
+  game_settings: GameSettings,
+  listener: W3GSListener,
+  info: GameInfo,
+  source: S,
 }
 
-impl ObserverGameHost {
-  pub async fn start(info: ObserverGameInfo, platform: Addr<Platform>) -> Result<Self> {
-    let ct = CancellationToken::new();
-    let (tx, rx) = channel(32);
+impl<S> ObserverGameHost<S>
+where
+  S: Stream<Item = Result<GameRecordData>> + Unpin,
+{
+  pub async fn new(info: GameInfo, source: S, platform: Addr<Platform>) -> Result<Self> {
+    let client_info = platform
+      .send(GetClientPlatformInfo::default())
+      .await?
+      .map_err(|_| Error::War3NotLocated)?;
+
+    if client_info.version != info.game_version {
+      return Err(Error::GameVersionMismatch);
+    }
 
     let map = platform
       .send(OpenMap {
-        path: info.map_path.clone(),
+        path: info.map.path.clone(),
       })
       .await??;
 
-    if map.checksum.sha1 != info.map_sha1 {
+    if Some(map.checksum.sha1) != info.map.sha1() {
       return Err(Error::MapChecksumMismatch);
     }
 
     let listener = W3GSListener::bind().await?;
-    let port = listener.port();
 
     let (map_width, map_height) = map.map.dimension();
     let game_settings = GameSettings::new(
       Default::default(),
       GameSettingsMap {
-        path: info.map_path.clone(),
+        path: info.map.path.clone(),
         width: map_width as u16,
         height: map_height as u16,
         sha1: map.checksum.sha1,
@@ -63,60 +77,22 @@ impl ObserverGameHost {
       },
     );
 
-    let worker = Worker {
-      ct: ct.clone(),
+    Ok(Self {
       map_checksum: map.checksum,
       game_settings,
-      rx,
       listener,
       info,
-    };
-
-    tokio::spawn(
-      async move {
-        if let Err(err) = worker.run().await {
-          tracing::error!("observer host: {}", err);
-        }
-      }
-      .instrument(tracing::debug_span!("worker")),
-    );
-
-    Ok(Self {
-      ct: ct.clone(),
-      tx,
-      port,
+      source,
     })
   }
-}
 
-impl Drop for ObserverGameHost {
-  fn drop(&mut self) {
-    self.ct.cancel();
-  }
-}
-
-#[derive(Debug)]
-enum Cmd {
-  PlayArchive { path: PathBuf },
-}
-
-struct Worker {
-  ct: CancellationToken,
-  map_checksum: MapChecksum,
-  game_settings: GameSettings,
-  rx: Receiver<Cmd>,
-  listener: W3GSListener,
-  info: ObserverGameInfo,
-}
-
-impl Worker {
-  async fn run(mut self) -> Result<()> {
+  pub async fn play(mut self) -> Result<()> {
     let map_sha1: [u8; 20] = self.map_checksum.sha1;
     let lan_game_info = {
       let mut game_info = flo_lan::GameInfo::new(
         1,
         "FLO-STREAM",
-        &self.info.map_path,
+        &self.info.map.path,
         map_sha1,
         self.map_checksum.xoro,
       )?;
@@ -133,10 +109,6 @@ impl Worker {
 
     let mut stream: W3GSStream = loop {
       tokio::select! {
-        _ = self.ct.cancelled() => {
-          tracing::debug!("cancelled");
-          return Ok(());
-        },
         res = self.listener.accept() => {
           let mut stream = if let Some(stream) = res? {
             stream
@@ -152,130 +124,162 @@ impl Worker {
 
     tracing::debug!("game loop");
 
-    loop {
-      tokio::select! {
-        _ = self.ct.cancelled() => {
-          tracing::debug!("cancelled");
-          break;
-        }
-        Some(cmd) = self.rx.recv() => {
-          self.handle_cmd(cmd, &slot_info, &mut stream).await?;
-        }
-      }
-    }
+    self.play_source(&slot_info, &mut stream).await?;
 
     Ok(())
   }
 
-  async fn handle_cmd(
-    &mut self,
-    cmd: Cmd,
-    slots: &LanSlotInfo,
-    stream: &mut W3GSStream,
-  ) -> Result<()> {
-    enum Msg {
-      TimeSlot(Packet),
-      Checksum { tick: u32, checksum: u32 },
-    }
+  async fn play_source(&mut self, slots: &LanSlotInfo, stream: &mut W3GSStream) -> Result<()> {
+    let mut loaded = false;
+    let mut tick: u32 = 0;
+    let mut agreed_checksums = VecDeque::new();
+    let mut pending_checksums = VecDeque::new();
+    let mut source_done = false;
+    let mut send_queue = SendQueue::new();
+    let mut desync_ticks = 0;
+    send_queue.set_speed(4.0);
 
-    match cmd {
-      Cmd::PlayArchive { path } => {
-        use flo_observer_fs::GameDataArchiveReader;
-        let archive = GameDataArchiveReader::open(path).await?;
-
-        let (tx, mut rx) = channel(32);
-        let ct = self.ct.clone();
-
-        let mut handle = tokio::spawn(async move {
-          let mut records = archive.records();
-          while let Some(record) = records.next().await? {
-            match record {
-              GameRecordData::W3GS(pkt) => match pkt.type_id() {
-                PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
-                  if tx.send(Msg::TimeSlot(pkt)).await.is_err() {
-                    break;
-                  }
-                }
-                id => {
-                  tracing::debug!("send: {:?}", id);
-                }
-              },
-              GameRecordData::StartLag(_) => {}
-              GameRecordData::StopLag(_) => {}
-              GameRecordData::GameEnd => {}
-              GameRecordData::TickChecksum { tick, checksum } => {
-                if tx.send(Msg::Checksum { tick, checksum }).await.is_err() {
-                  break;
-                }
-              }
-              _ => {}
-            }
+    loop {
+      tokio::select! {
+        r = self.source.try_next(), if loaded && !source_done => {
+          if let Some(r) = r? {
+            self.handle_record(r, slots, &mut send_queue, &mut agreed_checksums).await?;
+          } else {
+            source_done = true;
+            send_queue.finish();
           }
-          Ok::<_, Error>(())
-        });
-
-        let mut loaded = false;
-        let mut tick = 0;
-        let mut checksums = vec![];
-
-        loop {
-          tokio::select! {
-            _ = ct.cancelled() => {
-              break;
-            },
-            res = &mut handle => {
-              res??;
-            }
-            Some(msg) = rx.recv(), if loaded => {
-              match msg {
-                Msg::TimeSlot(pkt) => {
-                  stream.send(pkt).await?;
+        },
+        next = send_queue.next() => {
+          if let Some(packets) = next {
+            stream.send_all(packets.into_iter().map(|(_, p)| p)).await?;
+          } else {
+            tracing::debug!("source finished");
+            break;
+          }
+        },
+        res = stream.recv() => {
+          if let Some(pkt) = res? {
+            match pkt.type_id() {
+              PacketTypeId::OutgoingKeepAlive => {
+                let payload: OutgoingKeepAlive = pkt.decode_simple()?;
+                let mut checksum = payload.checksum;
+                if let Some(pending) = pending_checksums.pop_front() {
+                  pending_checksums.push_back(checksum);
+                  checksum = pending;
                 }
-                Msg::Checksum { tick, checksum } => {
-                  checksums.push(checksum);
-                }
-              }
-            },
-            res = stream.recv() => {
-              if let Some(pkt) = res? {
-                match pkt.type_id() {
-                  PacketTypeId::OutgoingKeepAlive => {
-                    let payload: OutgoingKeepAlive = pkt.decode_simple()?;
-                    let checksum = payload.checksum;
-                    tick += 1;
-                    if !checksums.is_empty() {
-                      let expected = checksums.remove(0);
-                      if expected != checksum {
-                        tracing::warn!("tick = {}, {} != {}", tick, expected, checksum);
-                      }
+                if let Some(expected) = agreed_checksums.pop_front() {
+                  if expected != checksum {
+                    let budget = DESYNC_GRACE_PERIOD_TICKS.saturating_sub(desync_ticks);
+                    let msg = format!("desync detected: tick = {}, budget = {}, {} != {}", tick, budget, checksum, expected);
+                    desync_ticks += 1;
+                    if desync_ticks > DESYNC_GRACE_PERIOD_TICKS {
+                      tracing::error!("{}", msg);
+                      stream.send(Packet::simple(
+                        ChatFromHost::private_to_self(slots.my_slot_player_id, msg)
+                      )?).await?;
+                      break;
+                    } else {
+                      tracing::warn!("{}", msg);
                     }
-                  },
-                  PacketTypeId::ChatToHost => {
-                    let payload: ChatToHost = pkt.decode_simple()?;
-                    tracing::debug!("chat to host: {:?}", payload);
-                  },
-                  PacketTypeId::GameLoadedSelf => {
-                    tracing::debug!("self loaded");
-                    stream.send(Packet::simple(PlayerLoaded {
-                      player_id: slots.my_slot_player_id
-                    })?).await?;
-                    loaded = true;
+                    agreed_checksums.push_front(expected);
+                  } else {
+                    if desync_ticks > 0 {
+                      tracing::debug!("resync: {} ticks", desync_ticks);
+                      desync_ticks = 0;
+                    }
                   }
-                  PacketTypeId::LeaveReq => {
-                    stream.send(Packet::simple(LeaveAck)?).await?;
-                    break;
-                  }
-                  id => {
-                    tracing::debug!("recv: {:?}", id)
-                  }
+                } else {
+                  pending_checksums.push_back(checksum);
                 }
-              } else {
+                tick += 1;
+              },
+              PacketTypeId::GameLoadedSelf => {
+                tracing::debug!("self loaded");
+                stream.send(Packet::simple(PlayerLoaded {
+                  player_id: slots.my_slot_player_id
+                })?).await?;
+                loaded = true;
+              }
+              PacketTypeId::LeaveReq => {
+                stream.send(Packet::simple(LeaveAck)?).await?;
+                tracing::debug!("leave ack");
                 break;
               }
+              id => {
+                tracing::debug!("recv: {:?}", id)
+              }
             }
+          } else {
+            tracing::debug!("game connection closed");
+            break;
           }
         }
       }
+    }
+    Ok(())
+  }
+
+  async fn handle_record(
+    &mut self,
+    record: GameRecordData,
+    slot_info: &LanSlotInfo,
+    send_queue: &mut SendQueue,
+    checksums: &mut VecDeque<u32>,
+  ) -> Result<()> {
+    match record {
+      GameRecordData::W3GS(pkt) => match pkt.type_id() {
+        PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
+          let time_increment_ms =
+            IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())? as u64;
+          send_queue.push(pkt, time_increment_ms.into());
+        }
+        PacketTypeId::PlayerLeft => {
+          send_queue.push(pkt, None);
+        }
+        id => {
+          tracing::debug!("send: {:?}", id);
+        }
+      },
+      GameRecordData::StartLag(player_ids) => {
+        send_queue.push(
+          Packet::simple(StartLag::new(
+            player_ids
+              .into_iter()
+              .filter_map(|player_id| {
+                Some(LagPlayer {
+                  player_id: slot_info
+                    .player_infos
+                    .iter()
+                    .find(|p| p.player_id == player_id)?
+                    .slot_player_id,
+                  lag_duration_ms: 0,
+                })
+              })
+              .collect(),
+          ))?,
+          None,
+        );
+      }
+      GameRecordData::StopLag(player_id) => {
+        if let Some(slot) = slot_info
+          .player_infos
+          .iter()
+          .find(|p| p.player_id == player_id)
+        {
+          send_queue.push(
+            Packet::simple(StopLag(LagPlayer {
+              player_id: slot.slot_player_id,
+              lag_duration_ms: 0,
+            }))?,
+            None,
+          );
+        }
+      }
+      GameRecordData::GameEnd => {}
+      GameRecordData::TickChecksum { checksum, .. } => {
+        checksums.push_back(checksum);
+      }
+      _ => {}
     }
     Ok(())
   }
@@ -292,9 +296,6 @@ impl Worker {
 
     loop {
       tokio::select! {
-        _ = self.ct.cancelled() => {
-          return Ok(false)
-        },
         res = stream.recv() => {
           let pkt: Packet = if let Some(v) = res? {
             v
@@ -302,7 +303,7 @@ impl Worker {
             return Ok(false)
           };
 
-          match pkt.type_id() {
+          match dbg!(pkt.type_id()) {
             PacketTypeId::LeaveReq => {
               stream.send(Packet::simple(LeaveAck)?).await?;
               stream.flush().await?;
@@ -390,8 +391,6 @@ impl Worker {
         })?)
       })
       .collect::<Result<Vec<_>>>()?;
-
-    tracing::debug!("{:?}", loaded);
 
     stream.send_all(loaded).await?;
 
@@ -488,75 +487,6 @@ impl Worker {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_obs_host() {
-  flo_log_subscriber::init_env_override("flo_client");
-
-  use flo_state::Actor;
-  use flo_types::game::*;
-  let platform = Platform::new(&Default::default()).await.unwrap().start();
-
-  let map_path = r#"maps/W3Champions/v7.1/w3c_Amazonia.w3x"#;
-  let map = platform
-    .send(OpenMap {
-      path: map_path.to_string(),
-    })
-    .await
-    .unwrap()
-    .unwrap();
-
-  macro_rules! slot {
-    ($player_id:expr, $team:expr, $color:expr, $race:expr) => {
-      Slot {
-        player: Some(PlayerInfo {
-          id: $player_id,
-          name: format!("Player {}", $player_id),
-          source: PlayerSource::Api,
-        }),
-        settings: SlotSettings {
-          team: $team,
-          color: $color,
-          race: $race,
-          status: SlotStatus::Occupied,
-          ..Default::default()
-        },
-        ..Default::default()
-      }
-    };
-  }
-
-  let host = ObserverGameHost::start(
-    ObserverGameInfo {
-      map_path: map_path.to_string(),
-      map_sha1: map.checksum.sha1,
-      slots: vec![
-        slot!(1, 0, 0, Race::Undead),
-        slot!(2, 1, 4, Race::Orc),
-        // slot!(3, 0, 4, Race::Random),
-        // slot!(4, 0, 7, Race::Random),
-        // slot!(5, 1, 1, Race::Undead),
-        // slot!(6, 1, 3, Race::Random),
-        // slot!(7, 1, 6, Race::Random),
-        // slot!(8, 1, 2, Race::Human),
-      ],
-      random_seed: -319861548,
-    },
-    platform.addr(),
-  )
-  .await
-  .unwrap();
-
-  host
-    .tx
-    .send(Cmd::PlayArchive {
-      path: flo_util::sample_path!("replay", "711553.gz"),
-    })
-    .await
-    .unwrap();
-
-  std::future::pending::<()>().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reader() {
   use flo_observer::record::GameRecordData;
   use flo_observer_fs::GameDataArchiveReader;
@@ -597,4 +527,87 @@ async fn test_reader() {
     }
   }
   println!("max_len = {}", max_len);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_stream() -> crate::error::Result<()> {
+  use flo_state::Actor;
+  dotenv::dotenv().unwrap();
+  flo_log_subscriber::init_env_override("flo_client");
+
+  let game_id = 2118777;
+  let token = flo_observer::token::create_observer_token(game_id, None).unwrap();
+  let (i, s) = crate::observer::source::NetworkSource::connect("127.0.0.1:3557", token).await?;
+  // let s = crate::observer::source::ArchiveFileSource::load(format!("/Users/fluxxu/Downloads/{}", game_id)).await?;
+
+  // tracing::info!("game: {:#?}", i);
+
+  let platform = Platform::new(&Default::default()).await.unwrap().start();
+
+  let host = ObserverGameHost::new(i, s, platform.addr()).await?;
+  host.play().await?;
+
+  Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_archive() -> crate::error::Result<()> {
+  pub use flo_grpc::controller::flo_controller_client::FloControllerClient;
+  use flo_grpc::Channel;
+  use flo_state::Actor;
+  use s2_grpc_utils::S2ProtoUnpack;
+  use tonic::service::{interceptor::InterceptedService, Interceptor};
+
+  pub async fn get_grpc_client() -> FloControllerClient<InterceptedService<Channel, WithSecret>> {
+    let host = std::env::var("CONTROLLER_HOST").unwrap().clone();
+    let channel = Channel::from_shared(format!("tcp://{}:3549", host))
+      .unwrap()
+      .connect()
+      .await
+      .unwrap();
+    FloControllerClient::with_interceptor(channel, WithSecret)
+  }
+
+  #[derive(Clone)]
+  pub struct WithSecret;
+
+  impl Interceptor for WithSecret {
+    fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+      req.metadata_mut().insert(
+        "x-flo-secret",
+        std::env::var("CONTROLLER_SECRET").unwrap().parse().unwrap(),
+      );
+      Ok(req)
+    }
+  }
+
+  dotenv::dotenv().unwrap();
+  flo_log_subscriber::init_env_override("flo_client");
+
+  let game_id = 2114757;
+  let s = crate::observer::source::ArchiveFileSource::load(dbg!(format!(
+    "../../target/games/{}.gz",
+    game_id
+  )))
+  .await?;
+  let mut ctrl = get_grpc_client().await;
+  let game = GameInfo::unpack(
+    ctrl
+      .get_game(flo_grpc::controller::GetGameRequest { game_id })
+      .await
+      .unwrap()
+      .into_inner()
+      .game
+      .unwrap(),
+  )
+  .unwrap();
+
+  // tracing::info!("game: {:#?}", i);
+
+  let platform = Platform::new(&Default::default()).await.unwrap().start();
+
+  let host = ObserverGameHost::new(game, s, platform.addr()).await?;
+  host.play().await?;
+
+  Ok(())
 }

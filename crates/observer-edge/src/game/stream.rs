@@ -1,9 +1,10 @@
+use crate::broadcast::{BroadcastReceiver, BroadcastSender};
 use bytes::{Bytes, BytesMut};
 use flo_kinesis::iterator::GameChunk;
 use flo_observer::record::GameRecordData;
 use std::collections::BTreeMap;
 
-use crate::broadcast::{BroadcastSender, BroadcastReceiver};
+pub const MAX_STREAM_FRAME_SIZE: usize = 8 * 1024;
 
 pub struct GameStreamMap {
   map: BTreeMap<i32, GameStream>,
@@ -16,20 +17,24 @@ impl GameStreamMap {
     }
   }
 
-  pub fn subscribe(&mut self, game_id: i32, initial_records: &[GameRecordData]) -> (GameStreamDataSnapshot, BroadcastReceiver<GameStreamEvent>) {
+  pub fn subscribe(
+    &mut self,
+    game_id: i32,
+    initial_records: &[GameRecordData],
+  ) -> (GameStreamDataSnapshot, BroadcastReceiver<GameStreamEvent>) {
     use std::collections::btree_map::Entry;
     match self.map.entry(game_id) {
-        Entry::Vacant(e) => {
-          let (stream, rx) = GameStream::new(game_id, initial_records);
-          let snapshot = stream.make_data_snapshot();
-          e.insert(stream);
-          (snapshot, rx)
-        },
-        Entry::Occupied(e) => {
-          let stream = e.get();
-          let snapshot = stream.make_data_snapshot();
-          (snapshot, stream.tx.subscribe())
-        },
+      Entry::Vacant(e) => {
+        let (stream, rx) = GameStream::new(game_id, initial_records);
+        let snapshot = stream.make_data_snapshot();
+        e.insert(stream);
+        (snapshot, rx)
+      }
+      Entry::Occupied(e) => {
+        let stream = e.get();
+        let snapshot = stream.make_data_snapshot();
+        (snapshot, stream.tx.subscribe())
+      }
     }
   }
 
@@ -57,18 +62,23 @@ impl GameStreamMap {
 
 pub struct GameStream {
   game_id: i32,
-  buf: BytesMut,
+  frames: Vec<Bytes>,
   tx: BroadcastSender<GameStreamEvent>,
 }
 
 impl GameStream {
-  pub fn new(game_id: i32, initial_records: &[GameRecordData]) -> (Self, BroadcastReceiver<GameStreamEvent>) {
-    let mut buf = BytesMut::new();
-    for record in initial_records {
-      record.encode(&mut buf);
-    }
+  pub fn new(
+    game_id: i32,
+    initial_records: &[GameRecordData],
+  ) -> (Self, BroadcastReceiver<GameStreamEvent>) {
     let (tx, rx) = BroadcastSender::channel();
-    (Self { game_id, buf, tx }, rx)
+    let mut stream = Self {
+      game_id,
+      frames: vec![],
+      tx,
+    };
+    stream.encode_records(&initial_records);
+    (stream, rx)
   }
 
   fn is_closed(&self) -> bool {
@@ -77,37 +87,172 @@ impl GameStream {
 
   fn make_data_snapshot(&self) -> GameStreamDataSnapshot {
     GameStreamDataSnapshot {
-      data: self.buf.clone().freeze(),
+      frames: self.frames.clone(),
     }
   }
 
   fn dispatch_records(&mut self, records: &[GameRecordData]) -> bool {
     if records.is_empty() {
-      return self.tx.is_closed()
+      return self.tx.is_closed();
     };
-    let pos = self.buf.len();
-    for record in records {
-      record.encode(&mut self.buf);
-    }
-    let len = self.buf.len() - pos;
-    if len > 0 {
-      let data = self.buf.clone().split_off(len).freeze();
-      self.tx.send(GameStreamEvent::Chunk {
-        data
-      })
+    let encoded = self.encode_records(records);
+    if !encoded.is_empty() {
+      let event = GameStreamEvent::Chunk {
+        frames: encoded.frames.to_vec(),
+      };
+      self.tx.send(event)
     } else {
       !self.tx.is_closed()
     }
+  }
+
+  fn encode_records(&mut self, records: &[GameRecordData]) -> EncodedRecords {
+    let mut buf = BytesMut::with_capacity(MAX_STREAM_FRAME_SIZE);
+    let start_frames_len = self.frames.len();
+    for record in records {
+      if let GameRecordData::W3GS(p) = record {
+        if p.type_id() == flo_w3gs::protocol::constants::PacketTypeId::ChatFromHost {
+          continue;
+        }
+      }
+
+      if buf.len() + record.encode_len() > MAX_STREAM_FRAME_SIZE {
+        let frame = buf.freeze();
+        self.frames.push(frame);
+        buf = BytesMut::with_capacity(MAX_STREAM_FRAME_SIZE);
+      }
+
+      record.encode(&mut buf);
+      
+      if buf.len() > MAX_STREAM_FRAME_SIZE {
+        tracing::warn!(
+          game_id = self.game_id,
+          "oversized record: {:?} {}",
+          record.type_id(),
+          buf.len()
+        );
+      }
+    }
+
+    if buf.len() > 0 {
+      self.frames.push(buf.freeze());
+    }
+
+    let encoded = if self.frames.len() != start_frames_len {
+      EncodedRecords {
+        frames: &self.frames[start_frames_len..],
+      }
+    } else {
+      EncodedRecords {
+        frames: &[],
+      }
+    };
+
+    encoded
+  }
+}
+
+struct EncodedRecords<'a> {
+  frames: &'a [Bytes],
+}
+
+impl<'a> EncodedRecords<'a> {
+  fn is_empty(&self) -> bool {
+    self.frames.len() == 0
+  }
+
+  fn len(&self) -> usize {
+    self.frames.iter().map(|f| f.len()).sum::<usize>()
   }
 }
 
 #[derive(Debug, Clone)]
 pub enum GameStreamEvent {
   Chunk {
-    data: Bytes,
+    frames: Vec<Bytes>,
   },
 }
 
 pub struct GameStreamDataSnapshot {
-  pub data: Bytes,
+  pub frames: Vec<Bytes>,
+}
+
+#[tokio::test]
+async fn test_game_stream() {
+  dotenv::dotenv().unwrap();
+  flo_log_subscriber::init();
+
+  use bytes::Buf;
+  use tokio_stream::StreamExt;
+  let initial: Vec<_> = (0..1000_u32)
+    .map(|v| GameRecordData::TickChecksum {
+      tick: v,
+      checksum: v,
+    })
+    .collect();
+  let append_chunks: Vec<Vec<_>> = (1..10)
+    .map(|i| {
+      (0..1000)
+        .map(|v| GameRecordData::TickChecksum {
+          tick: i * 1000 + v,
+          checksum: i * 1000 + v,
+        })
+        .collect()
+    })
+    .collect();
+  let all: Vec<_> = initial
+    .clone()
+    .into_iter()
+    .chain(append_chunks.clone().into_iter().flatten())
+    .collect();
+  let (mut stream, rx) = GameStream::new(1, &initial);
+  let snapshot = stream.make_data_snapshot();
+
+  tracing::debug!("initial = {}, all = {}", initial.len(), all.len());
+
+  fn parse_records(mut buf: &[u8], items: &mut Vec<GameRecordData>) {
+    while buf.remaining() > 0 {
+      items.push(GameRecordData::decode(&mut buf).unwrap());
+    }
+  }
+
+  let send = tokio::spawn(async move {
+    for item in append_chunks {
+      assert!(stream.dispatch_records(&item));
+    }
+  });
+
+  let recv = tokio::spawn(async move {
+    let mut records = vec![];
+    for frame in snapshot.frames {
+      parse_records(&frame, &mut records);
+    }
+    let events: Vec<_> = rx.into_stream().collect().await;
+    for event in events {
+      let GameStreamEvent::Chunk { frames } = event;
+      for frame in frames {
+        parse_records(&frame, &mut records);
+      }
+    }
+    records
+  });
+
+  send.await.unwrap();
+
+  let got = recv.await.unwrap();
+
+  assert_eq!(got.len(), all.len());
+  for (i, a) in got.into_iter().enumerate() {
+    let a = if let GameRecordData::TickChecksum { tick, .. } = a {
+      tick
+    } else {
+      unreachable!()
+    };
+    let b = if let GameRecordData::TickChecksum { tick, .. } = &all[i] {
+      *tick
+    } else {
+      unreachable!()
+    };
+    assert_eq!(a, b)
+  }
 }

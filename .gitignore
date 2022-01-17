@@ -18,3 +18,4 @@ flo.toml
 *.json
 
 /.idea
+.DS_Store

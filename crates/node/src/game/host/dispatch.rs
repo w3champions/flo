@@ -368,7 +368,7 @@ struct State {
   shared: Arc<Mutex<Shared>>,
   status_rx: watch::Receiver<DispatchStatus>,
   game_player_id_lookup: BTreeMap<u8, i32>,
-  player_name_lookup: BTreeMap<i32, String>,
+  _player_name_lookup: BTreeMap<i32, String>,
   chat_banned_player_ids: Vec<i32>,
   left_players: BTreeSet<i32>,
 }
@@ -391,7 +391,7 @@ impl State {
         .into_iter()
         .map(|slot| ((slot.id + 1) as u8, slot.player.player_id))
         .collect(),
-      player_name_lookup: slots
+      _player_name_lookup: slots
         .into_iter()
         .map(|slot| (slot.player.player_id, slot.player.name.clone()))
         .collect(),

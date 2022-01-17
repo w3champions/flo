@@ -32,11 +32,11 @@ pub struct GameHandler {
 }
 
 impl GameHandler {
-  pub fn new(services: Services, game_id: i32, records: GameChunk) -> Self {
+  pub fn new(services: Services, game_id: i32, initial_arrival_time: f64) -> Self {
     let span = tracing::info_span!("game", game_id);
     let meta = GameMeta {
       id: game_id,
-      started_at: Utc.timestamp_millis((records.approximate_arrival_timestamp * 1000.) as i64),
+      started_at: Utc.timestamp_millis((initial_arrival_time * 1000.) as i64),
       ended_at: None,
       duration: None,
       player_left_reason_map: BTreeMap::new(),
@@ -50,16 +50,20 @@ impl GameHandler {
       _services: services,
       meta,
       game: FetchGameState::new(),
-      next_record_id: records.max_seq_id + 1,
-      initial_arrival_time: records.approximate_arrival_timestamp,
+      next_record_id: 0,
+      initial_arrival_time,
       last_arrival_timestamp: None,
-      records: records.records,
+      records: vec![],
       span,
     }
   }
 
   pub fn id(&self) -> i32 {
     self.meta.id
+  }
+
+  pub fn initial_arrival_time(&self) -> f64 {
+    self.initial_arrival_time
   }
 
   pub fn set_fetch_result(&mut self, result: Result<Game>, snapshot_map: &mut GameSnapshotMap) {
@@ -173,14 +177,16 @@ impl GameHandler {
           snapshot_map,
         )?;
       } else {
-        self.span.in_scope(|| {
-          tracing::debug!("{:?}", chunk);
-        });
-        return Err(Error::UnexpectedGameRecords {
-          expected: self.next_record_id,
-          range: [chunk.min_seq_id, chunk.max_seq_id],
-          len: chunk.records.len(),
-        });
+        if chunk.max_seq_id > self.next_record_id {
+          self.span.in_scope(|| {
+            tracing::debug!("{:?}", chunk);
+          });
+          return Err(Error::UnexpectedGameRecords {
+            expected: self.next_record_id,
+            range: [chunk.min_seq_id, chunk.max_seq_id],
+            len: chunk.records.len(),
+          });
+        }
       }
     } else {
       self.next_record_id = chunk.max_seq_id + 1;
@@ -265,11 +271,20 @@ impl GameHandler {
             tracing::info!("ended at: {:?}, duration: {}", ended_at, duration);
           });
           snapshot_map.end_game(&self.meta);
+          // {
+          //   use bytes::BytesMut;
+          //   let mut b = BytesMut::new();
+          //   for r in &self.records {
+          //     r.encode(&mut b);
+          //   }
+          //   record.encode(&mut b);
+          //   std::fs::write(format!("target/games/{}", self.meta.id), b).unwrap()
+          // }
         }
         GameRecordData::TickChecksum { .. } => {}
         GameRecordData::RTTStats(stats) => {
           self.game.put_rtt(self.meta.id, stats, snapshot_map)?;
-          return Ok(());
+          continue;
         }
       }
       self.records.push(record)

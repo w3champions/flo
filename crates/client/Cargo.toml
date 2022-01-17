@@ -19,7 +19,7 @@ flo-net = { path = "../net" }
 flo-config = { path = "../config" }
 flo-platform = { path = "../platform" }
 flo-w3storage = { path = "../w3storage" }
-flo-w3map = { path = "../w3map" }
+flo-w3map = { path = "../w3map", features = ["w3storage"]}
 flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-task = { path = "../task" }
@@ -31,7 +31,7 @@ flo-observer-fs = { path = "../observer-fs" }
 s2-grpc-utils = "0.2"
 tokio = { version = "1.15.0", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.5", features = ["time", "net"] }
-tokio-util = "0.6"
+tokio-util = { version = "0.6", features = ["time"] }
 async-tungstenite = { version = "0.16.1", features = ["tokio-runtime"], optional = true }
 tracing = "0.1"
 tracing-futures = "0.2"
@@ -54,6 +54,8 @@ dotenv = "0.15"
 flo-log-subscriber = { path = "../log-subscriber" }
 flo-controller = { path = "../controller" }
 flo-observer-consumer = { path = "../observer-consumer" }
+flo-grpc = { path = "../../deps/flo-grpc" }
+tonic = "0.6"
 
 [build-dependencies]
 flo-constants = { path = "../constants" }

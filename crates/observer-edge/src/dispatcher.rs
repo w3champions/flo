@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use flo_net::observer::GameInfo;
@@ -9,7 +11,7 @@ use crate::constants::FLO_STATS_MAX_IN_MEMORY_GAMES;
 use crate::error::{Result, Error};
 use crate::broadcast::{BroadcastReceiver};
 use crate::game::snapshot::{GameSnapshotMap, GameSnapshot, GameSnapshotWithStats};
-use crate::game::stream::{GameStreamMap, GameStream};
+use crate::game::stream::{GameStreamMap};
 use crate::game::{GameHandler, Game, GameMeta};
 use crate::server::peer::GameStreamServer;
 use crate::services::Services;
@@ -70,19 +72,24 @@ impl Dispatcher {
             self.slots.put(game_id, Slot::InActive);
             continue;
           }
-          let handler = GameHandler::new(
+          let mut handler = GameHandler::new(
             self.services.clone(),
             game_id,
-            game_chunk
+            game_chunk.approximate_arrival_timestamp
           );
-          if self.slots.len() == self.slots.cap() {
-            if let Some((game_id, Slot::Active(_removed))) = self.slots.pop_lru() {
-              tracing::info!(game_id, "expired");
-              self.snapshots.remove_game(game_id);
+
+          if let Err(err) = handler.handle_chunk(game_chunk, &mut self.snapshots) {
+            tracing::error!(game_id, "handle initial records: {}", err);
+          } else {
+            if self.slots.len() == self.slots.cap() {
+              if let Some((game_id, Slot::Active(_removed))) = self.slots.pop_lru() {
+                tracing::info!(game_id, "expired");
+                self.snapshots.remove_game(game_id);
+              }
             }
+            self.slots.put(game_id, Slot::Active(handler));
+            ctx.spawn(Self::fetch_game(self.services.clone(), ctx.addr(), game_id));
           }
-          self.slots.put(game_id, Slot::Active(handler));
-          ctx.spawn(Self::fetch_game(self.services.clone(), ctx.addr(), game_id));
         }
       }
       if should_remove {
@@ -126,7 +133,22 @@ impl Dispatcher {
   }
 }
 
-impl Actor for Dispatcher {}
+#[async_trait]
+impl Actor for Dispatcher {
+  async fn started(&mut self, ctx: &mut Context<Self>) {
+    let addr = ctx.addr();
+    ctx.spawn(async move {
+      let mut interval = tokio::time::interval(Duration::from_secs(60));
+      interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+      loop {
+        interval.tick().await;
+        if addr.send(StreamGc).await.is_err() {
+          break;
+        }
+      }
+    });
+  }
+}
 
 enum Slot {
   InActive,
@@ -279,6 +301,19 @@ impl Handler<FetchGameResult> for Dispatcher {
     } else {
       tracing::warn!(game_id = msg.game_id, "fetch game result discarded");
     }
+  }
+}
+
+struct StreamGc;
+
+impl Message for StreamGc {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<StreamGc> for Dispatcher {
+  async fn handle(&mut self, _: &mut Context<Self> , _: StreamGc) {
+    self.streams.remove_all_disconnected();
   }
 }
 

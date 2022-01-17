@@ -38,6 +38,9 @@ impl GameSnapshotMap {
 
   pub fn end_game(&mut self, meta: &GameMeta) {
     if let (Some(ended_at), Some(duration)) = (meta.ended_at.clone(), meta.duration.clone()) {
+      if let Some(g) = self.map.get_mut(&meta.id) {
+        g.ended_at = Some(ended_at);
+      }
       self.send_game_list_update_event(|| GameListUpdateEvent::ended(meta.id, ended_at));
       self.send_game_update_event(meta.id, || GameUpdateEvent::ended(meta.id, GameUpdateEventDataEnded {
         ended_at,

@@ -104,6 +104,7 @@ impl Handler<GetMapList> for Platform {
   }
 }
 
+#[derive(Default)]
 pub struct GetClientPlatformInfo {
   pub force_reload: bool,
 }

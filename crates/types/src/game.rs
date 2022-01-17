@@ -102,7 +102,7 @@ pub struct Map {
 }
 
 #[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
-#[s2_grpc(message_type = "flo_net::proto::flo_connect::Slot")]
+#[s2_grpc(message_type(flo_net::proto::flo_connect::Slot))]
 pub struct Slot {
   pub player: Option<PlayerInfo>,
   pub settings: SlotSettings,
@@ -120,8 +120,33 @@ impl Default for Slot {
   }
 }
 
+pub struct LanGameSlot<'a> {
+  pub player: Option<LanGamePlayerInfo<'a>>,
+  pub settings: SlotSettings,
+}
+
+pub struct LanGamePlayerInfo<'a> {
+  pub id: i32,
+  pub name: &'a str,
+}
+
+impl<'a> From<&'a Slot> for LanGameSlot<'a> {
+  fn from(slot: &'a Slot) -> Self {
+    Self {
+      player: slot.player.as_ref().map(|p| LanGamePlayerInfo {
+        id: p.id,
+        name: p.name.as_str()
+      }),
+      settings: slot.settings.clone(),
+    }
+  }
+}
+
 #[derive(Debug, S2ProtoUnpack, S2ProtoPack, Serialize, Deserialize, Clone)]
-#[s2_grpc(message_type(flo_net::proto::flo_connect::SlotSettings))]
+#[s2_grpc(message_type(
+  flo_net::proto::flo_connect::SlotSettings,
+  flo_grpc::game::SlotSettings,
+))]
 pub struct SlotSettings {
   pub team: i32,
   pub color: i32,
@@ -148,7 +173,10 @@ impl Default for SlotSettings {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::Computer")]
+#[s2_grpc(proto_enum_type(
+  flo_net::proto::flo_connect::Computer,
+  flo_grpc::game::Computer
+))]
 pub enum Computer {
   Easy = 0,
   Normal = 1,
@@ -167,7 +195,10 @@ impl From<Computer> for flo_w3gs::slot::AI {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::Race")]
+#[s2_grpc(proto_enum_type(
+  flo_net::proto::flo_connect::Race,
+  flo_grpc::game::Race,
+))]
 pub enum Race {
   Human = 0,
   Orc = 1,
@@ -190,7 +221,10 @@ impl From<Race> for flo_w3gs::slot::RacePref {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::SlotStatus")]
+#[s2_grpc(proto_enum_type(
+  flo_net::proto::flo_connect::SlotStatus,
+  flo_grpc::game::SlotStatus,
+))]
 pub enum SlotStatus {
   Open = 0,
   Closed = 1,

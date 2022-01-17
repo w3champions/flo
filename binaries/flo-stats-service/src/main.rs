@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   {
     dotenv::dotenv()?;
     flo_log_subscriber::init_env_override(
-      "flo_stats_service=debug,flo_observer_edge=debug,flo_observer=debug",
+      "flo_stats_service=debug,flo_observer_edge::game::stream=debug",
     );
   }
 

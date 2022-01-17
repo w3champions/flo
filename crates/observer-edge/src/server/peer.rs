@@ -11,13 +11,12 @@ use tokio_stream::StreamExt;
 use crate::broadcast::BroadcastReceiver;
 use crate::game::stream::{GameStreamEvent, GameStreamDataSnapshot};
 
-const MAX_PAYLOAD_SIZE: usize = 8 * 1024;
 const PING_INTERVAL: Duration = Duration::from_secs(10);
 const PING_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct GameStreamServer {
   game_id: i32,
-  snapshot: GameStreamDataSnapshot,
+  snapshot: Option<GameStreamDataSnapshot>,
   rx: BroadcastReceiver<GameStreamEvent>,
 }
 
@@ -25,7 +24,7 @@ impl GameStreamServer {
   pub fn new(game_id: i32, snapshot: GameStreamDataSnapshot, rx: BroadcastReceiver<GameStreamEvent>) -> Self {
     Self {
       game_id,
-      snapshot,
+      snapshot: Some(snapshot),
       rx,
     }
   }
@@ -33,8 +32,10 @@ impl GameStreamServer {
   pub async fn run(mut self, mut transport: FloStream) -> Result<()> {
     let game_id = self.game_id;
     let mut ready_frames = ReadyFrameStream::new();
-
-    ready_frames.push_frames(self.snapshot.data);
+    
+    if let Some(snapshot) = self.snapshot.take() {
+      ready_frames.push_frames(&snapshot.frames);
+    }
 
     let mut ping = PingStream::interval(PING_INTERVAL, PING_TIMEOUT);
     ping.start();
@@ -44,8 +45,8 @@ impl GameStreamServer {
           match r {
             Ok(event) => {
               match event {
-                GameStreamEvent::Chunk { data } => {
-                  ready_frames.push_frames(data);
+                GameStreamEvent::Chunk { frames } => {
+                  ready_frames.push_frames(&frames);
                 },
               }
             }
@@ -108,13 +109,10 @@ impl ReadyFrameStream {
     }
   }
 
-  fn push_frames(&mut self, mut data: Bytes, ) {
-    while data.len() > MAX_PAYLOAD_SIZE {
-      let chunk = data.split_to(MAX_PAYLOAD_SIZE);
-      self.q.push_back(Frame::new_bytes(PacketTypeId::ObserverData, chunk));
-    }
-    if !data.is_empty() {
-      self.q.push_back(Frame::new_bytes(PacketTypeId::ObserverData, data));
+  fn push_frames(&mut self, frames: &[Bytes]) 
+  {
+    for frame in frames {
+      self.q.push_back(Frame::new_bytes(PacketTypeId::ObserverData, frame.clone()));
     }
     if !self.q.is_empty() {
       self.w.take().map(|w| w.wake());

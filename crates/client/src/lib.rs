@@ -1,18 +1,24 @@
+pub mod error;
 mod controller;
-mod error;
 mod game;
 mod lan;
 mod message;
 mod node;
-mod observer;
 mod ping;
-mod platform;
 mod version;
+mod platform;
+mod observer;
+
+pub use observer::{
+  source as observer_source,
+  game::ObserverGameHost
+};
 
 use crate::message::{GetPort, Listener};
 use flo_state::Registry;
 use std::path::PathBuf;
 pub use version::FLO_VERSION;
+
 
 #[derive(Debug, Default, Clone)]
 pub struct StartConfig {

@@ -1450,6 +1450,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
+ "bytes",
  "clap 2.34.0",
  "dotenv",
  "flo-client",
@@ -1459,6 +1460,8 @@ dependencies = [
  "flo-lan",
  "flo-log-subscriber",
  "flo-net",
+ "flo-observer",
+ "flo-observer-fs",
  "flo-w3map",
  "flo-w3storage",
  "futures 0.3.19",
@@ -1486,6 +1489,7 @@ dependencies = [
  "flo-config",
  "flo-constants",
  "flo-controller",
+ "flo-grpc",
  "flo-lan",
  "flo-log",
  "flo-log-subscriber",
@@ -1515,6 +1519,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tonic",
  "tracing",
  "tracing-futures",
 ]
@@ -4665,9 +4670,9 @@ checksum = "6bf34684c5767b87de9119790e92e9a1d60056be2ceeaf16a8e6ef13082aeab1"
 
 [[package]]
 name = "smallvec"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ecab6c735a6bb4139c0caafd0cc3635748bbb3acf4550e8138122099251f309"
+checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
 
 [[package]]
 name = "smithay-client-toolkit"
