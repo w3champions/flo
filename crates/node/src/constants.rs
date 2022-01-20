@@ -24,7 +24,7 @@ pub const GAME_DELAY_RANGE: [Duration; 2] =
   [Duration::from_millis(25), Duration::from_millis(60 * 1000)];
 
 pub const OBS_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
-pub const OBS_CHANNEL_SIZE: usize = 512;
+pub const OBS_CHANNEL_SIZE: usize = 30000;
 pub const OBS_MAX_CHUNK_SIZE: usize = 512 * 1024;
 pub static OBS_SOURCE: Lazy<ObserverRecordSource> = Lazy::new(|| {
   std::env::var("OBSERVER_SOURCE")
