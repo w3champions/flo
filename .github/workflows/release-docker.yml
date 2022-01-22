@@ -35,7 +35,6 @@ jobs:
           mv ./target/release/flo-controller-service ./build/release
           mv ./target/release/flo-node-service ./build/release
           mv ./target/release/flo-observer-service ./build/release
-          mv ./target/release/flo-stats-service ./build/release
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -69,12 +68,4 @@ jobs:
           push: true
           tags: fluxxu/flo-observer:${{ github.sha }},fluxxu/flo-observer:latest
           file: './build/observer.Dockerfile'
-          context: './build'
-
-      - name: Build and push - flo-stats
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: fluxxu/flo-stats:${{ github.sha }},fluxxu/flo-stats:latest
-          file: './build/stats.Dockerfile'
           context: './build'
