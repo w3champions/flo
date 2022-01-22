@@ -56,17 +56,21 @@ where
     return Err(Error::SlotNotResolved);
   }
 
+  let first_obs_player_idx = slots
+    .iter()
+    .position(|s| s.settings.status == SlotStatus::Occupied && s.settings.team == 24);
+
   let mut stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
     if player_slots.len() > 23 {
       return Err(Error::NoVacantSlotForObserver);
     }
-    Some(FLO_OB_SLOT)
+    if let Some(idx) = first_obs_player_idx {
+      Some(index_to_player_id(idx) as usize)
+    } else {
+      Some(FLO_OB_SLOT)
+    }
   } else {
-    let has_obs_player = slots
-      .iter()
-      .find(|s| s.settings.status == SlotStatus::Occupied && s.settings.team == 24)
-      .is_some();
-    if has_obs_player {
+    if first_obs_player_idx.is_some() {
       None
     } else {
       Some(FLO_OB_SLOT)
