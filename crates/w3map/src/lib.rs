@@ -27,9 +27,6 @@ use self::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct W3Map {
-  name: String,
-  author: String,
-  description: String,
   suggested_players: String,
   file_size: usize,
   info: MapInfo,
@@ -269,18 +266,6 @@ impl W3Map {
     };
 
     Ok(W3Map {
-      name: trigger_strings
-        .get(&info.name)
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "".to_string()),
-      author: trigger_strings
-        .get(&info.author)
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "".to_string()),
-      description: trigger_strings
-        .get(&info.description)
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "".to_string()),
       suggested_players: trigger_strings
         .get(&info.suggested_players)
         .map(|v| v.to_string())

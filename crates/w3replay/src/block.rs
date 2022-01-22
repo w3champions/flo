@@ -42,14 +42,14 @@ pub struct BlockHeader {
 pub struct Blocks<R> {
   r: R,
   num_blocks: usize,
-  total_size: usize,
+  _total_size: usize,
   finished_block: usize,
 }
 
 impl<R> Blocks<R> {
   pub(crate) fn new(r: R, num_blocks: usize, total_size: usize) -> Self {
     Self {
-      total_size,
+      _total_size: total_size,
       r,
       num_blocks,
       finished_block: 0,
@@ -63,7 +63,7 @@ where
 {
   pub fn from_buf(buf: B, num_blocks: usize) -> Self {
     Self {
-      total_size: buf.remaining(),
+      _total_size: buf.remaining(),
       r: buf.reader(),
       num_blocks,
       finished_block: 0,
@@ -98,8 +98,10 @@ where
       crc16_compressed_data: 0,
       ..header.clone()
     };
-    let chain =
-      std::io::Read::chain(Cursor::new(header_for_crc.encode_to_bytes()), self.r.by_ref());
+    let chain = std::io::Read::chain(
+      Cursor::new(header_for_crc.encode_to_bytes()),
+      self.r.by_ref(),
+    );
     let mut r = CrcReader::new(chain);
     if let Err(e) = r.read_exact(&mut buf[0..BlockHeader::MIN_SIZE]) {
       return Some(Err(Error::ReadBlockHeader(e)));

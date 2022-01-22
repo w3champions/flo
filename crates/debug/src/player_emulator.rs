@@ -325,7 +325,7 @@ async fn test_emu_join() -> Result<()> {
   );
 
   let map = PlayerEmulator::check_map(game, &storage)?;
-  let mut player = PlayerEmulator::join(game, map, "TEST").await?;
+  let player = PlayerEmulator::join(game, map, "TEST").await?;
   player.run().await?;
   Ok(())
 }

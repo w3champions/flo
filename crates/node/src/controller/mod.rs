@@ -113,7 +113,7 @@ impl ControllerServerHandle {
 
 #[derive(Debug)]
 struct ControllerConn {
-  scope: SpawnScope,
+  _scope: SpawnScope,
 }
 
 impl ControllerConn {
@@ -131,7 +131,7 @@ impl ControllerConn {
       .instrument(tracing::debug_span!("worker"))
     });
 
-    ControllerConn { scope }
+    ControllerConn { _scope: scope }
   }
 }
 

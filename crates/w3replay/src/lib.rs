@@ -19,7 +19,7 @@ pub use records::*;
 
 #[derive(Debug)]
 pub struct W3Replay<R> {
-  header: Header,
+  _header: Header,
   blocks: Blocks<R>,
 }
 
@@ -36,7 +36,7 @@ impl W3Replay<BufReader<File>> {
     let header = Header::decode(&mut buf_slice).map_err(|e| e.context("header"))?;
     Ok(W3Replay {
       blocks: Blocks::new(r, header.num_blocks as usize, len - Header::MIN_SIZE),
-      header,
+      _header: header,
     })
   }
 
@@ -75,7 +75,7 @@ where
     let header = Header::decode(&mut buf).map_err(|e| e.context("header"))?;
     Ok(W3Replay {
       blocks: Blocks::from_buf(buf, header.num_blocks as usize),
-      header,
+      _header: header,
     })
   }
 }

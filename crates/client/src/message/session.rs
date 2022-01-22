@@ -26,7 +26,7 @@ use tracing_futures::Instrument;
 
 #[derive(Debug)]
 pub struct Session {
-  scope: SpawnScope,
+  _scope: SpawnScope,
   tx: Sender<OutgoingMessage>,
 }
 
@@ -52,7 +52,7 @@ impl Session {
       }
       .instrument(tracing::debug_span!("worker")),
     );
-    Self { scope, tx }
+    Self { _scope: scope, tx }
   }
 
   pub fn sender(&self) -> WsSender {

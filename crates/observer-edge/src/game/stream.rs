@@ -123,7 +123,7 @@ impl GameStream {
       }
 
       record.encode(&mut buf);
-      
+
       if buf.len() > MAX_STREAM_FRAME_SIZE {
         tracing::warn!(
           game_id = self.game_id,
@@ -143,9 +143,7 @@ impl GameStream {
         frames: &self.frames[start_frames_len..],
       }
     } else {
-      EncodedRecords {
-        frames: &[],
-      }
+      EncodedRecords { frames: &[] }
     };
 
     encoded
@@ -160,17 +158,11 @@ impl<'a> EncodedRecords<'a> {
   fn is_empty(&self) -> bool {
     self.frames.len() == 0
   }
-
-  fn len(&self) -> usize {
-    self.frames.iter().map(|f| f.len()).sum::<usize>()
-  }
 }
 
 #[derive(Debug, Clone)]
 pub enum GameStreamEvent {
-  Chunk {
-    frames: Vec<Bytes>,
-  },
+  Chunk { frames: Vec<Bytes> },
 }
 
 pub struct GameStreamDataSnapshot {

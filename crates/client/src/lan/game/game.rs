@@ -76,8 +76,6 @@ impl<'a> GameHandler<'a> {
     deferred_in_packets: Vec<Packet>,
     deferred_out_packets: Vec<Packet>,
   ) -> Result<GameResult> {
-    let mut loop_state = GameLoopState::new(&self.info);
-
     let mute_list = if let Ok(v) = self.client.send(GetMuteList).await {
       v
     } else {
@@ -112,7 +110,7 @@ impl<'a> GameHandler<'a> {
 
     for pkt in deferred_in_packets {
       tracing::warn!("deferred in packet: {:?}", pkt.type_id());
-      self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
+      self.handle_incoming_w3gs(pkt).await?;
     }
 
     for pkt in deferred_out_packets {
@@ -144,7 +142,7 @@ impl<'a> GameHandler<'a> {
               return Ok(GameResult::Leave)
             }
 
-            self.handle_game_packet(&mut loop_state, pkt).await?;
+            self.handle_game_packet(pkt).await?;
           } else {
             tracing::info!("game stream closed");
             return Ok(GameResult::Disconnected)
@@ -159,14 +157,14 @@ impl<'a> GameHandler<'a> {
             };
           match next {
             Some(status) => {
-              self.handle_game_status_change(&mut loop_state, status).await?;
+              self.handle_game_status_change(status).await?;
             },
             None => {},
           }
         }
         next = self.w3gs_rx.recv() => {
           if let Some(pkt) = next {
-            self.handle_incoming_w3gs(&mut loop_state, pkt).await?;
+            self.handle_incoming_w3gs(pkt).await?;
           } else {
             return Err(Error::TaskCancelled(anyhow::format_err!("W3GS tx dropped")))
           }
@@ -176,7 +174,7 @@ impl<'a> GameHandler<'a> {
   }
 
   #[inline]
-  async fn handle_incoming_w3gs(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
+  async fn handle_incoming_w3gs(&mut self, pkt: Packet) -> Result<()> {
     match pkt.type_id() {
       OutgoingKeepAlive::PACKET_TYPE_ID => {}
       OutgoingAction::PACKET_TYPE_ID => {}
@@ -203,16 +201,12 @@ impl<'a> GameHandler<'a> {
     Ok(())
   }
 
-  async fn handle_game_status_change(
-    &mut self,
-    _state: &mut GameLoopState,
-    status: NodeGameStatus,
-  ) -> Result<()> {
+  async fn handle_game_status_change(&mut self, status: NodeGameStatus) -> Result<()> {
     tracing::debug!("game status changed: {:?}", status);
     Ok(())
   }
 
-  async fn handle_game_packet(&mut self, _state: &mut GameLoopState, pkt: Packet) -> Result<()> {
+  async fn handle_game_packet(&mut self, pkt: Packet) -> Result<()> {
     match pkt.type_id() {
       PacketTypeId::PongToHost => return Ok(()),
       ChatToHost::PACKET_TYPE_ID => {
@@ -790,21 +784,6 @@ async fn send_chats_to_self(tx: &mut Sender<Packet>, player_id: u8, messages: Ve
       Err(err) => {
         tracing::error!("encode chat packet: {}", err);
       }
-    }
-  }
-}
-
-#[derive(Debug)]
-struct GameLoopState {
-  time: u32,
-  ping: Option<u32>,
-}
-
-impl GameLoopState {
-  fn new(_info: &LanGameInfo) -> Self {
-    GameLoopState {
-      time: 0,
-      ping: None,
     }
   }
 }

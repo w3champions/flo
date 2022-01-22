@@ -21,9 +21,9 @@ pub static JWT_SECRET_BASE64: Lazy<String> =
 #[derive(Debug, Queryable)]
 pub struct ApiClient {
   id: i32,
-  name: String,
+  _name: String,
   secret_key: String,
-  created_at: DateTime<Utc>,
+  _created_at: DateTime<Utc>,
   player_id: i32,
 }
 
@@ -73,7 +73,7 @@ impl Handler<GetInterceptor> for ConfigStorage {
     _: GetInterceptor,
   ) -> <GetInterceptor as Message>::Result {
     FloGrpcInterceptor {
-      api_client_map: self.api_client_map.clone()
+      api_client_map: self.api_client_map.clone(),
     }
   }
 }

@@ -1,7 +1,7 @@
 use flo_w3gs::slot::{RacePref, SlotData, SlotInfo};
 
 use crate::error::*;
-use flo_types::game::{Slot, SlotStatus, SlotSettings, LanGameSlot};
+use flo_types::game::{LanGameSlot, SlotStatus};
 
 #[derive(Debug)]
 pub struct LanSlotInfo {
@@ -35,11 +35,11 @@ pub fn build_player_slot_info<'a, P, S>(
   self_player: P,
   random_seed: i32,
   slots: &'a [S],
-) -> Result<LanSlotInfo> 
-where 
+) -> Result<LanSlotInfo>
+where
   P: Into<SelfPlayer>,
   S: 'a,
-  &'a S: Into<LanGameSlot<'a>>
+  &'a S: Into<LanGameSlot<'a>>,
 {
   const FLO_OB_SLOT: usize = 23;
   let self_player: SelfPlayer = self_player.into();
@@ -147,14 +147,16 @@ where
       .into_iter()
       .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
       .ok_or_else(|| Error::SlotNotResolved)?,
-    SelfPlayer::StreamObserver => slot_info
-      .slots()
-      .iter()
-      .enumerate()
-      .rev()
-      .find(|(_, s)| s.team == 24)
-      .ok_or_else(|| Error::SlotNotResolved)?
-      .0,
+    SelfPlayer::StreamObserver => {
+      slot_info
+        .slots()
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, s)| s.team == 24)
+        .ok_or_else(|| Error::SlotNotResolved)?
+        .0
+    }
   };
 
   let my_slot_player_id = index_to_player_id(my_slot_index);

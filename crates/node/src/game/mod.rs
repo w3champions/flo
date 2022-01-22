@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use futures::lock::Mutex;
 use futures::FutureExt;
@@ -41,10 +40,9 @@ impl FloEvent for GameEvent {
 
 #[derive(Debug)]
 pub struct GameSession {
-  scope: SpawnScope,
-  game_id: i32,
+  _scope: SpawnScope,
+  _game_id: i32,
   state: Arc<Mutex<State>>,
-  shared: Arc<SharedState>,
 }
 
 impl GameSession {
@@ -77,16 +75,10 @@ impl GameSession {
       obs,
     }));
 
-    let shared = Arc::new(SharedState {
-      game_id,
-      created_at: SystemTime::now(),
-    });
-
     let sess = Self {
-      scope,
-      game_id,
+      _scope: scope,
+      _game_id: game_id,
       state,
-      shared,
     };
 
     tokio::spawn({
@@ -523,12 +515,6 @@ impl PlayerSlot {
   }
 }
 
-#[derive(Debug)]
-struct SharedState {
-  game_id: i32,
-  created_at: SystemTime,
-}
-
 impl State {
   async fn check_game_end(&mut self) -> bool {
     if self.player_slots.values().all(|slot| {
@@ -599,6 +585,7 @@ impl S2ProtoUnpack<proto::GameSlot> for GameSlot {
 
 #[derive(Debug, S2ProtoUnpack)]
 #[s2_grpc(message_type(flo_net::proto::flo_node::SlotSettings))]
+#[allow(unused)]
 pub struct GameSlotSettings {
   team: i32,
   color: i32,

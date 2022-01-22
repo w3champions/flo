@@ -40,19 +40,22 @@ impl Archiver {
 
     let (tx, rx) = mpsc::channel(10);
 
-    Ok((
-      Self {
-        data_dir,
-        s3_bucket: s3_bucket.clone(),
-        s3_client: s3_client.clone(),
-        rx,
-      },
-      ArchiverHandle {
-        tx,
-        s3_bucket,
-        s3_client
-      },
-    ).into())
+    Ok(
+      (
+        Self {
+          data_dir,
+          s3_bucket: s3_bucket.clone(),
+          s3_client: s3_client.clone(),
+          rx,
+        },
+        ArchiverHandle {
+          tx,
+          s3_bucket,
+          s3_client,
+        },
+      )
+        .into(),
+    )
   }
 
   pub async fn serve(self) {
@@ -168,6 +171,7 @@ impl Archiver {
 }
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct ArchiverHandle {
   tx: mpsc::Sender<Msg>,
   s3_bucket: String,
@@ -179,14 +183,15 @@ impl ArchiverHandle {
     self.tx.send(Msg::AddFolder(path)).await.is_ok()
   }
 
+  #[allow(unused)]
   pub async fn fetch(&self, game_id: i32) -> Result<Option<Vec<Bytes>>> {
-    use rusoto_s3::GetObjectRequest;
     use futures::stream::StreamExt;
     use rusoto_core::RusotoError;
     use rusoto_s3::GetObjectError;
-  
+    use rusoto_s3::GetObjectRequest;
+
     let key = game_id.to_string();
-  
+
     let req = GetObjectRequest {
       key: key.clone(),
       bucket: self.s3_bucket.clone(),
@@ -195,15 +200,19 @@ impl ArchiverHandle {
     let parts = match self.s3_client.get_object(req).await {
       Ok(res) => {
         if let Some(stream) = res.body {
-          stream.collect::<Vec<_>>().await.into_iter().collect::<Result<Vec<_>, _>>()?
+          stream
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?
         } else {
-          return Ok(None)
+          return Ok(None);
         }
-      },
+      }
       Err(RusotoError::Service(GetObjectError::NoSuchKey(_))) => return Ok(None),
       Err(err) => return Err(err.into()),
     };
-    
+
     Ok(Some(parts))
   }
 }

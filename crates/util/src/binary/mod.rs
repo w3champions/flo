@@ -4,11 +4,9 @@ pub use std::ffi::CString;
 pub use std::mem::size_of;
 
 mod ext;
-mod flags;
 mod net;
 
 pub use self::ext::*;
-pub use self::flags::Flags;
 pub use self::net::*;
 
 pub trait BinEncode {
@@ -194,7 +192,6 @@ impl BinEncode for Bytes {
 
 #[test]
 fn test_ext_decode_cstring() {
-
   let cstr = "1234567890".as_bytes();
   // continuous buffer
   let mut buf = "1234567890\0z".as_bytes();

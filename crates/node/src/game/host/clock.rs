@@ -15,7 +15,7 @@ pub struct ActionTickStream {
   step_duration: Duration,
   delay: Pin<Box<Sleep>>,
   actions: Vec<PlayerAction>,
-  last_instant: Instant,
+  _last_instant: Instant,
   resume_waker: Option<Waker>,
 }
 
@@ -32,7 +32,7 @@ impl ActionTickStream {
       step_duration,
       delay: Box::pin(sleep(step_duration)),
       actions: vec![],
-      last_instant: Instant::now(),
+      _last_instant: Instant::now(),
       resume_waker: None,
     }
   }

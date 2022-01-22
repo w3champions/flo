@@ -6,9 +6,9 @@ use lazy_static::lazy_static;
 #[derive(Debug, BinDecode, Default)]
 pub struct MinimapIcons {
   #[bin(eq = 0)]
-  version: i32,
-  num: u32,
-  #[bin(repeat = "num")]
+  _version: i32,
+  _num: u32,
+  #[bin(repeat = "_num")]
   icons: Vec<MinimapIcon>,
 }
 
