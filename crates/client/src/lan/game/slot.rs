@@ -65,7 +65,10 @@ where
       return Err(Error::NoVacantSlotForObserver);
     }
     if let Some(idx) = first_obs_player_idx {
-      Some(index_to_player_id(idx) as usize)
+      // Reset ob slot becuase it will be overridden
+      tracing::debug!("override ob slot: {}", idx);
+
+      Some(idx)
     } else {
       Some(FLO_OB_SLOT)
     }
@@ -114,15 +117,17 @@ where
     }
   }
 
-  if let Some(idx) = stream_ob_slot.clone() {
+  if let Some(ob_slot_idx) = stream_ob_slot.clone() {
     use flo_w3gs::slot::SlotStatus;
-    let slot = slot_info.slot_mut(idx).expect("always has 24 slots");
+    let slot = slot_info
+      .slot_mut(ob_slot_idx)
+      .expect("always has 24 slots");
 
-    if slot.slot_status != SlotStatus::Open {
+    if ob_slot_idx == FLO_OB_SLOT && slot.slot_status != SlotStatus::Open {
       // do not add FLO observer if the slot status is not Open
       stream_ob_slot.take();
     } else {
-      slot.player_id = index_to_player_id(idx);
+      slot.player_id = index_to_player_id(ob_slot_idx);
       slot.slot_status = SlotStatus::Occupied;
       slot.race = RacePref::RANDOM;
       slot.color = 0;
@@ -133,6 +138,10 @@ where
   let player_infos = player_slots
     .into_iter()
     .filter_map(|(i, slot)| {
+      if stream_ob_slot == Some(i) {
+        return None;
+      }
+
       if let Some(player) = slot.player.as_ref() {
         Some(LanSlotPlayerInfo {
           slot_player_id: index_to_player_id(i),
@@ -151,27 +160,20 @@ where
       .into_iter()
       .position(|slot| slot.player.as_ref().map(|p| p.id) == Some(player_id))
       .ok_or_else(|| Error::SlotNotResolved)?,
-    SelfPlayer::StreamObserver => {
-      slot_info
-        .slots()
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, s)| s.team == 24)
-        .ok_or_else(|| Error::SlotNotResolved)?
-        .0
-    }
+    SelfPlayer::StreamObserver => stream_ob_slot
+      .clone()
+      .ok_or_else(|| Error::SlotNotResolved)?,
   };
 
   let my_slot_player_id = index_to_player_id(my_slot_index);
 
-  Ok(LanSlotInfo {
+  Ok(dbg!(LanSlotInfo {
     my_slot_player_id,
     my_slot: slot_info.slots()[my_slot_index].clone(),
     slot_info,
     player_infos,
     stream_ob_slot,
-  })
+  }))
 }
 
 pub fn index_to_player_id(index: usize) -> u8 {

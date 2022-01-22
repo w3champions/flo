@@ -35,6 +35,7 @@ pub enum IncomingMessage {
   KillTestGame,
   SetNodeAddrOverrides(SetNodeAddrOverrides),
   ClearNodeAddrOverrides,
+  WatchGame(WatchGame),
 }
 
 #[derive(Debug, Serialize)]
@@ -177,4 +178,9 @@ pub struct GamePlayerEnter {
   pub game_id: i32,
   pub slot_index: i32,
   pub slot: Slot,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WatchGame {
+  pub token: String,
 }

@@ -192,6 +192,7 @@ impl Worker {
       IncomingMessage::ClearNodeAddrOverrides => {
         self.client.send(ClearNodeAddrOverrides).await??;
       }
+      IncomingMessage::WatchGame(_) => todo!(),
     }
     Ok(())
   }

@@ -12,6 +12,7 @@ use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
+use flo_w3gs::leave::PlayerLeft;
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
 use flo_w3gs::protocol::action::OutgoingKeepAlive;
@@ -29,7 +30,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
-const DESYNC_GRACE_PERIOD_TICKS: usize = 30;
+const DESYNC_GRACE_PERIOD_TICKS: usize = 128;
 
 pub struct ObserverGameHost<S> {
   map_checksum: MapChecksum,
@@ -234,6 +235,8 @@ where
           send_queue.push(pkt, time_increment_ms.into());
         }
         PacketTypeId::PlayerLeft => {
+          let payload: PlayerLeft = pkt.decode_simple()?;
+          tracing::debug!("player left: {}", payload.player_id);
           send_queue.push(pkt, None);
         }
         id => {
@@ -535,9 +538,10 @@ async fn test_stream() -> crate::error::Result<()> {
   dotenv::dotenv().unwrap();
   flo_log_subscriber::init_env_override("flo_client");
 
-  let game_id = 2118777;
+  let game_id = 2142528;
   let token = flo_observer::token::create_observer_token(game_id, None).unwrap();
-  let (i, s) = crate::observer::source::NetworkSource::connect("127.0.0.1:3557", token).await?;
+  let (i, s) =
+    crate::observer::source::NetworkSource::connect("stats.w3flo.com:3557", token).await?;
   // let s = crate::observer::source::ArchiveFileSource::load(format!("/Users/fluxxu/Downloads/{}", game_id)).await?;
 
   // tracing::info!("game: {:#?}", i);
