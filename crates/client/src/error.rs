@@ -18,8 +18,8 @@ pub enum Error {
   MapChecksumMismatch,
   #[error("Game version mismatch")]
   GameVersionMismatch,
-  #[error("No vacant slot for observer")]
-  NoVacantSlotForObserver,
+  #[error("FLO observer slot occupied")]
+  FloObserverSlotOccupied,
   #[error("Unexpected w3gs packet: {0:?}")]
   UnexpectedW3GSPacket(flo_w3gs::packet::Packet),
   #[error("Slot not resolved")]

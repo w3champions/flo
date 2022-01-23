@@ -45,35 +45,29 @@ where
   let self_player: SelfPlayer = self_player.into();
   let slots: Vec<LanGameSlot> = slots.into_iter().map(Into::into).collect();
 
-  let player_slots: Vec<(usize, _)> = slots
+  let occupied_slots: Vec<(usize, _)> = slots
     .iter()
     .enumerate()
     .filter(|(_, slot)| slot.settings.status == SlotStatus::Occupied)
     .collect();
 
-  if player_slots.is_empty() {
+  if occupied_slots.is_empty() {
     tracing::error!("game has no player slot");
     return Err(Error::SlotNotResolved);
   }
 
-  let first_obs_player_idx = slots
+  let flo_ob_slot_occupied = occupied_slots
     .iter()
-    .position(|s| s.settings.status == SlotStatus::Occupied && s.settings.team == 24);
+    .find(|(idx, _)| *idx == FLO_OB_SLOT)
+    .is_some();
 
-  let mut stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
-    if player_slots.len() > 23 {
-      return Err(Error::NoVacantSlotForObserver);
+  let stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
+    if occupied_slots.len() > 23 {
+      return Err(Error::FloObserverSlotOccupied);
     }
-    if let Some(idx) = first_obs_player_idx {
-      // Reset ob slot becuase it will be overridden
-      tracing::debug!("override ob slot: {}", idx);
-
-      Some(idx)
-    } else {
-      Some(FLO_OB_SLOT)
-    }
+    Some(FLO_OB_SLOT)
   } else {
-    if first_obs_player_idx.is_some() {
+    if flo_ob_slot_occupied {
       None
     } else {
       Some(FLO_OB_SLOT)
@@ -85,7 +79,7 @@ where
     b.random_seed(random_seed)
       .num_slots(24)
       .num_players(
-        player_slots
+        occupied_slots
           .iter()
           .filter(|(_, slot)| slot.settings.team != 24)
           .count(),
@@ -93,7 +87,7 @@ where
       .build()
   };
 
-  for (i, player_slot) in &player_slots {
+  for (i, player_slot) in &occupied_slots {
     use flo_w3gs::slot::SlotStatus;
     let slot = slot_info.slot_mut(*i).expect("always has 24 slots");
 
@@ -123,19 +117,14 @@ where
       .slot_mut(ob_slot_idx)
       .expect("always has 24 slots");
 
-    if ob_slot_idx == FLO_OB_SLOT && slot.slot_status != SlotStatus::Open {
-      // do not add FLO observer if the slot status is not Open
-      stream_ob_slot.take();
-    } else {
-      slot.player_id = index_to_player_id(ob_slot_idx);
-      slot.slot_status = SlotStatus::Occupied;
-      slot.race = RacePref::RANDOM;
-      slot.color = 0;
-      slot.team = 24;
-    }
+    slot.player_id = index_to_player_id(ob_slot_idx);
+    slot.slot_status = SlotStatus::Occupied;
+    slot.race = RacePref::RANDOM;
+    slot.color = 0;
+    slot.team = 24;
   };
 
-  let player_infos = player_slots
+  let player_infos = occupied_slots
     .into_iter()
     .filter_map(|(i, slot)| {
       if stream_ob_slot == Some(i) {
