@@ -237,7 +237,7 @@ async fn test_game_stream() {
     }
     let events: Vec<_> = rx.into_stream().collect().await;
     for event in events {
-      let GameStreamEvent::Chunk { frames } = event;
+      let GameStreamEvent::Chunk { frames, .. } = event;
       for frame in frames {
         parse_records(&frame, &mut records);
       }
