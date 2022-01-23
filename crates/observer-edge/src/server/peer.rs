@@ -1,15 +1,20 @@
-use std::{time::Duration, collections::VecDeque, task::{Waker, Context, Poll}, pin::Pin};
-use crate::error::{Result, Error};
+use crate::broadcast::BroadcastReceiver;
+use crate::error::{Error, Result};
+use crate::game::stream::{GameStreamDataSnapshot, GameStreamEvent};
 use bytes::Bytes;
 use flo_net::{
+  packet::{Frame, PacketTypeId},
+  ping::{PingMsg, PingStream},
   stream::FloStream,
-  ping::{PingStream, PingMsg},
-  packet::{Frame, PacketTypeId}
 };
 use futures::Stream;
+use std::{
+  collections::VecDeque,
+  pin::Pin,
+  task::{Context, Poll, Waker},
+  time::Duration,
+};
 use tokio_stream::StreamExt;
-use crate::broadcast::BroadcastReceiver;
-use crate::game::stream::{GameStreamEvent, GameStreamDataSnapshot};
 
 const PING_INTERVAL: Duration = Duration::from_secs(10);
 const PING_TIMEOUT: Duration = Duration::from_secs(10);
@@ -21,7 +26,11 @@ pub struct GameStreamServer {
 }
 
 impl GameStreamServer {
-  pub fn new(game_id: i32, snapshot: GameStreamDataSnapshot, rx: BroadcastReceiver<GameStreamEvent>) -> Self {
+  pub fn new(
+    game_id: i32,
+    snapshot: GameStreamDataSnapshot,
+    rx: BroadcastReceiver<GameStreamEvent>,
+  ) -> Self {
     Self {
       game_id,
       snapshot: Some(snapshot),
@@ -32,7 +41,7 @@ impl GameStreamServer {
   pub async fn run(mut self, mut transport: FloStream) -> Result<()> {
     let game_id = self.game_id;
     let mut ready_frames = ReadyFrameStream::new();
-    
+
     if let Some(snapshot) = self.snapshot.take() {
       ready_frames.push_frames(&snapshot.frames);
     }
@@ -45,8 +54,11 @@ impl GameStreamServer {
           match r {
             Ok(event) => {
               match event {
-                GameStreamEvent::Chunk { frames } => {
+                GameStreamEvent::Chunk { frames, ended } => {
                   ready_frames.push_frames(&frames);
+                  if ended {
+                    ready_frames.finish();
+                  }
                 },
               }
             }
@@ -60,8 +72,13 @@ impl GameStreamServer {
             }
           }
         }
-        Some(frame) = ready_frames.next() => {
-          transport.send_frame(frame).await?;
+        next = ready_frames.next() => {
+          if let Some(frame) = next {
+            transport.send_frame(frame).await?;
+          } else {
+            transport.send_frame(Frame::new_empty(PacketTypeId::ObserverDataEnd)).await?;
+            break;
+          }
         }
         r = transport.recv_frame() => {
           match r {
@@ -99,21 +116,35 @@ impl GameStreamServer {
 struct ReadyFrameStream {
   q: VecDeque<Frame>,
   w: Option<Waker>,
+  finished: bool,
 }
 
 impl ReadyFrameStream {
   fn new() -> Self {
     Self {
       q: VecDeque::new(),
-      w: None
+      w: None,
+      finished: false,
     }
   }
 
-  fn push_frames(&mut self, frames: &[Bytes]) 
-  {
-    for frame in frames {
-      self.q.push_back(Frame::new_bytes(PacketTypeId::ObserverData, frame.clone()));
+  fn push_frames(&mut self, frames: &[Bytes]) {
+    if self.finished {
+      return;
     }
+
+    for frame in frames {
+      self
+        .q
+        .push_back(Frame::new_bytes(PacketTypeId::ObserverData, frame.clone()));
+    }
+    if !self.q.is_empty() {
+      self.w.take().map(|w| w.wake());
+    }
+  }
+
+  fn finish(&mut self) {
+    self.finished = true;
     if !self.q.is_empty() {
       self.w.take().map(|w| w.wake());
     }
@@ -121,24 +152,28 @@ impl ReadyFrameStream {
 }
 
 impl Stream for ReadyFrameStream {
-    type Item = Frame;
+  type Item = Frame;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-      if let Some(frame) = self.q.pop_front() {
-        return Poll::Ready(Some(frame))
-      }
+  fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    if let Some(frame) = self.q.pop_front() {
+      return Poll::Ready(Some(frame));
+    }
 
-      match self.w {
-        Some(ref w) => {
-          if !w.will_wake(cx.waker()) {
-            self.w.replace(cx.waker().clone());
-          }
-        },
-        None => {
+    if self.finished {
+      return Poll::Ready(None);
+    }
+
+    match self.w {
+      Some(ref w) => {
+        if !w.will_wake(cx.waker()) {
           self.w.replace(cx.waker().clone());
         }
       }
-
-      Poll::Pending
+      None => {
+        self.w.replace(cx.waker().clone());
+      }
     }
+
+    Poll::Pending
+  }
 }

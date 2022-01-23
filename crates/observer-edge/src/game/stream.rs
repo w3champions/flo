@@ -64,6 +64,7 @@ pub struct GameStream {
   game_id: i32,
   frames: Vec<Bytes>,
   tx: BroadcastSender<GameStreamEvent>,
+  ended: bool,
 }
 
 impl GameStream {
@@ -76,6 +77,7 @@ impl GameStream {
       game_id,
       frames: vec![],
       tx,
+      ended: false,
     };
     stream.encode_records(&initial_records);
     (stream, rx)
@@ -88,6 +90,7 @@ impl GameStream {
   fn make_data_snapshot(&self) -> GameStreamDataSnapshot {
     GameStreamDataSnapshot {
       frames: self.frames.clone(),
+      ended: self.ended,
     }
   }
 
@@ -99,6 +102,7 @@ impl GameStream {
     if !encoded.is_empty() {
       let event = GameStreamEvent::Chunk {
         frames: encoded.frames.to_vec(),
+        ended: encoded.has_game_end,
       };
       self.tx.send(event)
     } else {
@@ -138,12 +142,22 @@ impl GameStream {
       self.frames.push(buf.freeze());
     }
 
+    let has_game_end = if let Some(GameRecordData::GameEnd) = records.last() {
+      true
+    } else {
+      false
+    };
+
     let encoded = if self.frames.len() != start_frames_len {
       EncodedRecords {
         frames: &self.frames[start_frames_len..],
+        has_game_end,
       }
     } else {
-      EncodedRecords { frames: &[] }
+      EncodedRecords {
+        frames: &[],
+        has_game_end,
+      }
     };
 
     encoded
@@ -152,6 +166,7 @@ impl GameStream {
 
 struct EncodedRecords<'a> {
   frames: &'a [Bytes],
+  has_game_end: bool,
 }
 
 impl<'a> EncodedRecords<'a> {
@@ -162,11 +177,12 @@ impl<'a> EncodedRecords<'a> {
 
 #[derive(Debug, Clone)]
 pub enum GameStreamEvent {
-  Chunk { frames: Vec<Bytes> },
+  Chunk { frames: Vec<Bytes>, ended: bool },
 }
 
 pub struct GameStreamDataSnapshot {
   pub frames: Vec<Bytes>,
+  pub ended: bool,
 }
 
 #[tokio::test]
