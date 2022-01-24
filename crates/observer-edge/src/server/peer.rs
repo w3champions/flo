@@ -44,6 +44,9 @@ impl GameStreamServer {
 
     if let Some(snapshot) = self.snapshot.take() {
       ready_frames.push_frames(&snapshot.frames);
+      if snapshot.ended {
+        ready_frames.finish()
+      }
     }
 
     let mut ping = PingStream::interval(PING_INTERVAL, PING_TIMEOUT);
@@ -68,6 +71,7 @@ impl GameStreamServer {
                 return Err(Error::ObserverPeerLagged(n))
               }
               transport.send_frame(Frame::new_empty(PacketTypeId::ObserverDataEnd)).await?;
+              transport.flush().await?;
               break;
             }
           }
@@ -77,6 +81,7 @@ impl GameStreamServer {
             transport.send_frame(frame).await?;
           } else {
             transport.send_frame(Frame::new_empty(PacketTypeId::ObserverDataEnd)).await?;
+            transport.flush().await?;
             break;
           }
         }

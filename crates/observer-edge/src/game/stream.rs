@@ -79,7 +79,9 @@ impl GameStream {
       tx,
       ended: false,
     };
-    stream.encode_records(&initial_records);
+    if stream.encode_records(&initial_records).has_game_end {
+      stream.ended = true;
+    }
     (stream, rx)
   }
 
@@ -200,7 +202,7 @@ async fn test_game_stream() {
     .collect();
   let append_chunks: Vec<Vec<_>> = (1..10)
     .map(|i| {
-      (0..1000)
+      (0..8000)
         .map(|v| GameRecordData::TickChecksum {
           tick: i * 1000 + v,
           checksum: i * 1000 + v,

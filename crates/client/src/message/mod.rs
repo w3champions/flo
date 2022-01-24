@@ -8,6 +8,7 @@ pub(crate) use ws::{WsMessageListener as MessageListener, WsMessageStream as Mes
 
 use crate::controller::{ControllerClient, ReplaceSession};
 use crate::error::*;
+use crate::observer::ObserverClient;
 use crate::platform::Platform;
 use crate::StartConfig;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, RegistryRef, Service};
@@ -16,7 +17,8 @@ use tracing_futures::Instrument;
 
 pub struct Listener {
   platform: Addr<Platform>,
-  client: Addr<ControllerClient>,
+  controller_client: Addr<ControllerClient>,
+  observer_client: Addr<ObserverClient>,
   listener: Option<MessageListener>,
   port: u16,
 }
@@ -32,7 +34,8 @@ impl Actor for Listener {
 
     let worker = Worker {
       platform: self.platform.clone(),
-      client: self.client.clone(),
+      controller_client: self.controller_client.clone(),
+      observer_client: self.observer_client.clone(),
     };
     ctx.spawn(
       {
@@ -40,7 +43,7 @@ impl Actor for Listener {
           if let Err(err) = worker.serve(listener).await {
             tracing::error!("serve: {}", err);
             worker
-              .client
+              .controller_client
               .notify(MessageEvent::WorkerError(err))
               .await
               .ok();
@@ -58,14 +61,16 @@ impl Service<StartConfig> for Listener {
 
   async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     let platform = registry.resolve().await?;
-    let client = registry.resolve().await?;
+    let controller_client = registry.resolve().await?;
+    let observer_client = registry.resolve().await?;
 
     let listener = MessageListener::bind(registry).await?;
     let port = listener.port();
 
     Ok(Listener {
       platform,
-      client,
+      controller_client,
+      observer_client,
       listener: listener.into(),
       port,
     })
@@ -74,7 +79,8 @@ impl Service<StartConfig> for Listener {
 
 struct Worker {
   platform: Addr<Platform>,
-  client: Addr<ControllerClient>,
+  controller_client: Addr<ControllerClient>,
+  observer_client: Addr<ObserverClient>,
 }
 
 impl Worker {
@@ -87,9 +93,14 @@ impl Worker {
         return Ok(());
       };
 
-      let session = Session::new(self.platform.clone(), self.client.clone(), stream);
+      let session = Session::new(
+        self.platform.clone(), 
+        self.controller_client.clone(), 
+        self.observer_client.clone(), 
+        stream
+      );
 
-      self.client.notify(ReplaceSession(session)).await?;
+      self.controller_client.notify(ReplaceSession(session)).await?;
     }
   }
 }

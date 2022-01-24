@@ -11,6 +11,7 @@ use flo_net::proto::flo_connect::{
 };
 
 use crate::error::{Error, Result};
+use crate::observer::WatchGame;
 use crate::ping::PingUpdate;
 use crate::platform::{PlatformStateError, StartTestGame};
 pub use flo_types::game::{
@@ -178,9 +179,4 @@ pub struct GamePlayerEnter {
   pub game_id: i32,
   pub slot_index: i32,
   pub slot: Slot,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WatchGame {
-  pub token: String,
 }

@@ -156,13 +156,13 @@ where
 
   let my_slot_player_id = index_to_player_id(my_slot_index);
 
-  Ok(dbg!(LanSlotInfo {
+  Ok(LanSlotInfo {
     my_slot_player_id,
     my_slot: slot_info.slots()[my_slot_index].clone(),
     slot_info,
     player_infos,
     stream_ob_slot,
-  }))
+  })
 }
 
 pub fn index_to_player_id(index: usize) -> u8 {

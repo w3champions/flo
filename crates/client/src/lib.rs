@@ -1,24 +1,19 @@
-pub mod error;
 mod controller;
+pub mod error;
 mod game;
 mod lan;
 mod message;
 mod node;
+pub mod observer;
 mod ping;
-mod version;
 mod platform;
-mod observer;
-
-pub use observer::{
-  source as observer_source,
-  game::ObserverGameHost
-};
+mod version;
 
 use crate::message::{GetPort, Listener};
 use flo_state::Registry;
+use observer::{ObserverClient, WatchGame};
 use std::path::PathBuf;
 pub use version::FLO_VERSION;
-
 
 #[derive(Debug, Default, Clone)]
 pub struct StartConfig {
@@ -26,6 +21,7 @@ pub struct StartConfig {
   pub installation_path: Option<PathBuf>,
   pub user_data_path: Option<PathBuf>,
   pub controller_host: Option<String>,
+  pub stats_host: Option<String>,
 }
 
 pub struct FloClient {
@@ -45,6 +41,18 @@ impl FloClient {
     platform
       .send(StartTestGame {
         name: "TEST".to_string(),
+      })
+      .await??;
+
+    Ok(())
+  }
+
+  pub async fn watch(&self, token: String) -> Result<(), error::Error> {
+    let obs = self._registry.resolve::<ObserverClient>().await?;
+
+    obs
+      .send(WatchGame {
+        token,
       })
       .await??;
 

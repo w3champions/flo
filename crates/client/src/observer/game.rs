@@ -12,7 +12,6 @@ use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
-use flo_w3gs::leave::PlayerLeft;
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
 use flo_w3gs::protocol::action::OutgoingKeepAlive;
@@ -31,6 +30,7 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 const DESYNC_GRACE_PERIOD_TICKS: usize = 128;
+const BUFFER_DURATION: Duration = Duration::from_secs(5);
 
 pub struct ObserverGameHost<S> {
   map_checksum: MapChecksum,
@@ -134,13 +134,13 @@ where
     let mut loaded = false;
     let mut tick: u32 = 0;
     let mut agreed_checksums = VecDeque::new();
-    let mut pending_checksums = VecDeque::new();
+    let mut pending_local_checksums = VecDeque::new();
     let mut source_done = false;
     let mut send_queue = SendQueue::new();
     let mut desync_ticks = 0;
     send_queue.set_speed(4.0);
 
-    loop {
+    'main: loop {
       tokio::select! {
         r = self.source.try_next(), if loaded && !source_done => {
           if let Some(r) = r? {
@@ -163,35 +163,55 @@ where
             match pkt.type_id() {
               PacketTypeId::OutgoingKeepAlive => {
                 let payload: OutgoingKeepAlive = pkt.decode_simple()?;
-                let mut checksum = payload.checksum;
-                if let Some(pending) = pending_checksums.pop_front() {
-                  pending_checksums.push_back(checksum);
-                  checksum = pending;
+
+                if send_queue.speed() != 1. && send_queue.buffered_duration() <= BUFFER_DURATION {
+                  send_queue.set_speed(1.);
+                  stream.send(Packet::simple(
+                    ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast forwarding completed.")
+                  )?).await?;
                 }
-                if let Some(expected) = agreed_checksums.pop_front() {
-                  if expected != checksum {
+
+                let mut incoming_checksum = Some(payload.checksum);
+                'check: while let Some(expected) = agreed_checksums.front().cloned() {
+                  // check pending queue first
+                  let local_checksum = if let Some(pending_checksum) = pending_local_checksums.pop_front() {
+                    pending_checksum
+                  } else {
+                    if let Some(incoming) = incoming_checksum.take() {
+                      incoming
+                    } else {
+                      break 'check;
+                    }
+                  };
+                  if expected != local_checksum {
                     let budget = DESYNC_GRACE_PERIOD_TICKS.saturating_sub(desync_ticks);
-                    let msg = format!("desync detected: tick = {}, budget = {}, {} != {}", tick, budget, checksum, expected);
+                    let msg = format!("desync detected: tick = {}, budget = {}, {} != {}", tick, budget, local_checksum, expected);
                     desync_ticks += 1;
                     if desync_ticks > DESYNC_GRACE_PERIOD_TICKS {
                       tracing::error!("{}", msg);
                       stream.send(Packet::simple(
                         ChatFromHost::private_to_self(slots.my_slot_player_id, msg)
                       )?).await?;
-                      break;
+                      break 'main;
                     } else {
                       tracing::warn!("{}", msg);
                     }
-                    agreed_checksums.push_front(expected);
                   } else {
                     if desync_ticks > 0 {
                       tracing::debug!("resync: {} ticks", desync_ticks);
                       desync_ticks = 0;
                     }
+                    // Remove only when matched
+                    // Because sometimes it's possible to resync after several ticks
+                    agreed_checksums.pop_front();
                   }
-                } else {
-                  pending_checksums.push_back(checksum);
                 }
+
+                // stream lagged, delay desync detection
+                if let Some(incoming) = incoming_checksum {
+                  pending_local_checksums.push_back(incoming)
+                }
+
                 tick += 1;
               },
               PacketTypeId::GameLoadedSelf => {
@@ -199,6 +219,9 @@ where
                 stream.send(Packet::simple(PlayerLoaded {
                   player_id: slots.my_slot_player_id
                 })?).await?;
+                stream.send(Packet::simple(
+                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast forwarding...")
+                )?).await?;
                 loaded = true;
               }
               PacketTypeId::LeaveReq => {
@@ -235,8 +258,6 @@ where
           send_queue.push(pkt, time_increment_ms.into());
         }
         PacketTypeId::PlayerLeft => {
-          let payload: PlayerLeft = pkt.decode_simple()?;
-          tracing::debug!("player left: {}", payload.player_id);
           send_queue.push(pkt, None);
         }
         id => {
@@ -530,28 +551,6 @@ async fn test_reader() {
     }
   }
   println!("max_len = {}", max_len);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_stream() -> crate::error::Result<()> {
-  use flo_state::Actor;
-  dotenv::dotenv().unwrap();
-  flo_log_subscriber::init_env_override("flo_client");
-
-  let game_id = 2142528;
-  let token = flo_observer::token::create_observer_token(game_id, None).unwrap();
-  let (i, s) =
-    crate::observer::source::NetworkSource::connect("stats.w3flo.com:3557", token).await?;
-  // let s = crate::observer::source::ArchiveFileSource::load(format!("/Users/fluxxu/Downloads/{}", game_id)).await?;
-
-  // tracing::info!("game: {:#?}", i);
-
-  let platform = Platform::new(&Default::default()).await.unwrap().start();
-
-  let host = ObserverGameHost::new(i, s, platform.addr()).await?;
-  host.play().await?;
-
-  Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

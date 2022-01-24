@@ -1,8 +1,10 @@
-use crate::error::Error;
+use crate::error::{Result, Error};
+use crate::observer::game::ObserverGameHost;
 use crate::observer::source::NetworkSource;
-use crate::platform::Platform;
-use crate::{ObserverGameHost, StartConfig};
-use flo_state::{async_trait, Actor, Addr, RegistryRef, Service};
+use crate::platform::{Platform, GetClientConfig};
+use crate::StartConfig;
+use flo_state::{async_trait, Actor, Addr, RegistryRef, Service, Message, Handler};
+use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 
 pub mod game;
@@ -26,6 +28,41 @@ impl Service<StartConfig> for ObserverClient {
       platform,
       playing: None,
     })
+  }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WatchGame {
+  pub token: String,
+}
+
+impl Message for WatchGame {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<WatchGame> for ObserverClient {
+  async fn handle(&mut self, ctx: &mut flo_state::Context<Self>, WatchGame { token }: WatchGame) -> Result<()> {
+    let config = self.platform.send(GetClientConfig).await?;
+    tracing::debug!("stats host: {}", config.stats_host);
+
+    let (game, source) = NetworkSource::connect(&format!("{}:{}", config.stats_host, flo_constants::OBSERVER_SOCKET_PORT), token).await?;
+    let host = ObserverGameHost::new(game, source, self.platform.clone()).await?;
+    let ct = CancellationToken::new();
+    self.playing.replace(Playing {
+      ct: ct.clone(),
+    });
+    ctx.spawn(async move {
+      tokio::select! {
+        _ = ct.cancelled() => {},
+        r = host.play() => {
+          if let Err(err) = r {
+            tracing::error!("observer game host play: {}", err)
+          } 
+        }
+      }
+    });
+    Ok(())
   }
 }
 

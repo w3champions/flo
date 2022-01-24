@@ -29,9 +29,23 @@ impl SendQueue {
   }
 
   pub fn set_speed(&mut self, speed: f64) {
+    if speed == 1. {
+      self.speed.take();
+      return
+    }
     if speed > 0. {
       self.speed.replace(speed);
     }
+  }
+
+  pub fn speed(&self) -> f64 {
+    self.speed.clone().unwrap_or(1.)
+  }
+
+  pub fn buffered_duration(&self) -> Duration {
+    self.base_instant.clone().and_then(|t| {
+      t.checked_duration_since(Instant::now())
+    }).unwrap_or_default()
   }
 
   pub fn finish(&mut self) {
@@ -114,6 +128,9 @@ impl Stream for SendQueue {
 
     if let Some(mut expired) = expired {
       expired.sort_by_key(|(idx, _)| *idx);
+
+      
+
       Poll::Ready(Some(expired))
     } else {
       if exhausted {

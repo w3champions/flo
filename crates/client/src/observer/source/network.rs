@@ -1,7 +1,3 @@
-use std::{
-  pin::Pin,
-  task::{Context, Poll},
-};
 use crate::error::{Error, Result};
 use bytes::Buf;
 use flo_net::{
@@ -12,6 +8,10 @@ use flo_observer::record::GameRecordData;
 use flo_types::observer::GameInfo;
 use futures::Stream;
 use s2_grpc_utils::S2ProtoUnpack;
+use std::{
+  pin::Pin,
+  task::{Context, Poll},
+};
 use tokio::net::ToSocketAddrs;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -77,6 +77,8 @@ struct Worker {
 impl Worker {
   async fn run(mut self) {
     use flo_net::packet::FramePayload;
+    let mut total_bytes = 0;
+
     'main: loop {
       tokio::select! {
         _ = self.ct.cancelled() => {
@@ -97,6 +99,7 @@ impl Worker {
                 PacketTypeId::ObserverData => {
                   match frame.payload {
                       FramePayload::Bytes(mut bytes) => {
+                        total_bytes += bytes.len();
                         while bytes.remaining() > 0 {
                           match GameRecordData::decode(&mut bytes) {
                             Ok(record) => {
@@ -118,7 +121,7 @@ impl Worker {
                   };
                 },
                 PacketTypeId::ObserverDataEnd => {
-                  tracing::debug!("observer data stream ended");
+                  tracing::debug!("observer data stream ended: {} bytes", total_bytes);
                   break;
                 },
                 t => {

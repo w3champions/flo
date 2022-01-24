@@ -3,10 +3,13 @@ use backoff::backoff::Backoff;
 use bytes::{BufMut, Bytes, BytesMut};
 use flo_observer::{record::GameRecord, record::RTTStats, KINESIS_CLIENT};
 use flo_w3gs::packet::Packet;
+use parking_lot::Mutex;
 use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::Notify;
 use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
 
@@ -28,8 +31,10 @@ impl ObserverPublisher {
   pub fn new() -> Self {
     let (tx, rx) = channel(crate::constants::OBS_CHANNEL_SIZE);
     let ct = CancellationToken::new();
+    let bm = BufferMap::new();
 
-    tokio::spawn(Worker::new(ct.clone(), rx).run());
+    tokio::spawn(Handler::new(ct.clone(), rx, bm.clone()).run());
+    tokio::spawn(Pusher::new(ct.clone(), bm.clone()).run());
 
     Self { ct, tx }
   }
@@ -81,7 +86,10 @@ impl ObserverPublisherHandle {
       .tx
       .try_send(Cmd::AddRecord(record))
       .err()
-      .map(|_| self.broken.set(true));
+      .map(|_| {
+        tracing::error!("observer pushing disabled.");
+        self.broken.set(true)
+      });
   }
 
   pub fn remove_game(&self, game_id: i32) {
@@ -102,20 +110,124 @@ enum Cmd {
   RemoveGame { game_id: i32 },
 }
 
-struct Worker {
-  ct: CancellationToken,
-  rx: Receiver<Cmd>,
-  last_sequence_number: Option<String>,
-  buffer_map: BTreeMap<i32, GameBuffer>,
+#[derive(Clone)]
+struct BufferMap {
+  map: Arc<Mutex<BTreeMap<i32, GameBuffer>>>,
+  notify: Arc<Notify>,
 }
 
-impl Worker {
-  fn new(ct: CancellationToken, rx: Receiver<Cmd>) -> Self {
+impl BufferMap {
+  fn new() -> Self {
+    Self {
+      map: Arc::new(Mutex::new(BTreeMap::new())),
+      notify: Arc::new(Notify::new()),
+    }
+  }
+
+  fn add_record(&self, record: GameRecord) {
+    self
+      .map
+      .lock()
+      .entry(record.game_id)
+      .or_insert_with(|| GameBuffer::new())
+      .push(record);
+    self.notify.notify_one();
+  }
+
+  fn mark_remove(&self, game_id: i32) {
+    let mut g = self.map.lock();
+    if let Some(buf) = g.get_mut(&game_id) {
+      buf.should_remove = true;
+    }
+  }
+
+  fn split_chunks(&self, time: Instant) -> Vec<(i32, Bytes)> {
+    let mut map = self.map.lock();
+    let mut remove_ids = None;
+    let mut expired_ids = None;
+    let items = map
+      .iter_mut()
+      .filter_map(|(game_id, buf)| {
+        if buf.should_remove {
+          remove_ids.get_or_insert_with(|| vec![]).push(*game_id);
+        }
+
+        if time.saturating_duration_since(buf.last_update) > BUFFER_TIMEOUT {
+          expired_ids.get_or_insert_with(|| vec![]).push(*game_id);
+          return None;
+        }
+
+        if buf.is_empty() {
+          return None;
+        }
+
+        Some((*game_id, buf.split_chunk()))
+      })
+      .collect();
+
+    if let Some(ids) = remove_ids {
+      for id in ids {
+        map.remove(&id);
+      }
+    }
+
+    if let Some(ids) = expired_ids {
+      for id in ids {
+        map.remove(&id);
+        tracing::warn!("obs: game buffer expired: {}", id);
+      }
+    }
+
+    items
+  }
+}
+
+struct Handler {
+  ct: CancellationToken,
+  rx: Receiver<Cmd>,
+  buffer_map: BufferMap,
+}
+
+impl Handler {
+  fn new(ct: CancellationToken, rx: Receiver<Cmd>, buffer_map: BufferMap) -> Self {
+    Self { ct, rx, buffer_map }
+  }
+
+  async fn run(mut self) {
+    loop {
+      tokio::select! {
+        _ = self.ct.cancelled() => break,
+        Some(cmd) = self.rx.recv() => {
+          self.handle_cmd(cmd).await;
+        },
+      }
+    }
+  }
+
+  async fn handle_cmd(&mut self, cmd: Cmd) {
+    match cmd {
+      Cmd::AddRecord(record) => {
+        self.buffer_map.add_record(record);
+      }
+      Cmd::RemoveGame { game_id } => {
+        self.buffer_map.mark_remove(game_id);
+      }
+    }
+  }
+}
+
+struct Pusher {
+  ct: CancellationToken,
+  last_sequence_number: Option<String>,
+  buffer_map: BufferMap,
+}
+
+impl Pusher {
+  fn new(ct: CancellationToken, buffer_map: BufferMap) -> Self {
     Self {
       ct,
-      rx,
       last_sequence_number: None,
-      buffer_map: BTreeMap::new(),
+      buffer_map,
     }
   }
 
@@ -134,19 +246,16 @@ impl Worker {
     loop {
       tokio::select! {
         _ = self.ct.cancelled() => break,
-        Some(cmd) = self.rx.recv() => {
-          if !active {
-            active = true;
-            flush_timeout.as_mut().reset(Instant::now() + crate::constants::OBS_FLUSH_INTERVAL);
-          }
-          self.handle_cmd(cmd).await;
-        },
         _ = &mut flush_timeout, if active => {
           let mut reset_backoff = false;
           loop {
             match self.flush().await {
               Ok(next) => {
-                flush_timeout.as_mut().reset(next);
+                if let Some(next) = next {
+                  flush_timeout.as_mut().reset(next);
+                } else {
+                  active = false;
+                }
                 break;
               }
               Err(err) => {
@@ -163,72 +272,27 @@ impl Worker {
           if reset_backoff {
             flush_backoff.reset();
           }
-        }
-      }
-    }
-  }
-
-  async fn handle_cmd(&mut self, cmd: Cmd) {
-    match cmd {
-      Cmd::AddRecord(record) => {
-        self
-          .buffer_map
-          .entry(record.game_id)
-          .or_insert_with(|| GameBuffer::new())
-          .push(record);
-      }
-      Cmd::RemoveGame { game_id } => {
-        if let Some(buf) = self.buffer_map.get_mut(&game_id) {
-          buf.should_remove = true;
+        },
+        _ = self.buffer_map.notify.notified(), if !active => {
+          active = true;
+          flush_timeout.as_mut().reset(Instant::now());
         }
       }
     }
   }
 
   // returns next flush instant
-  async fn flush(&mut self) -> Result<Instant> {
+  async fn flush(&mut self) -> Result<Option<Instant>> {
     use rusoto_core::RusotoError;
     use rusoto_kinesis::{Kinesis, PutRecordError, PutRecordInput};
 
-    let mut remove_ids = None;
-    let mut expired_ids = None;
     let start = Instant::now();
     let items: Vec<_> = self
       .buffer_map
-      .iter_mut()
-      .filter_map(|(game_id, buf)| {
-        if buf.should_remove {
-          remove_ids.get_or_insert_with(|| vec![]).push(*game_id);
-        }
-
-        if start.saturating_duration_since(buf.last_update) > BUFFER_TIMEOUT {
-          expired_ids.get_or_insert_with(|| vec![]).push(*game_id);
-          return None;
-        }
-
-        if buf.is_empty() {
-          return None;
-        }
-
-        Some((*game_id, buf.split_chunk()))
-      })
-      .collect();
-
-    if let Some(ids) = remove_ids {
-      for id in ids {
-        self.buffer_map.remove(&id);
-      }
-    }
-
-    if let Some(ids) = expired_ids {
-      for id in ids {
-        self.buffer_map.remove(&id);
-        tracing::warn!("obs: game buffer expired: {}", id);
-      }
-    }
+      .split_chunks(start);
 
     if items.is_empty() {
-      return Ok(start + crate::constants::OBS_FLUSH_INTERVAL);
+      return Ok(None);
     }
 
     for (game_id, data) in items {
@@ -272,12 +336,12 @@ impl Worker {
     }
 
     let now = Instant::now();
-    Ok(
+    Ok(Some(
       now
         + crate::constants::OBS_FLUSH_INTERVAL
           .checked_sub(now - start)
           .unwrap_or(Duration::from_secs(0)),
-    )
+    ))
   }
 }
 

@@ -23,7 +23,7 @@ pub struct Platform {
 }
 
 impl Platform {
-  pub(crate) async fn new(start_config: &StartConfig) -> Result<Self> {
+  pub async fn new(start_config: &StartConfig) -> Result<Self> {
     let (config, info) = load(start_config).await;
     Ok(Platform {
       start_config: start_config.clone(),
@@ -368,6 +368,10 @@ async fn load(
         .controller_host
         .clone()
         .unwrap_or_else(|| flo_constants::CONTROLLER_HOST.to_string()),
+      stats_host: start_config
+        .stats_host
+        .clone()
+        .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
       ..Default::default()
     };
 

@@ -1,0 +1,17 @@
+[package]
+name = "flo-stats-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flo-constants = { path = "../../crates/constants" }
+flo-observer-edge = { path = "../../crates/observer-edge" }
+flo-log-subscriber = { path = "../../crates/log-subscriber" }
+
+tokio = { version = "1.15.0", features = ["time", "sync", "macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.5", features = ["time"] }
+tracing = "0.1"
+async-graphql = "3.0.20"
+async-graphql-axum = "3.0.20"
+axum = "0.4"
+dotenv = "0.15"

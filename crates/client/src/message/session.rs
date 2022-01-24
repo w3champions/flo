@@ -7,6 +7,7 @@ use crate::controller::{
 };
 use crate::error::{Error, Result};
 use crate::message::MessageStream;
+use crate::observer::ObserverClient;
 use crate::platform::{
   GetClientPlatformInfo, GetMapDetail, GetMapList, KillTestGame, Platform, PlatformStateError,
   Reload,
@@ -33,12 +34,13 @@ pub struct Session {
 impl Session {
   pub fn new(
     platform: Addr<Platform>,
-    client: Addr<ControllerClient>,
+    controller_client: Addr<ControllerClient>,
+    observer_client: Addr<ObserverClient>,
     stream: MessageStream,
   ) -> Self {
     let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
-    let serve_state = Arc::new(Worker { platform, client });
+    let serve_state = Arc::new(Worker { platform, controller_client, observer_client });
     tokio::spawn(
       {
         let scope = scope.handle();
@@ -121,7 +123,8 @@ async fn serve_stream(
 
 struct Worker {
   platform: Addr<Platform>,
-  client: Addr<ControllerClient>,
+  controller_client: Addr<ControllerClient>,
+  observer_client: Addr<ObserverClient>,
 }
 
 impl Worker {
@@ -172,7 +175,7 @@ impl Worker {
       }
       IncomingMessage::SetNodeAddrOverrides(req) => {
         let res = self
-          .client
+          .controller_client
           .send(SetNodeAddrOverrides {
             overrides: req.overrides,
           })
@@ -190,9 +193,11 @@ impl Worker {
         }
       }
       IncomingMessage::ClearNodeAddrOverrides => {
-        self.client.send(ClearNodeAddrOverrides).await??;
+        self.controller_client.send(ClearNodeAddrOverrides).await??;
       }
-      IncomingMessage::WatchGame(_) => todo!(),
+      IncomingMessage::WatchGame(msg) => {
+        self.observer_client.send(msg).await??;
+      },
     }
     Ok(())
   }
@@ -212,7 +217,7 @@ impl Worker {
 
   async fn handle_connect(&self, token: String) -> Result<()> {
     self
-      .client
+      .controller_client
       .notify(MessageEvent::ConnectController(ConnectController { token }))
       .await?;
     Ok(())
@@ -265,7 +270,7 @@ impl Worker {
 
   async fn send_frame<T: FloPacket>(&self, pkt: T) -> Result<()> {
     self
-      .client
+      .controller_client
       .send(SendFrame(pkt.encode_as_frame()?))
       .await??;
     Ok(())
