@@ -160,6 +160,7 @@ impl GameHandler {
           .game_version
           .clone()
           .ok_or_else(|| Error::GameVersionUnknown)?,
+        start_time_millis: (self.initial_arrival_time * 1000.) as i64
       },
     ))
   }

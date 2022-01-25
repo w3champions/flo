@@ -5,7 +5,7 @@ use crate::{Result, env::ENV};
 #[derive(Debug, StructOpt)]
 pub enum Command {
   Token { game_id: i32 },
-  Watch { game_id: i32 },
+  Watch { game_id: i32, delay_secs: Option<i64> },
 }
 
 impl Command {
@@ -15,8 +15,8 @@ impl Command {
         let token = flo_observer::token::create_observer_token(game_id, None)?;
         println!("{}", token)
       }
-      Command::Watch { game_id } => {
-        let token = flo_observer::token::create_observer_token(game_id, None)?;
+      Command::Watch { game_id , delay_secs} => {
+        let token = flo_observer::token::create_observer_token(game_id, delay_secs)?;
         let client = flo_client::start(flo_client::StartConfig {
           stats_host: ENV.stats_host.clone().into(),
           ..Default::default()

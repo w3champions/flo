@@ -14,6 +14,7 @@ pub struct GameInfo {
   pub slots: Vec<Slot>,
   pub random_seed: i32,
   pub game_version: String,
+  pub start_time_millis: i64,
 }
 
 impl S2ProtoUnpack<Game> for GameInfo {
@@ -25,6 +26,7 @@ impl S2ProtoUnpack<Game> for GameInfo {
       slots: S2ProtoUnpack::unpack(value.slots)?,
       random_seed: value.random_seed,
       game_version: value.game_version.unwrap_or_default(),
+      start_time_millis: value.started_at.map(|v| v.seconds + (v.nanos as i64 / 1000000)).unwrap_or_default()
     })
   }
 }

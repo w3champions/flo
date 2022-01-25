@@ -62,6 +62,12 @@ impl GameInfo {
     })
   }
 
+  pub fn with_referrees(mut self) -> Self {
+    self.data.settings.game_setting_flags.remove(GameSettingFlags::OBS_FULL);
+    self.data.settings.game_setting_flags.insert(GameSettingFlags::OBS_REFEREES);
+    self
+  }
+
   pub fn from_replay<P: AsRef<Path>>(path: P) -> Result<Self> {
     use flo_w3replay::Record;
     for record in W3Replay::open(path)?.into_records() {

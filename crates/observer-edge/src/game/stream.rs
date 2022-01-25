@@ -20,12 +20,13 @@ impl GameStreamMap {
   pub fn subscribe(
     &mut self,
     game_id: i32,
+    initial_arrival_time: f64,
     initial_records: &[GameRecordData],
   ) -> (GameStreamDataSnapshot, BroadcastReceiver<GameStreamEvent>) {
     use std::collections::btree_map::Entry;
     match self.map.entry(game_id) {
       Entry::Vacant(e) => {
-        let (stream, rx) = GameStream::new(game_id, initial_records);
+        let (stream, rx) = GameStream::new(game_id, initial_arrival_time, initial_records);
         let snapshot = stream.make_data_snapshot();
         e.insert(stream);
         (snapshot, rx)
@@ -62,7 +63,9 @@ impl GameStreamMap {
 
 pub struct GameStream {
   game_id: i32,
-  frames: Vec<Bytes>,
+  initial_arrival_time: i64,
+  time: i64,
+  frames: Vec<GameStreamFrame>,
   tx: BroadcastSender<GameStreamEvent>,
   ended: bool,
 }
@@ -70,11 +73,15 @@ pub struct GameStream {
 impl GameStream {
   pub fn new(
     game_id: i32,
+    initial_arrival_time: f64,
     initial_records: &[GameRecordData],
   ) -> (Self, BroadcastReceiver<GameStreamEvent>) {
     let (tx, rx) = BroadcastSender::channel();
+    let time = initial_arrival_time as _;
     let mut stream = Self {
       game_id,
+      initial_arrival_time: time,
+      time,
       frames: vec![],
       tx,
       ended: false,
@@ -91,6 +98,7 @@ impl GameStream {
 
   fn make_data_snapshot(&self) -> GameStreamDataSnapshot {
     GameStreamDataSnapshot {
+      initial_arrival_time: self.initial_arrival_time,
       frames: self.frames.clone(),
       ended: self.ended,
     }
@@ -113,19 +121,33 @@ impl GameStream {
   }
 
   fn encode_records(&mut self, records: &[GameRecordData]) -> EncodedRecords {
+    let mut frame_time = self.time;
     let mut buf = BytesMut::with_capacity(MAX_STREAM_FRAME_SIZE);
     let start_frames_len = self.frames.len();
     for record in records {
       if let GameRecordData::W3GS(p) = record {
-        if p.type_id() == flo_w3gs::protocol::constants::PacketTypeId::ChatFromHost {
-          continue;
+        use flo_w3gs::protocol::action::IncomingAction;
+        use flo_w3gs::protocol::constants::PacketTypeId;
+        match p.type_id() {
+          PacketTypeId::ChatFromHost => {}
+          PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
+            if let Some(time_increment_ms) = IncomingAction::peek_time_increment_ms(&p.payload).ok()
+            {
+              self.time += time_increment_ms as i64;
+            }
+          }
+          _ => {}
         }
       }
 
       if buf.len() + record.encode_len() > MAX_STREAM_FRAME_SIZE {
-        let frame = buf.freeze();
-        self.frames.push(frame);
+        let data = buf.freeze();
+        self.frames.push(GameStreamFrame {
+          approx_timestamp_millis: frame_time,
+          data,
+        });
         buf = BytesMut::with_capacity(MAX_STREAM_FRAME_SIZE);
+        frame_time = self.time;
       }
 
       record.encode(&mut buf);
@@ -141,7 +163,10 @@ impl GameStream {
     }
 
     if buf.len() > 0 {
-      self.frames.push(buf.freeze());
+      self.frames.push(GameStreamFrame {
+        approx_timestamp_millis: frame_time,
+        data: buf.freeze(),
+      });
     }
 
     let has_game_end = if let Some(GameRecordData::GameEnd) = records.last() {
@@ -167,7 +192,7 @@ impl GameStream {
 }
 
 struct EncodedRecords<'a> {
-  frames: &'a [Bytes],
+  frames: &'a [GameStreamFrame],
   has_game_end: bool,
 }
 
@@ -179,12 +204,22 @@ impl<'a> EncodedRecords<'a> {
 
 #[derive(Debug, Clone)]
 pub enum GameStreamEvent {
-  Chunk { frames: Vec<Bytes>, ended: bool },
+  Chunk {
+    frames: Vec<GameStreamFrame>,
+    ended: bool,
+  },
 }
 
 pub struct GameStreamDataSnapshot {
-  pub frames: Vec<Bytes>,
+  pub initial_arrival_time: i64,
+  pub frames: Vec<GameStreamFrame>,
   pub ended: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GameStreamFrame {
+  pub approx_timestamp_millis: i64,
+  pub data: Bytes,
 }
 
 #[tokio::test]
@@ -215,7 +250,7 @@ async fn test_game_stream() {
     .into_iter()
     .chain(append_chunks.clone().into_iter().flatten())
     .collect();
-  let (mut stream, rx) = GameStream::new(1, &initial);
+  let (mut stream, rx) = GameStream::new(1, Instant::now(), &initial);
   let snapshot = stream.make_data_snapshot();
 
   tracing::debug!("initial = {}, all = {}", initial.len(), all.len());

@@ -47,7 +47,7 @@ impl Handler<WatchGame> for ObserverClient {
     tracing::debug!("stats host: {}", config.stats_host);
 
     let (game, source) = NetworkSource::connect(&format!("{}:{}", config.stats_host, flo_constants::OBSERVER_SOCKET_PORT), token).await?;
-    let host = ObserverGameHost::new(game, source, self.platform.clone()).await?;
+    let host = ObserverGameHost::new(game, source.delay_secs(), source, self.platform.clone()).await?;
     let ct = CancellationToken::new();
     self.playing.replace(Playing {
       ct: ct.clone(),

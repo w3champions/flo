@@ -19,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 pub struct NetworkSource {
   rx: mpsc::UnboundedReceiver<Result<GameRecordData>>,
   ct: CancellationToken,
+  delay_secs: Option<i64>,
 }
 
 impl Drop for NetworkSource {
@@ -41,11 +42,11 @@ impl NetworkSource {
 
     let reply = transport.recv_frame().await?;
 
-    let game: GameInfo = flo_net::try_flo_packet! {
+    let (game, delay_secs): (GameInfo, Option<i64>) = flo_net::try_flo_packet! {
       reply => {
         p: PacketObserverConnectAccept => {
           tracing::debug!("observer server version: {:?}", p.version);
-          GameInfo::unpack(p.game)?
+          (GameInfo::unpack(p.game)?, p.delay_secs)
         }
         p: PacketObserverConnectReject => {
           return Err(Error::ObserverConnectionRequestRejected(p.reason()).into())
@@ -64,7 +65,11 @@ impl NetworkSource {
       .run(),
     );
 
-    Ok((game, Self { rx, ct }))
+    Ok((game, Self { rx, ct, delay_secs}))
+  }
+
+  pub fn delay_secs(&self) -> Option<i64> {
+    self.delay_secs.clone()
   }
 }
 
@@ -99,6 +104,8 @@ impl Worker {
                 PacketTypeId::ObserverData => {
                   match frame.payload {
                       FramePayload::Bytes(mut bytes) => {
+                      tracing::debug!("observer data frame: {} bytes", bytes.len());
+
                         total_bytes += bytes.len();
                         while bytes.remaining() > 0 {
                           match GameRecordData::decode(&mut bytes) {
@@ -137,6 +144,7 @@ impl Worker {
         }
       }
     }
+    tracing::debug!("observer data stream closed");
   }
 }
 

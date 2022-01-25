@@ -1,21 +1,21 @@
 use std::time::Duration;
 
-use backoff::ExponentialBackoff;
-use backoff::backoff::Backoff;
-use flo_net::observer::GameInfo;
-use lru::LruCache;
-use flo_state::{Actor, async_trait, Context, Addr, Message, Handler};
-use flo_kinesis::data_stream::{DataStreamIterator};
-use flo_kinesis::iterator::{Chunk};
+use crate::broadcast::BroadcastReceiver;
 use crate::constants::FLO_STATS_MAX_IN_MEMORY_GAMES;
-use crate::error::{Result, Error};
-use crate::broadcast::{BroadcastReceiver};
-use crate::game::snapshot::{GameSnapshotMap, GameSnapshot, GameSnapshotWithStats};
-use crate::game::stream::{GameStreamMap};
-use crate::game::{GameHandler, Game, GameMeta};
+use crate::error::{Error, Result};
+use crate::game::event::{GameListUpdateEvent, GameUpdateEvent};
+use crate::game::snapshot::{GameSnapshot, GameSnapshotMap, GameSnapshotWithStats};
+use crate::game::stream::GameStreamMap;
+use crate::game::{Game, GameHandler, GameMeta};
 use crate::server::peer::GameStreamServer;
 use crate::services::Services;
-use crate::game::event::{GameUpdateEvent, GameListUpdateEvent};
+use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
+use flo_kinesis::data_stream::DataStreamIterator;
+use flo_kinesis::iterator::Chunk;
+use flo_net::observer::GameInfo;
+use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
+use lru::LruCache;
 use tokio_stream::StreamExt;
 
 pub struct Dispatcher {
@@ -54,14 +54,23 @@ impl Dispatcher {
             should_remove = true;
             tracing::error!(game_id, "handle records: {}", err);
           }
-        },
-        Some(Slot::InActive) => {},
+        }
+        Some(Slot::InActive) => {}
         None => {
           if game_chunk.min_seq_id != 0 {
             if game_chunk.records.len() < 8 {
-              tracing::debug!(game_id, "unexpected initial records: {:?}: {:?}", [game_chunk.min_seq_id, game_chunk.max_seq_id], game_chunk.records);
+              tracing::debug!(
+                game_id,
+                "unexpected initial records: {:?}: {:?}",
+                [game_chunk.min_seq_id, game_chunk.max_seq_id],
+                game_chunk.records
+              );
             } else {
-              tracing::debug!(game_id, "unexpected initial records: {:?}", [game_chunk.min_seq_id, game_chunk.max_seq_id]);
+              tracing::debug!(
+                game_id,
+                "unexpected initial records: {:?}",
+                [game_chunk.min_seq_id, game_chunk.max_seq_id]
+              );
             }
             if self.slots.len() == self.slots.cap() {
               if let Some((game_id, Slot::Active(_removed))) = self.slots.pop_lru() {
@@ -75,7 +84,7 @@ impl Dispatcher {
           let mut handler = GameHandler::new(
             self.services.clone(),
             game_id,
-            game_chunk.approximate_arrival_timestamp
+            game_chunk.approximate_arrival_timestamp,
           );
 
           if let Err(err) = handler.handle_chunk(game_chunk, &mut self.snapshots) {
@@ -103,28 +112,37 @@ impl Dispatcher {
     loop {
       match services.controller.fetch_game(game_id).await {
         Ok(game) => {
-          addr.notify(FetchGameResult {
-            game_id,
-            result: Ok(game)
-          }).await.ok();
+          addr
+            .notify(FetchGameResult {
+              game_id,
+              result: Ok(game),
+            })
+            .await
+            .ok();
           break;
-        },
+        }
         Err(err @ Error::InvalidGameId(_)) => {
-          addr.notify(FetchGameResult {
-            game_id,
-            result: Err(err),
-          }).await.ok();
+          addr
+            .notify(FetchGameResult {
+              game_id,
+              result: Err(err),
+            })
+            .await
+            .ok();
           break;
-        },
+        }
         Err(err) => {
           if let Some(d) = backoff.next_backoff() {
             tracing::error!("fetch game: {}, retry in {:?}...", err, d);
             tokio::time::sleep(d).await;
           } else {
-            addr.notify(FetchGameResult {
-              game_id,
-              result: Err(err),
-            }).await.ok();
+            addr
+              .notify(FetchGameResult {
+                game_id,
+                result: Err(err),
+              })
+              .await
+              .ok();
             break;
           }
         }
@@ -163,7 +181,7 @@ impl Message for AddIterator {
 
 #[async_trait]
 impl Handler<AddIterator> for Dispatcher {
-  async fn handle(&mut self, ctx: &mut Context<Self> , AddIterator(iter): AddIterator) {
+  async fn handle(&mut self, ctx: &mut Context<Self>, AddIterator(iter): AddIterator) {
     ctx.spawn(Self::run_iter(ctx.addr(), iter));
   }
 }
@@ -176,7 +194,7 @@ impl Message for ListGames {
 
 #[async_trait]
 impl Handler<ListGames> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , _: ListGames) -> Vec<GameSnapshot> {
+  async fn handle(&mut self, _: &mut Context<Self>, _: ListGames) -> Vec<GameSnapshot> {
     self.snapshots.list_snapshots()
   }
 }
@@ -191,12 +209,20 @@ impl Message for GetGameInfo {
 
 #[async_trait]
 impl Handler<GetGameInfo> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , GetGameInfo { game_id }: GetGameInfo) -> Result<(GameMeta, GameInfo)> {
-    let info = self.slots.get(&game_id)
-      .and_then(|slot| if let Slot::Active(ref handler) = slot {
-        Some(handler.make_game_info())
-      } else {
-        None
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    GetGameInfo { game_id }: GetGameInfo,
+  ) -> Result<(GameMeta, GameInfo)> {
+    let info = self
+      .slots
+      .get(&game_id)
+      .and_then(|slot| {
+        if let Slot::Active(ref handler) = slot {
+          Some(handler.make_game_info())
+        } else {
+          None
+        }
       })
       .ok_or_else(|| Error::GameNotFound(game_id))??;
     Ok(info)
@@ -213,12 +239,20 @@ impl Message for SubscribeGameUpdate {
 
 #[async_trait]
 impl Handler<SubscribeGameUpdate> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , msg: SubscribeGameUpdate) -> Result<(GameSnapshotWithStats, BroadcastReceiver<GameUpdateEvent>)> {
-    let snapshot = self.slots.get(&msg.game_id)
-      .and_then(|slot| if let Slot::Active(ref handler) = slot {
-        Some(handler.make_snapshot_with_stats())
-      } else {
-        None
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    msg: SubscribeGameUpdate,
+  ) -> Result<(GameSnapshotWithStats, BroadcastReceiver<GameUpdateEvent>)> {
+    let snapshot = self
+      .slots
+      .get(&msg.game_id)
+      .and_then(|slot| {
+        if let Slot::Active(ref handler) = slot {
+          Some(handler.make_snapshot_with_stats())
+        } else {
+          None
+        }
       })
       .ok_or_else(|| Error::GameNotFound(msg.game_id))??;
     Ok((snapshot, self.snapshots.subscribe_game_updates(msg.game_id)))
@@ -233,7 +267,11 @@ impl Message for SubscribeGameListUpdate {
 
 #[async_trait]
 impl Handler<SubscribeGameListUpdate> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , _: SubscribeGameListUpdate) -> Result<(Vec<GameSnapshot>, BroadcastReceiver<GameListUpdateEvent>)> {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: SubscribeGameListUpdate,
+  ) -> Result<(Vec<GameSnapshot>, BroadcastReceiver<GameListUpdateEvent>)> {
     let snapshots = self.snapshots.list_snapshots();
     Ok((snapshots, self.snapshots.subscribe_game_list_updates()))
   }
@@ -241,6 +279,7 @@ impl Handler<SubscribeGameListUpdate> for Dispatcher {
 
 pub struct CreateGameStreamServer {
   pub game_id: i32,
+  pub delay_secs: Option<i64>,
 }
 
 impl Message for CreateGameStreamServer {
@@ -249,12 +288,22 @@ impl Message for CreateGameStreamServer {
 
 #[async_trait]
 impl Handler<CreateGameStreamServer> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , CreateGameStreamServer { game_id }: CreateGameStreamServer) -> Result<GameStreamServer> {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    CreateGameStreamServer {
+      game_id,
+      delay_secs,
+    }: CreateGameStreamServer,
+  ) -> Result<GameStreamServer> {
     match self.slots.get(&game_id) {
       Some(Slot::Active(handler)) => {
-        let (snapshot, rx) = self.streams.subscribe(game_id, handler.records());
-        Ok(GameStreamServer::new(game_id, snapshot, rx))
-      },
+        let (snapshot, rx) =
+          self
+            .streams
+            .subscribe(game_id, handler.initial_arrival_time(), handler.records());
+        Ok(GameStreamServer::new(game_id, delay_secs, snapshot, rx))
+      }
       _ => {
         return Err(Error::GameNotFound(game_id));
       }
@@ -270,7 +319,7 @@ impl Message for HandleChunk {
 
 #[async_trait]
 impl Handler<HandleChunk> for Dispatcher {
-  async fn handle(&mut self, ctx: &mut Context<Self> , HandleChunk(chunk): HandleChunk) {
+  async fn handle(&mut self, ctx: &mut Context<Self>, HandleChunk(chunk): HandleChunk) {
     self.handle_chunk(ctx, chunk);
   }
 }
@@ -286,13 +335,13 @@ impl Message for FetchGameResult {
 
 #[async_trait]
 impl Handler<FetchGameResult> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , msg: FetchGameResult) {
+  async fn handle(&mut self, _: &mut Context<Self>, msg: FetchGameResult) {
     if let Some(Slot::Active(handler)) = self.slots.get_mut(&msg.game_id) {
       handler.set_fetch_result(msg.result, &mut self.snapshots);
       match handler.make_snapshot() {
         Ok(snapshot) => {
           self.snapshots.insert_game(snapshot);
-        },
+        }
         Err(err) => {
           let game_id = msg.game_id;
           tracing::error!(game_id, "make snapshot: {}", err);
@@ -312,14 +361,14 @@ impl Message for StreamGc {
 
 #[async_trait]
 impl Handler<StreamGc> for Dispatcher {
-  async fn handle(&mut self, _: &mut Context<Self> , _: StreamGc) {
+  async fn handle(&mut self, _: &mut Context<Self>, _: StreamGc) {
     self.streams.remove_all_disconnected();
   }
 }
 
 #[tokio::test]
 async fn test_dispatcher() -> anyhow::Result<()> {
-  use flo_kinesis::data_stream::{DataStream};
+  use flo_kinesis::data_stream::DataStream;
   use flo_kinesis::iterator::ShardIteratorType;
   use std::time::Duration;
 
@@ -330,9 +379,7 @@ async fn test_dispatcher() -> anyhow::Result<()> {
   let d = Dispatcher::new(services).start();
   let ds = DataStream::from_env();
   let it = ShardIteratorType::at_timestamp_backward(Duration::from_secs(3600));
-  d.send(AddIterator(
-    ds.into_iter(it).await?
-  )).await?;
+  d.send(AddIterator(ds.into_iter(it).await?)).await?;
   futures::future::pending::<()>().await;
   Ok(())
 }

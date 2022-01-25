@@ -30,7 +30,7 @@ impl FloObserverEdge {
     let services = Services::from_env();
     let dispatcher = Dispatcher::new(services).start();
     let data_stream = DataStream::from_env();
-    let iter_type = ShardIteratorType::at_timestamp_backward(Duration::from_secs(3600));
+    let iter_type = ShardIteratorType::at_timestamp_backward(Duration::from_secs(crate::env::ENV.record_backscan_secs));
 
     tracing::debug!("creating iterator...");
 

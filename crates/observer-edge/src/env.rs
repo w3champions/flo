@@ -7,6 +7,7 @@ pub struct Env {
   pub controller_url: String,
   pub controller_secret: String,
   pub record_source: ObserverRecordSource,
+  pub record_backscan_secs: u64,
   pub jwt_secret_base64: String,
 }
 
@@ -19,5 +20,9 @@ pub static ENV: Lazy<Env> = Lazy::new(|| {
       .and_then(|v| v.parse().ok())
       .unwrap_or(ObserverRecordSource::Test),
     jwt_secret_base64: env::var("JWT_SECRET_BASE64").expect("env JWT_SECRET_BASE64"),
+    record_backscan_secs: std::env::var("OBSERVER_BACKSCAN_SECS")
+      .ok()
+      .and_then(|v| v.parse().ok())
+      .unwrap_or(3600),
   }
 });

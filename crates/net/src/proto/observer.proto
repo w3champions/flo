@@ -12,6 +12,7 @@ message PacketObserverConnect {
 message PacketObserverConnectAccept {
   flo_common.Version version = 1;
   GameInfo game = 2;
+  google.protobuf.Int64Value delay_secs = 3;
 }
 
 message PacketObserverConnectReject {
@@ -23,7 +24,7 @@ enum ObserverConnectRejectReason {
   ObserverConnectRejectReasonUnknown = 0;
   ObserverConnectRejectReasonObserverVersionTooOld = 1;
   ObserverConnectRejectReasonInvalidToken = 2;
-  ObserverConnectRejectReasonGameNoFound = 3;
+  ObserverConnectRejectReasonGameNotFound = 3;
   ObserverConnectRejectReasonGameNotReady = 4;
   ObserverConnectRejectReasonDelayNotOver = 5;
 }
@@ -35,6 +36,7 @@ message GameInfo {
   repeated Slot slots = 4;
   int32 random_seed = 5;
   string game_version = 6;
+  int64 start_time_millis = 7;
 }
 
 message Map {

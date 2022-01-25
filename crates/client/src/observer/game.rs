@@ -8,7 +8,7 @@ use flo_state::Addr;
 use flo_types::observer::GameInfo;
 use flo_util::binary::SockAddr;
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::chat::ChatFromHost;
+use flo_w3gs::chat::{ChatFromHost, ChatToHost};
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
@@ -25,18 +25,19 @@ use flo_w3map::MapChecksum;
 use futures::Stream;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 const DESYNC_GRACE_PERIOD_TICKS: usize = 128;
-const BUFFER_DURATION: Duration = Duration::from_secs(5);
+const BUFFER_DURATION: Duration = Duration::from_secs(1);
 
 pub struct ObserverGameHost<S> {
   map_checksum: MapChecksum,
   game_settings: GameSettings,
   listener: W3GSListener,
   info: GameInfo,
+  delay_millis: Option<i64>,
   source: S,
 }
 
@@ -44,7 +45,12 @@ impl<S> ObserverGameHost<S>
 where
   S: Stream<Item = Result<GameRecordData>> + Unpin,
 {
-  pub async fn new(info: GameInfo, source: S, platform: Addr<Platform>) -> Result<Self> {
+  pub async fn new(
+    info: GameInfo,
+    delay_secs: Option<i64>,
+    source: S,
+    platform: Addr<Platform>,
+  ) -> Result<Self> {
     let client_info = platform
       .send(GetClientPlatformInfo::default())
       .await?
@@ -78,11 +84,18 @@ where
       },
     );
 
+    tracing::debug!(
+      "start = {}, delay = {}",
+      info.start_time_millis,
+      delay_secs.clone().unwrap_or_default() * 1000
+    );
+
     Ok(Self {
       map_checksum: map.checksum,
       game_settings,
       listener,
       info,
+      delay_millis: delay_secs.map(|v| v * 1000),
       source,
     })
   }
@@ -96,7 +109,8 @@ where
         &self.info.map.path,
         map_sha1,
         self.map_checksum.xoro,
-      )?;
+      )?
+      .with_referrees();
       game_info.set_port(self.listener.port());
       game_info
     };
@@ -133,12 +147,36 @@ where
   async fn play_source(&mut self, slots: &LanSlotInfo, stream: &mut W3GSStream) -> Result<()> {
     let mut loaded = false;
     let mut tick: u32 = 0;
+    let mut time: u32 = 0;
+    let mut pending_ticks = VecDeque::new();
     let mut agreed_checksums = VecDeque::new();
     let mut pending_local_checksums = VecDeque::new();
     let mut source_done = false;
     let mut send_queue = SendQueue::new();
     let mut desync_ticks = 0;
-    send_queue.set_speed(4.0);
+    let base_time = SystemTime::now()
+      .duration_since(SystemTime::UNIX_EPOCH)
+      .ok()
+      .unwrap_or_default()
+      .as_millis() as i64;
+    let base_instant = Instant::now();
+    let start_time_millis = self.info.start_time_millis;
+    let started_duration_millis = base_time.saturating_sub(self.info.start_time_millis);
+
+    tracing::debug!("started duration = {}", started_duration_millis);
+
+    let get_aprox_game_time = || {
+      start_time_millis
+        + started_duration_millis
+        + (Instant::now() - base_instant).as_millis() as i64
+    };
+    let get_local_game_time = |time| start_time_millis + time as i64;
+    let get_delay_secs = |time| {
+      (get_aprox_game_time().saturating_sub(get_local_game_time(time)) as f32 / 1000.0).ceil()
+        as i64
+    };
+
+    send_queue.set_speed(flo_constants::OBSERVER_FAST_FORWARDING_SPEED);
 
     'main: loop {
       tokio::select! {
@@ -151,8 +189,16 @@ where
           }
         },
         next = send_queue.next() => {
-          if let Some(packets) = next {
-            stream.send_all(packets.into_iter().map(|(_, p)| p)).await?;
+          if let Some(pkt) = next {
+            match pkt.type_id() {
+              PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
+                let time_increment_ms =
+                  IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
+                pending_ticks.push_back(time_increment_ms);
+              },
+              _ => {}
+            }
+            stream.send(pkt).await?;
           } else {
             tracing::debug!("source finished");
             break;
@@ -164,11 +210,35 @@ where
               PacketTypeId::OutgoingKeepAlive => {
                 let payload: OutgoingKeepAlive = pkt.decode_simple()?;
 
-                if send_queue.speed() != 1. && send_queue.buffered_duration() <= BUFFER_DURATION {
-                  send_queue.set_speed(1.);
-                  stream.send(Packet::simple(
-                    ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast forwarding completed.")
-                  )?).await?;
+                if let Some(time_increment_ms) = pending_ticks.pop_front() {
+                  time += time_increment_ms as u32;
+                }
+
+                if send_queue.speed() != 1. {
+                  let delay_secs = get_delay_secs(time);
+
+                  if send_queue.buffered_duration() <= BUFFER_DURATION {
+                    send_queue.set_speed(1.);
+                    stream.send(Packet::simple(
+                      ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Fast Forwarding complete: Synced with {}s delay.", delay_secs))
+                    )?).await?;
+                  } else {
+                    if let Some(delay_millis) = self.delay_millis.as_ref() {
+                      let aprox_game_time = get_aprox_game_time();
+                      let local_game_time = get_local_game_time(time);
+
+                      tracing::debug!("delay = {}s, buffered duration = {}s", delay_secs, (send_queue.buffered_duration().as_millis() as f64 / 1000.));
+
+                      if aprox_game_time.saturating_sub(local_game_time) <= *delay_millis {
+                        send_queue.set_speed(1.);
+                        stream.send(Packet::simple(
+                          ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Fast Forwarding complete: Synced with {}s delay.", delay_secs))
+                        )?).await?;
+                      }
+                    }
+                  }
+                } else {
+                  tracing::debug!("buffered duration = {}s", send_queue.buffered_duration().as_millis() as f64 / 1000.0);
                 }
 
                 let mut incoming_checksum = Some(payload.checksum);
@@ -220,7 +290,7 @@ where
                   player_id: slots.my_slot_player_id
                 })?).await?;
                 stream.send(Packet::simple(
-                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast forwarding...")
+                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] To toggle Fast Forwarding, press Shift+Enter, then send -ff`.")
                 )?).await?;
                 loaded = true;
               }
@@ -228,6 +298,50 @@ where
                 stream.send(Packet::simple(LeaveAck)?).await?;
                 tracing::debug!("leave ack");
                 break;
+              }
+              PacketTypeId::ChatToHost => {
+                let payload: ChatToHost = pkt.decode_simple()?;
+                if let Some(msg) = payload.chat_message() {
+                  match msg {
+                    b"-ff" => {
+                      if send_queue.speed() != 1. {
+                        send_queue.set_speed(1.);
+                        stream.send(Packet::simple({
+                          ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding stopped.")
+                        })?).await?;
+                      } else {
+                        send_queue.set_speed(flo_constants::OBSERVER_FAST_FORWARDING_SPEED);
+                        stream.send(Packet::simple({
+                          ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding...")
+                        })?).await?;
+                      }
+                    }
+                    b"-time" => {
+                      let delay_secs = get_delay_secs(time);
+                      let buffer_secs: f64 = send_queue.buffered_duration().as_millis() as f64 / 1000.;
+                      stream.send(Packet::simple({
+                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Game clock: {}s", time as f64 / 1000.))
+                      })?).await?;
+                      stream.send(Packet::simple({
+                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Delay: {}s", delay_secs))
+                      })?).await?;
+                      stream.send(Packet::simple({
+                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Buffered: {}s", buffer_secs))
+                      })?).await?;
+                    }
+                    _ => {
+                      let help_messages = &[
+                        "[FLO] Shift+Enter Commands:",
+                        "[FLO]  -ff: Toggle Fast Forward",
+                      ];
+                      for msg in help_messages {
+                        stream.send(Packet::simple({
+                          ChatFromHost::private_to_self(slots.my_slot_player_id, *msg)
+                        })?).await?;
+                      }
+                    },
+                  }
+                }
               }
               id => {
                 tracing::debug!("recv: {:?}", id)
@@ -253,9 +367,8 @@ where
     match record {
       GameRecordData::W3GS(pkt) => match pkt.type_id() {
         PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
-          let time_increment_ms =
-            IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())? as u64;
-          send_queue.push(pkt, time_increment_ms.into());
+          let time_increment_ms = IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
+          send_queue.push(pkt, (time_increment_ms as u64).into());
         }
         PacketTypeId::PlayerLeft => {
           send_queue.push(pkt, None);
@@ -386,7 +499,8 @@ where
                 }
               }
             }
-            PacketTypeId::ChatToHost | PacketTypeId::PongToHost => {},
+            PacketTypeId::ChatToHost => {},
+            PacketTypeId::PongToHost => {},
             _ => {
               tracing::error!("unexpected packet: {:?}", pkt.type_id());
               return Ok(false)
@@ -609,7 +723,7 @@ async fn test_archive() -> crate::error::Result<()> {
 
   let platform = Platform::new(&Default::default()).await.unwrap().start();
 
-  let host = ObserverGameHost::new(game, s, platform.addr()).await?;
+  let host = ObserverGameHost::new(game, None, s, platform.addr()).await?;
   host.play().await?;
 
   Ok(())
