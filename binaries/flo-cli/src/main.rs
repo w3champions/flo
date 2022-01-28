@@ -7,6 +7,7 @@ mod grpc;
 mod lan;
 mod server;
 mod observer;
+mod kinesis;
 
 pub use anyhow::Result;
 
@@ -29,6 +30,10 @@ enum Opt {
     #[structopt(subcommand)]
     cmd: observer::Command,
   },
+  Kinesis {
+    #[structopt(subcommand)]
+    cmd: kinesis::Command,
+  }
 }
 
 #[tokio::main]
@@ -50,6 +55,9 @@ async fn main() -> Result<()> {
       cmd.run().await?;
     }
     Opt::Observer { cmd } => {
+      cmd.run().await?;
+    }
+    Opt::Kinesis { cmd } => {
       cmd.run().await?;
     }
   }

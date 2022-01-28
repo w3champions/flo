@@ -365,7 +365,7 @@ impl GameBuffer {
   }
 
   pub fn is_empty(&self) -> bool {
-    self.data.is_empty()
+    self.split_chunks.is_empty() && self.data.is_empty()
   }
 
   // [source: u32] [[seq_id: u32] [data]]

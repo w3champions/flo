@@ -26,7 +26,7 @@ impl S2ProtoUnpack<Game> for GameInfo {
       slots: S2ProtoUnpack::unpack(value.slots)?,
       random_seed: value.random_seed,
       game_version: value.game_version.unwrap_or_default(),
-      start_time_millis: value.started_at.map(|v| v.seconds + (v.nanos as i64 / 1000000)).unwrap_or_default()
+      start_time_millis: value.started_at.map(|v| v.seconds * 1000 + (v.nanos as i64 / 1000000)).unwrap_or_default()
     })
   }
 }

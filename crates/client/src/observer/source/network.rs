@@ -104,8 +104,7 @@ impl Worker {
                 PacketTypeId::ObserverData => {
                   match frame.payload {
                       FramePayload::Bytes(mut bytes) => {
-                      tracing::debug!("observer data frame: {} bytes", bytes.len());
-
+                        tracing::debug!("observer data frame: {} bytes", bytes.len());
                         total_bytes += bytes.len();
                         while bytes.remaining() > 0 {
                           match GameRecordData::decode(&mut bytes) {

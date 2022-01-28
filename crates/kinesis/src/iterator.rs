@@ -209,6 +209,9 @@ impl Scanner {
       if source != self.source {
         continue;
       }
+
+      tracing::debug!("data len = {}", bytes.len());
+
       let record = KMSRecord::decode(bytes)?;
       for (seq_id, r) in record.records {
         let entry = map.entry(r.game_id).or_insert_with(|| GameChunk {

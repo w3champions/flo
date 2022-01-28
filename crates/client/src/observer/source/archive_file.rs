@@ -16,13 +16,17 @@ pub struct ArchiveFileSource {
 
 impl ArchiveFileSource {
   pub async fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+    let inner = MemorySource::new(GameDataArchiveReader::open(path)
+      .await?
+      .records()
+      .collect_vec()
+      .await
+    ?);
+
+    tracing::debug!("archive duration: {}ms", inner.remaining_millis());
+
     Ok(Self {
-      inner: MemorySource::new(GameDataArchiveReader::open(path)
-        .await?
-        .records()
-        .collect_vec()
-        .await
-      ?)
+      inner
     })
   }
 }

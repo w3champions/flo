@@ -63,7 +63,6 @@ impl GameStreamMap {
 
 pub struct GameStream {
   game_id: i32,
-  initial_arrival_time: i64,
   time: i64,
   frames: Vec<GameStreamFrame>,
   tx: BroadcastSender<GameStreamEvent>,
@@ -77,10 +76,9 @@ impl GameStream {
     initial_records: &[GameRecordData],
   ) -> (Self, BroadcastReceiver<GameStreamEvent>) {
     let (tx, rx) = BroadcastSender::channel();
-    let time = initial_arrival_time as _;
+    let time = (initial_arrival_time * 1000.) as _;
     let mut stream = Self {
       game_id,
-      initial_arrival_time: time,
       time,
       frames: vec![],
       tx,
@@ -98,7 +96,6 @@ impl GameStream {
 
   fn make_data_snapshot(&self) -> GameStreamDataSnapshot {
     GameStreamDataSnapshot {
-      initial_arrival_time: self.initial_arrival_time,
       frames: self.frames.clone(),
       ended: self.ended,
     }
@@ -211,7 +208,6 @@ pub enum GameStreamEvent {
 }
 
 pub struct GameStreamDataSnapshot {
-  pub initial_arrival_time: i64,
   pub frames: Vec<GameStreamFrame>,
   pub ended: bool,
 }

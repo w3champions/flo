@@ -12,10 +12,12 @@ flo-lan = { path = "../../crates/lan" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 flo-w3storage = { path = "../../crates/w3storage" }
 flo-w3map = { path = "../../crates/w3map" }
+flo-w3gs = { path = "../../crates/w3gs" }
 flo-client = { path = "../../crates/client", features = ["worker"] }
 flo-debug = { path = "../../crates/debug" }
 flo-observer = { path = "../../crates/observer" }
 flo-observer-fs = { path = "../../crates/observer-fs" }
+flo-kinesis = { path = "../../crates/kinesis" }
 
 anyhow = "1"
 tonic = "0.6"
@@ -25,6 +27,7 @@ structopt = "0.3"
 tracing = "0.1"
 tracing-futures = "0.2"
 tokio = { version = "1.15.0", features = ["macros", "signal"] }
+tokio-stream = "0.1.8"
 rand = "0.8"
 hex = "0.4"
 async-tungstenite = { version = "0.16.1", features = ["tokio-runtime"] }

@@ -104,6 +104,10 @@ impl DelaySendQueue {
 
   pub fn new(delay_millis: i64) -> Self {
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok().unwrap_or_default();
+    let fast_forwarding_millis = (delay_millis as f64 / (flo_constants::OBSERVER_FAST_FORWARDING_SPEED - 1.0)).ceil() as i64;
+
+    tracing::debug!("fast_forwarding_millis = {}", fast_forwarding_millis);
+
     Self {
       next_seq: 0,
       delayed: DelayQueue::new(),
@@ -113,7 +117,7 @@ impl DelaySendQueue {
       base_timestamp_millis: now.as_millis() as i64,
       base_instant: Instant::now(),
       delay_millis,
-      fast_forwarding_millis: (delay_millis as f64 / (flo_constants::OBSERVER_FAST_FORWARDING_SPEED - 1.0)).ceil() as i64
+      fast_forwarding_millis,
     }
   }
 
@@ -134,9 +138,14 @@ impl DelaySendQueue {
       } else {
         self.delay_millis
       };
+
+      let delay = (frame.approx_timestamp_millis + delay_millis).saturating_sub(now).saturating_sub(Self::MAX_PRESEND_MILLIS);
+
+      // tracing::debug!("frame: approx_timestamp_millis = {}, delay = {}", frame.approx_timestamp_millis, delay);
+
       let delay = Duration::from_millis(std::cmp::max(
         0_i64, 
-        (frame.approx_timestamp_millis + delay_millis).saturating_sub(now).saturating_sub(Self::MAX_PRESEND_MILLIS)
+        delay
       ) as u64);
 
       self

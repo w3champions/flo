@@ -109,8 +109,7 @@ where
         &self.info.map.path,
         map_sha1,
         self.map_checksum.xoro,
-      )?
-      .with_referrees();
+      )?;
       game_info.set_port(self.listener.port());
       game_info
     };
@@ -148,6 +147,7 @@ where
     let mut loaded = false;
     let mut tick: u32 = 0;
     let mut time: u32 = 0;
+    let mut received_millis: u32 = 0;
     let mut pending_ticks = VecDeque::new();
     let mut agreed_checksums = VecDeque::new();
     let mut pending_local_checksums = VecDeque::new();
@@ -195,12 +195,13 @@ where
                 let time_increment_ms =
                   IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
                 pending_ticks.push_back(time_increment_ms);
+                received_millis += time_increment_ms as u32;
               },
               _ => {}
             }
             stream.send(pkt).await?;
           } else {
-            tracing::debug!("source finished");
+            tracing::debug!("source finished, received {}ms", received_millis);
             break;
           }
         },
@@ -701,7 +702,7 @@ async fn test_archive() -> crate::error::Result<()> {
   dotenv::dotenv().unwrap();
   flo_log_subscriber::init_env_override("flo_client");
 
-  let game_id = 2114757;
+  let game_id = 2156507;
   let s = crate::observer::source::ArchiveFileSource::load(dbg!(format!(
     "../../target/games/{}.gz",
     game_id
