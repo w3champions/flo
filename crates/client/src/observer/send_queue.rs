@@ -1,17 +1,18 @@
-use flo_net::w3gs::{W3GSPacket};
-use futures::{Stream, Future};
-use tokio::time::{Sleep, sleep};
+use flo_net::w3gs::W3GSPacket;
+use futures::{Future, Stream};
+use std::collections::VecDeque;
 use std::{
   pin::Pin,
   task::{Context, Poll, Waker},
   time::{Duration, Instant},
 };
-use std::collections::VecDeque;
+use tokio::time::{sleep, Sleep};
 
 pub struct SendQueue {
   sleep: Pin<Box<Sleep>>,
   speed: Option<f64>,
   packets: VecDeque<(W3GSPacket, Option<u64>)>,
+  buffered_millis: u64,
   finished: bool,
   exhausted_waker: Option<Waker>,
   delayed: Option<W3GSPacket>,
@@ -23,6 +24,7 @@ impl SendQueue {
     Self {
       sleep: Box::pin(sleep(Default::default())),
       packets: VecDeque::new(),
+      buffered_millis: 0,
       speed: None,
       finished: false,
       exhausted_waker: None,
@@ -34,7 +36,7 @@ impl SendQueue {
   pub fn set_speed(&mut self, speed: f64) {
     if speed == 1. {
       self.speed.take();
-      return
+      return;
     }
     if speed > 0. {
       self.speed.replace(speed);
@@ -46,7 +48,7 @@ impl SendQueue {
   }
 
   pub fn buffered_duration(&self) -> Duration {
-    Duration::from_millis(self.packets.iter().filter_map(|(_, t)| t.clone()).sum::<u64>())
+    Duration::from_millis(self.buffered_millis)
   }
 
   pub fn finish(&mut self) {
@@ -58,7 +60,11 @@ impl SendQueue {
       return;
     }
 
-    self.packets.push_back((packet,increase_millis));
+    if let Some(millis) = increase_millis.clone() {
+      self.buffered_millis += millis;
+    }
+
+    self.packets.push_back((packet, increase_millis));
     self.exhausted_waker.take().map(|w| w.wake());
   }
 }
@@ -70,11 +76,12 @@ impl Stream for SendQueue {
     futures::ready!(self.sleep.as_mut().poll(cx));
 
     if let Some(pkt) = self.delayed.take() {
-      return Poll::Ready(Some(pkt))
+      return Poll::Ready(Some(pkt));
     }
 
     if let Some((pkt, ms)) = self.packets.pop_front() {
       if let Some(ms) = ms {
+        self.buffered_millis = self.buffered_millis.saturating_sub(ms);
         let delay = Duration::from_millis(if let Some(f) = self.speed.clone() {
           if f > 0. {
             (ms as f64 / f).round() as u64
@@ -90,11 +97,12 @@ impl Stream for SendQueue {
         } else {
           Duration::default()
         };
-        let deadline = now + if last_tick_cost < delay{
-          delay - last_tick_cost
-        } else {
-          Duration::default()
-        };
+        let deadline = now
+          + if last_tick_cost < delay {
+            delay - last_tick_cost
+          } else {
+            Duration::default()
+          };
         self.last_deadline.replace(deadline);
         self.sleep.as_mut().reset(deadline.into());
         if let Poll::Ready(_) = self.sleep.as_mut().poll(cx) {
@@ -108,7 +116,7 @@ impl Stream for SendQueue {
       }
     } else {
       if self.finished {
-        return Poll::Ready(None)
+        return Poll::Ready(None);
       }
 
       if !self

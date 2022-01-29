@@ -1943,6 +1943,7 @@ dependencies = [
  "dotenv",
  "flo-constants",
  "flo-log-subscriber",
+ "flo-observer",
  "flo-observer-edge",
  "tokio",
  "tokio-stream",

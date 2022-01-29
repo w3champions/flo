@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 flo-constants = { path = "../../crates/constants" }
 flo-observer-edge = { path = "../../crates/observer-edge" }
+flo-observer = { path = "../../crates/observer" }
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 
 tokio = { version = "1.15.0", features = ["time", "sync", "macros", "rt-multi-thread"] }

@@ -199,6 +199,25 @@ impl Handler<ListGames> for Dispatcher {
   }
 }
 
+pub struct GetGame {
+  pub game_id: i32,
+}
+
+impl Message for GetGame {
+  type Result = Result<GameSnapshot>;
+}
+
+#[async_trait]
+impl Handler<GetGame> for Dispatcher {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    GetGame { game_id }: GetGame,
+  ) -> Result<GameSnapshot> {
+    self.snapshots.get_snapshot(game_id)
+  }
+}
+
 pub struct GetGameInfo {
   pub game_id: i32,
 }

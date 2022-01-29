@@ -1,10 +1,13 @@
-use async_graphql::{Context, Union, Object, Result, Schema, Subscription, SimpleObject};
-use tokio_stream::{Stream, StreamExt, once};
+use async_graphql::{Context, Object, Result, Schema, SimpleObject, Subscription, Union};
 use flo_observer_edge::{
-  FloObserverEdgeHandle, 
   game::snapshot::GameSnapshot,
-  game::{event::{GameListUpdateEvent, GameUpdateEvent}, snapshot::GameSnapshotWithStats},
+  game::{
+    event::{GameListUpdateEvent, GameUpdateEvent},
+    snapshot::GameSnapshotWithStats,
+  },
+  FloObserverEdgeHandle,
 };
+use tokio_stream::{once, Stream, StreamExt};
 
 pub type FloLiveSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 pub struct QueryRoot;
@@ -21,29 +24,54 @@ pub struct MutationRoot;
 
 #[Object]
 impl MutationRoot {
-  async fn noop(&self, _ctx: &Context<'_>) -> bool {
-    false
+  async fn create_observer_token(
+    &self,
+    ctx: &Context<'_>,
+    game_id: i32,
+  ) -> Result<ObserverTokenPayload> {
+    let handle: &FloObserverEdgeHandle = ctx.data()?;
+    let delay_secs = Some(180);
+    Ok(ObserverTokenPayload {
+      game: handle.get_game(game_id).await?,
+      delay_secs: delay_secs.clone(),
+      token: flo_observer::token::create_observer_token(game_id, delay_secs)?,
+    })
   }
+}
+
+#[derive(SimpleObject)]
+pub struct ObserverTokenPayload {
+  pub game: GameSnapshot,
+  pub delay_secs: Option<i64>,
+  pub token: String,
 }
 
 pub struct SubscriptionRoot;
 
 #[Subscription]
 impl SubscriptionRoot {
-  async fn game_list_update_events(&self, ctx: &Context<'_>) -> Result<impl Stream<Item = GameListUpdateEventItem>> {
+  async fn game_list_update_events(
+    &self,
+    ctx: &Context<'_>,
+  ) -> Result<impl Stream<Item = GameListUpdateEventItem>> {
     let handle: &FloObserverEdgeHandle = ctx.data()?;
     let (snapshots, rx) = handle.subscribe_game_list_updates().await?;
-    let events = rx.into_stream().map(|event| {
-      GameListUpdateEventItem::Event(GameListUpdateEventItemEvent {
-        event
-      })
-    });
-    Ok(once(GameListUpdateEventItem::Initial(GameListUpdateEventItemInitial {
-      snapshots
-    })).chain(events))
+    let events = rx
+      .into_stream()
+      .map(|event| GameListUpdateEventItem::Event(GameListUpdateEventItemEvent { event }));
+    Ok(
+      once(GameListUpdateEventItem::Initial(
+        GameListUpdateEventItemInitial { snapshots },
+      ))
+      .chain(events),
+    )
   }
 
-  async fn game_update_events(&self, ctx: &Context<'_>, id: i32) -> Result<impl Stream<Item = GameUpdateEventItem>> {
+  async fn game_update_events(
+    &self,
+    ctx: &Context<'_>,
+    id: i32,
+  ) -> Result<impl Stream<Item = GameUpdateEventItem>> {
     let handle: &FloObserverEdgeHandle = ctx.data()?;
     let (snapshot, rx) = handle.subscribe_game_updates(id).await?;
     let events = rx.into_stream().map(GameUpdateEventItem::Event);
