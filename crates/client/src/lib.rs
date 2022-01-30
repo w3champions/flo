@@ -6,7 +6,7 @@ mod message;
 mod node;
 pub mod observer;
 mod ping;
-mod platform;
+pub mod platform;
 mod version;
 
 use crate::message::{GetPort, Listener};
@@ -50,11 +50,7 @@ impl FloClient {
   pub async fn watch(&self, token: String) -> Result<(), error::Error> {
     let obs = self._registry.resolve::<ObserverClient>().await?;
 
-    obs
-      .send(WatchGame {
-        token,
-      })
-      .await??;
+    obs.send(WatchGame { token }).await??;
 
     Ok(())
   }
