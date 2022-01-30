@@ -1,9 +1,9 @@
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use crate::observer::game::ObserverGameHost;
 use crate::observer::source::NetworkSource;
-use crate::platform::{Platform, GetClientConfig};
+use crate::platform::{GetClientConfig, Platform};
 use crate::StartConfig;
-use flo_state::{async_trait, Actor, Addr, RegistryRef, Service, Message, Handler};
+use flo_state::{async_trait, Actor, Addr, Handler, Message, RegistryRef, Service};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
 
@@ -16,6 +16,15 @@ pub struct ObserverClient {
   playing: Option<Playing>,
 }
 
+impl ObserverClient {
+  pub fn new(platform: Addr<Platform>) -> Self {
+    Self {
+      platform,
+      playing: None,
+    }
+  }
+}
+
 impl Actor for ObserverClient {}
 
 #[async_trait]
@@ -24,10 +33,7 @@ impl Service<StartConfig> for ObserverClient {
 
   async fn create(registry: &mut RegistryRef<StartConfig>) -> Result<Self, Self::Error> {
     let platform = registry.resolve::<Platform>().await?;
-    Ok(ObserverClient {
-      platform,
-      playing: None,
-    })
+    Ok(ObserverClient::new(platform))
   }
 }
 
@@ -42,23 +48,34 @@ impl Message for WatchGame {
 
 #[async_trait]
 impl Handler<WatchGame> for ObserverClient {
-  async fn handle(&mut self, ctx: &mut flo_state::Context<Self>, WatchGame { token }: WatchGame) -> Result<()> {
+  async fn handle(
+    &mut self,
+    ctx: &mut flo_state::Context<Self>,
+    WatchGame { token }: WatchGame,
+  ) -> Result<()> {
     let config = self.platform.send(GetClientConfig).await?;
     tracing::debug!("stats host: {}", config.stats_host);
 
-    let (game, source) = NetworkSource::connect(&format!("{}:{}", config.stats_host, flo_constants::OBSERVER_SOCKET_PORT), token).await?;
-    let host = ObserverGameHost::new(game, source.delay_secs(), source, self.platform.clone()).await?;
+    let (game, source) = NetworkSource::connect(
+      &format!(
+        "{}:{}",
+        config.stats_host,
+        flo_constants::OBSERVER_SOCKET_PORT
+      ),
+      token,
+    )
+    .await?;
+    let host =
+      ObserverGameHost::new(game, source.delay_secs(), source, self.platform.clone()).await?;
     let ct = CancellationToken::new();
-    self.playing.replace(Playing {
-      ct: ct.clone(),
-    });
+    self.playing.replace(Playing { ct: ct.clone() });
     ctx.spawn(async move {
       tokio::select! {
         _ = ct.cancelled() => {},
         r = host.play() => {
           if let Err(err) = r {
             tracing::error!("observer game host play: {}", err)
-          } 
+          }
         }
       }
     });
