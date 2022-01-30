@@ -1525,6 +1525,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-futures",
+ "winapi 0.3.9",
 ]
 
 [[package]]

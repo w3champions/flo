@@ -55,9 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .route("/ws", GraphQLSubscription::new(schema.clone()))
     .layer(AddExtensionLayer::new(schema))
     .layer({
-      let allowed_list: [HeaderValue; 2] = [
+      let allowed_list: [HeaderValue; 4] = [
         "http://localhost:3000".parse().unwrap(),
+        "http://localhost:3558".parse().unwrap(),
         "https://w3flo.com".parse().unwrap(),
+        "https://stats.w3flo.com".parse().unwrap(),
       ];
       CorsLayer::new()
         .allow_origin(Origin::list(allowed_list))

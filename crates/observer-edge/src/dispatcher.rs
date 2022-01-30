@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::broadcast::BroadcastReceiver;
 use crate::constants::FLO_STATS_MAX_IN_MEMORY_GAMES;
 use crate::error::{Error, Result};
@@ -16,11 +14,13 @@ use flo_kinesis::iterator::Chunk;
 use flo_net::observer::GameInfo;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
 use lru::LruCache;
+use std::time::Duration;
 use tokio_stream::StreamExt;
 
 pub struct Dispatcher {
   services: Services,
-  slots: LruCache<i32, Slot>,
+  slots: LruCache<i32, GameHandler>,
+  inactive_cache: LruCache<i32, ()>,
   snapshots: GameSnapshotMap,
   streams: GameStreamMap,
 }
@@ -30,6 +30,7 @@ impl Dispatcher {
     Self {
       services,
       slots: LruCache::new(*FLO_STATS_MAX_IN_MEMORY_GAMES),
+      inactive_cache: LruCache::new(*FLO_STATS_MAX_IN_MEMORY_GAMES),
       snapshots: GameSnapshotMap::new(),
       streams: GameStreamMap::new(),
     }
@@ -47,15 +48,19 @@ impl Dispatcher {
     for (game_id, game_chunk) in chunk.game_records {
       self.streams.dispatch_game_records(game_id, &game_chunk);
 
+      if self.inactive_cache.get(&game_id).is_some() {
+        continue;
+      }
+
       let mut should_remove = false;
+
       match self.slots.get_mut(&game_id) {
-        Some(Slot::Active(handler)) => {
+        Some(handler) => {
           if let Err(err) = handler.handle_chunk(game_chunk, &mut self.snapshots) {
             should_remove = true;
             tracing::error!(game_id, "handle records: {}", err);
           }
         }
-        Some(Slot::InActive) => {}
         None => {
           if game_chunk.min_seq_id != 0 {
             if game_chunk.records.len() < 8 {
@@ -73,12 +78,12 @@ impl Dispatcher {
               );
             }
             if self.slots.len() == self.slots.cap() {
-              if let Some((game_id, Slot::Active(_removed))) = self.slots.pop_lru() {
+              if let Some((game_id, _removed)) = self.slots.pop_lru() {
                 tracing::info!(game_id, "expired");
                 self.snapshots.remove_game(game_id);
               }
             }
-            self.slots.put(game_id, Slot::InActive);
+            self.inactive_cache.put(game_id, ());
             continue;
           }
           let mut handler = GameHandler::new(
@@ -91,12 +96,12 @@ impl Dispatcher {
             tracing::error!(game_id, "handle initial records: {}", err);
           } else {
             if self.slots.len() == self.slots.cap() {
-              if let Some((game_id, Slot::Active(_removed))) = self.slots.pop_lru() {
+              if let Some((game_id, _removed)) = self.slots.pop_lru() {
                 tracing::info!(game_id, "expired");
                 self.snapshots.remove_game(game_id);
               }
             }
-            self.slots.put(game_id, Slot::Active(handler));
+            self.slots.put(game_id, handler);
             ctx.spawn(Self::fetch_game(self.services.clone(), ctx.addr(), game_id));
           }
         }
@@ -168,11 +173,6 @@ impl Actor for Dispatcher {
   }
 }
 
-enum Slot {
-  InActive,
-  Active(GameHandler),
-}
-
 pub struct AddIterator(pub DataStreamIterator);
 
 impl Message for AddIterator {
@@ -236,13 +236,7 @@ impl Handler<GetGameInfo> for Dispatcher {
     let info = self
       .slots
       .get(&game_id)
-      .and_then(|slot| {
-        if let Slot::Active(ref handler) = slot {
-          Some(handler.make_game_info())
-        } else {
-          None
-        }
-      })
+      .map(|handler| handler.make_game_info())
       .ok_or_else(|| Error::GameNotFound(game_id))??;
     Ok(info)
   }
@@ -266,13 +260,7 @@ impl Handler<SubscribeGameUpdate> for Dispatcher {
     let snapshot = self
       .slots
       .get(&msg.game_id)
-      .and_then(|slot| {
-        if let Slot::Active(ref handler) = slot {
-          Some(handler.make_snapshot_with_stats())
-        } else {
-          None
-        }
-      })
+      .map(|handler| handler.make_snapshot_with_stats())
       .ok_or_else(|| Error::GameNotFound(msg.game_id))??;
     Ok((snapshot, self.snapshots.subscribe_game_updates(msg.game_id)))
   }
@@ -316,7 +304,7 @@ impl Handler<CreateGameStreamServer> for Dispatcher {
     }: CreateGameStreamServer,
   ) -> Result<GameStreamServer> {
     match self.slots.get(&game_id) {
-      Some(Slot::Active(handler)) => {
+      Some(handler) => {
         let (snapshot, rx) =
           self
             .streams
@@ -355,7 +343,7 @@ impl Message for FetchGameResult {
 #[async_trait]
 impl Handler<FetchGameResult> for Dispatcher {
   async fn handle(&mut self, _: &mut Context<Self>, msg: FetchGameResult) {
-    if let Some(Slot::Active(handler)) = self.slots.get_mut(&msg.game_id) {
+    if let Some(handler) = self.slots.get_mut(&msg.game_id) {
       handler.set_fetch_result(msg.result, &mut self.snapshots);
       match handler.make_snapshot() {
         Ok(snapshot) => {

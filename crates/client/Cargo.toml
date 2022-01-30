@@ -49,6 +49,9 @@ rand = "0.8"
 backoff = "0.3"
 bytes = "1.1.0"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["timeapi"] }
+
 [dev-dependencies]
 dotenv = "0.15"
 flo-log-subscriber = { path = "../log-subscriber" }

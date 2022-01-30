@@ -94,9 +94,10 @@ pub struct DelaySendQueue {
   delayed: DelayQueue<(usize, Frame)>,
   finished: bool,
   exhausted_waker: Option<Waker>,
-  expired: VecDeque<Frame>,
+  expired: VecDeque<(usize, Frame)>,
   base_timestamp_millis: i64,
   base_instant: Instant,
+  last_instant: Option<Instant>,
   delay_millis: i64,
   fast_forwarding_millis: i64,
 }
@@ -122,6 +123,7 @@ impl DelaySendQueue {
       expired: VecDeque::new(),
       base_timestamp_millis: now.as_millis() as i64,
       base_instant: Instant::now(),
+      last_instant: None,
       delay_millis,
       fast_forwarding_millis,
     }
@@ -141,7 +143,7 @@ impl DelaySendQueue {
       let fast_forwarding =
         now.saturating_sub(frame.approx_timestamp_millis) <= self.fast_forwarding_millis;
       let delay_millis = if fast_forwarding {
-        (self.delay_millis as f64 / flo_constants::OBSERVER_FAST_FORWARDING_SPEED).floor() as i64
+        (self.delay_millis as f64 / flo_constants::OBSERVER_FAST_FORWARDING_SPEED).floor() as _
       } else {
         self.delay_millis
       };
@@ -150,16 +152,25 @@ impl DelaySendQueue {
         .saturating_sub(now)
         .saturating_sub(Self::MAX_PRESEND_MILLIS);
 
-      // tracing::debug!("frame: approx_timestamp_millis = {}, delay = {}", frame.approx_timestamp_millis, delay);
+      // tracing::debug!(
+      //   "frame: approx_timestamp_millis = {}, delay = {}",
+      //   frame.approx_timestamp_millis,
+      //   delay
+      // );
 
       let delay = Duration::from_millis(std::cmp::max(0_i64, delay) as u64);
+      let next_instant = match self.last_instant.take() {
+        Some(last) => std::cmp::max(last, Instant::now() + delay),
+        None => Instant::now() + delay,
+      };
+      self.last_instant.replace(next_instant);
 
-      self.delayed.insert(
+      self.delayed.insert_at(
         (
           self.next_seq,
           Frame::new_bytes(PacketTypeId::ObserverData, frame.data.clone()),
         ),
-        delay,
+        next_instant.into(),
       );
       self.next_seq = self.next_seq.saturating_add(1);
     }
@@ -195,10 +206,10 @@ impl Stream for DelaySendQueue {
 
     if let Some(mut expired) = expired {
       expired.sort_by_key(|(idx, _)| *idx);
-      self.expired.extend(expired.into_iter().map(|item| item.1));
+      self.expired.extend(expired);
     }
 
-    if let Some(expired) = self.expired.pop_front() {
+    if let Some((_, expired)) = self.expired.pop_front() {
       Poll::Ready(Some(expired))
     } else {
       if exhausted {

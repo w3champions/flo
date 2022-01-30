@@ -176,6 +176,11 @@ where
         as i64
     };
 
+    #[cfg(windows)]
+    unsafe {
+      winapi::um::timeapi::timeBeginPeriod(1);
+    }
+
     send_queue.set_speed(flo_constants::OBSERVER_FAST_FORWARDING_SPEED);
 
     'main: loop {
@@ -291,7 +296,7 @@ where
                   player_id: slots.my_slot_player_id
                 })?).await?;
                 stream.send(Packet::simple(
-                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] To toggle Fast Forwarding, press Shift+Enter, then send -ff`.")
+                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding...")
                 )?).await?;
                 loaded = true;
               }
@@ -355,6 +360,20 @@ where
         }
       }
     }
+
+    let play_time = (Instant::now() - base_instant).as_millis() as u64;
+    tracing::debug!(
+      "game time: {}ms, play time: {}ms, speed: {}",
+      time,
+      play_time,
+      (time as f64) / (play_time as f64)
+    );
+
+    #[cfg(windows)]
+    unsafe {
+      winapi::um::timeapi::timeEndPeriod(1);
+    }
+
     Ok(())
   }
 

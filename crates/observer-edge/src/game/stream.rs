@@ -246,7 +246,7 @@ async fn test_game_stream() {
     .into_iter()
     .chain(append_chunks.clone().into_iter().flatten())
     .collect();
-  let (mut stream, rx) = GameStream::new(1, Instant::now(), &initial);
+  let (mut stream, rx) = GameStream::new(1, 0., &initial);
   let snapshot = stream.make_data_snapshot();
 
   tracing::debug!("initial = {}, all = {}", initial.len(), all.len());
@@ -266,13 +266,13 @@ async fn test_game_stream() {
   let recv = tokio::spawn(async move {
     let mut records = vec![];
     for frame in snapshot.frames {
-      parse_records(&frame, &mut records);
+      parse_records(&frame.data, &mut records);
     }
     let events: Vec<_> = rx.into_stream().collect().await;
     for event in events {
       let GameStreamEvent::Chunk { frames, .. } = event;
       for frame in frames {
-        parse_records(&frame, &mut records);
+        parse_records(&frame.data, &mut records);
       }
     }
     records

@@ -84,7 +84,7 @@ impl Stream for SendQueue {
         self.buffered_millis = self.buffered_millis.saturating_sub(ms);
         let delay = Duration::from_millis(if let Some(f) = self.speed.clone() {
           if f > 0. {
-            (ms as f64 / f).round() as u64
+            (ms as f64 / f).floor() as u64
           } else {
             ms
           }

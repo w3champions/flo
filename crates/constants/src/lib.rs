@@ -29,4 +29,4 @@ pub const MIN_FLO_VERSION: version::Version = Version {
 pub const OBSERVER_GRPC_PORT: u16 = 3556;
 pub const OBSERVER_SOCKET_PORT: u16 = 3557;
 pub const OBSERVER_GRAPHQL_PORT: u16 = 3558;
-pub const OBSERVER_FAST_FORWARDING_SPEED: f64 = 4.;
+pub const OBSERVER_FAST_FORWARDING_SPEED: f64 = 3.;
