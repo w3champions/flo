@@ -82,14 +82,10 @@ impl ObserverPublisherHandle {
     if self.broken.get() {
       return;
     }
-    self
-      .tx
-      .try_send(Cmd::AddRecord(record))
-      .err()
-      .map(|_| {
-        tracing::error!("observer pushing disabled.");
-        self.broken.set(true)
-      });
+    self.tx.try_send(Cmd::AddRecord(record)).err().map(|_| {
+      tracing::error!("observer pushing disabled.");
+      self.broken.set(true)
+    });
   }
 
   pub fn remove_game(&self, game_id: i32) {
@@ -287,9 +283,7 @@ impl Pusher {
     use rusoto_kinesis::{Kinesis, PutRecordError, PutRecordInput};
 
     let start = Instant::now();
-    let items: Vec<_> = self
-      .buffer_map
-      .split_chunks(start);
+    let items: Vec<_> = self.buffer_map.split_chunks(start);
 
     if items.is_empty() {
       return Ok(None);
@@ -370,7 +364,7 @@ impl GameBuffer {
 
   // [source: u32] [[seq_id: u32] [data]]
   pub fn push(&mut self, record: GameRecord) {
-    let next_len = self.data.len() + record.encode_len();
+    let next_len = 4 + self.data.len() + record.encode_len();
     if next_len > crate::constants::OBS_MAX_CHUNK_SIZE {
       self.split_chunks.push_back(self.data.split().freeze());
     }
@@ -383,7 +377,11 @@ impl GameBuffer {
     record.encode(&mut self.data);
     self.seq_id = self.seq_id.saturating_add(1);
 
-    assert!(self.data.len() <= crate::constants::OBS_MAX_CHUNK_SIZE);
+    tracing::warn!(
+      "expected len <= {}, got {}",
+      crate::constants::OBS_MAX_CHUNK_SIZE,
+      self.data.len()
+    );
     self.last_update = Instant::now();
   }
 
