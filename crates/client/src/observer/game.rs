@@ -187,7 +187,7 @@ where
       tokio::select! {
         r = self.source.try_next(), if loaded && !source_done => {
           if let Some(r) = r? {
-            self.handle_record(r, slots, &mut send_queue, &mut agreed_checksums).await?;
+            self.handle_record(time, r, slots, &mut send_queue, &mut agreed_checksums).await?;
           } else {
             source_done = true;
             send_queue.finish();
@@ -261,7 +261,7 @@ where
                   };
                   if expected != local_checksum {
                     let budget = DESYNC_GRACE_PERIOD_TICKS.saturating_sub(desync_ticks);
-                    let msg = format!("desync detected: tick = {}, budget = {}, {} != {}", tick, budget, local_checksum, expected);
+                    let msg = format!("[FLO] Desync detected: tick = {}, budget = {}, {} != {}", tick, budget, local_checksum, expected);
                     desync_ticks += 1;
                     if desync_ticks > DESYNC_GRACE_PERIOD_TICKS {
                       tracing::error!("{}", msg);
@@ -379,6 +379,7 @@ where
 
   async fn handle_record(
     &mut self,
+    _time: u32,
     record: GameRecordData,
     slot_info: &LanSlotInfo,
     send_queue: &mut SendQueue,

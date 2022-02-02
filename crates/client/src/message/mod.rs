@@ -1,4 +1,5 @@
 pub mod message;
+#[cfg(feature = "ws")]
 mod session;
 
 #[cfg(feature = "ws")]
@@ -94,13 +95,16 @@ impl Worker {
       };
 
       let session = Session::new(
-        self.platform.clone(), 
-        self.controller_client.clone(), 
-        self.observer_client.clone(), 
-        stream
+        self.platform.clone(),
+        self.controller_client.clone(),
+        self.observer_client.clone(),
+        stream,
       );
 
-      self.controller_client.notify(ReplaceSession(session)).await?;
+      self
+        .controller_client
+        .notify(ReplaceSession(session))
+        .await?;
     }
   }
 }
