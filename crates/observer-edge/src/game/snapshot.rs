@@ -146,9 +146,6 @@ pub struct GameSnapshot {
 impl GameSnapshot {
   pub fn new(meta: &GameMeta, game: &Game) -> Self {
     let players = game.slots.iter().filter_map(|slot| {
-      if slot.settings.team == 24 {
-        return None
-      }
       if let Some(ref player) = slot.player {
         let left = meta.player_left_reason_map.get(&player.id);
         Some(Player {
