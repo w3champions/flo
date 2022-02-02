@@ -49,8 +49,8 @@ impl ClientConfig {
     let config: TomlConfig = toml::from_str(&fs::read_to_string("flo.toml")?)?;
     let mut config = ClientConfig {
       local_port: config.local_port.unwrap_or(flo_constants::CLIENT_WS_PORT),
-      user_data_path: None,
-      installation_path: None,
+      user_data_path: config.user_data_path,
+      installation_path: config.installation_path,
       controller_host: config
         .controller_host
         .unwrap_or_else(|| flo_constants::CONTROLLER_HOST.to_string()),
