@@ -15,6 +15,7 @@ const PING_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct GameStreamServer {
   game_id: i32,
+  initial_arrival_time_millis: i64,
   delay_secs: Option<i64>,
   snapshot: Option<GameStreamDataSnapshot>,
   rx: BroadcastReceiver<GameStreamEvent>,
@@ -29,6 +30,7 @@ impl GameStreamServer {
   ) -> Self {
     Self {
       game_id,
+      initial_arrival_time_millis: snapshot.initial_arrival_time_millis,
       delay_secs,
       snapshot: Some(snapshot),
       rx,
@@ -38,7 +40,7 @@ impl GameStreamServer {
   pub async fn run(mut self, mut transport: FloStream) -> Result<()> {
     let game_id = self.game_id;
     let mut send_queue: Box<dyn GameStreamSendQueue> = if let Some(delay_secs) = self.delay_secs {
-      Box::new(DelaySendQueue::new(delay_secs * 1000))
+      Box::new(DelaySendQueue::new(self.initial_arrival_time_millis, delay_secs * 1000))
     } else {
       Box::new(NoDelaySendQueue::new())
     };
