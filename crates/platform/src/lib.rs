@@ -36,8 +36,10 @@ impl ClientPlatformInfo {
               .or_else(|| path::detect_user_data_path())
               .ok_or_else(|| Error::NoUserDataPath)?,
             installation_path: executable_path
-              // x86_64
+              // parent folder
               .parent()
+              // x86_64
+              .and_then(|p| p.parent())
               // _retail_
               .and_then(|p| p.parent())
               .ok_or_else(|| Error::NoInstallationFolder)?
