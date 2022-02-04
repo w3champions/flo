@@ -377,11 +377,14 @@ impl GameBuffer {
     record.encode(&mut self.data);
     self.seq_id = self.seq_id.saturating_add(1);
 
-    tracing::warn!(
-      "expected len <= {}, got {}",
-      crate::constants::OBS_MAX_CHUNK_SIZE,
-      self.data.len()
-    );
+    if self.data.len() > crate::constants::OBS_MAX_CHUNK_SIZE {
+      tracing::warn!(
+        "expected len <= {}, got {}",
+        crate::constants::OBS_MAX_CHUNK_SIZE,
+        self.data.len()
+      );
+    }
+    
     self.last_update = Instant::now();
   }
 
