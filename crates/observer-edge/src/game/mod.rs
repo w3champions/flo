@@ -135,10 +135,15 @@ impl GameHandler {
         slots: game
           .slots
           .iter()
-          .map(|slot| Slot {
+          .enumerate()
+          .map(|(idx, slot)| Slot {
             player: slot.player.as_ref().map(|v| PlayerInfo {
               id: v.id,
-              name: v.name.clone(),
+              name: if game.mask_player_names {
+                format!("Player {}", idx + 1)
+              } else {
+                v.name.clone()
+              },
             }),
             settings: {
               let mut msg = SlotSettings {
@@ -441,6 +446,7 @@ pub struct Game {
   pub slots: Vec<Slot>,
   pub random_seed: i32,
   pub game_version: Option<String>,
+  pub mask_player_names: bool,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]

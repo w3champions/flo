@@ -30,9 +30,10 @@ impl MutationRoot {
     game_id: i32,
   ) -> Result<ObserverTokenPayload> {
     let handle: &FloObserverEdgeHandle = ctx.data()?;
-    let delay_secs = Some(180);
+    let game = handle.get_game(game_id).await?;
+    let delay_secs = Some(if game.mask_player_names { 15 * 60 } else { 3 * 60 });
     Ok(ObserverTokenPayload {
-      game: handle.get_game(game_id).await?,
+      game,
       delay_secs: delay_secs.clone(),
       token: flo_observer::token::create_observer_token(game_id, delay_secs)?,
     })

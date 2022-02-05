@@ -141,16 +141,21 @@ pub struct GameSnapshot {
   pub players: Vec<Player>,
   pub random_seed: i32,
   pub game_version: Option<String>,
+  pub mask_player_names: bool,
 }
 
 impl GameSnapshot {
   pub fn new(meta: &GameMeta, game: &Game) -> Self {
-    let players = game.slots.iter().filter_map(|slot| {
+    let players = game.slots.iter().enumerate().filter_map(|(i, slot)| {
       if let Some(ref player) = slot.player {
         let left = meta.player_left_reason_map.get(&player.id);
         Some(Player {
           id: player.id,
-          name: player.name.clone(),
+          name: if game.mask_player_names {
+            format!("Player {}", i + 1)
+          } else {
+            player.name.clone()
+          },
           race: slot.settings.race,
           team: slot.settings.team,
           left_at: left.as_ref().map(|(time, _)| *time),
@@ -174,6 +179,7 @@ impl GameSnapshot {
       players,
       random_seed: game.random_seed,
       game_version: game.game_version.clone(),
+      mask_player_names: game.mask_player_names,
     }
   }
 }
