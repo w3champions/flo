@@ -81,7 +81,7 @@ where
       .num_players(
         occupied_slots
           .iter()
-          .filter(|(_, slot)| slot.settings.team != 24)
+          .filter(|(_, slot)| slot.settings.team != 24 && slot.player.is_some())
           .count(),
       )
       .build()
