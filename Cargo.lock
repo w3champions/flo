@@ -1728,7 +1728,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "backoff 0.3.0",
  "bytes",
