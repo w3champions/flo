@@ -156,7 +156,6 @@ where
     let mut loaded = false;
     let mut tick: u32 = 0;
     let mut time: u32 = 0;
-    let mut received_millis: u32 = 0;
     let mut pending_ticks = VecDeque::new();
     let mut agreed_checksums = VecDeque::new();
     let mut pending_local_checksums = VecDeque::new();
@@ -208,13 +207,13 @@ where
                 let time_increment_ms =
                   IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
                 pending_ticks.push_back(time_increment_ms);
-                received_millis += time_increment_ms as u32;
+                self.shared.stream_total_millis.fetch_add(time_increment_ms as _, Ordering::Relaxed);
               },
               _ => {}
             }
             stream.send(pkt).await?;
           } else {
-            tracing::debug!("source finished, received {}ms", received_millis);
+            tracing::debug!("source finished, received {}ms", self.shared.stream_total_millis());
             break;
           }
         },
@@ -630,6 +629,7 @@ pub struct ObserverHostShared {
   finished_notify: Arc<Notify>,
   joined: Arc<AtomicBool>,
   stream_finished: Arc<AtomicBool>,
+  stream_total_millis: Arc<AtomicU64>,
   finished: Arc<AtomicBool>,
 }
 
@@ -660,6 +660,10 @@ impl ObserverHostShared {
     self.stream_finished.load(Ordering::Relaxed)
   }
 
+  pub fn stream_total_millis(&self) -> u64 {
+    self.stream_total_millis.load(Ordering::Relaxed)
+  }
+
   pub fn finished(&self) -> bool {
     self.finished.load(Ordering::Relaxed)
   }
@@ -678,6 +682,7 @@ impl ObserverHostShared {
       finished_notify: Arc::new(Notify::new()),
       joined: Arc::new(AtomicBool::new(false)),
       stream_finished: Arc::new(AtomicBool::new(false)),
+      stream_total_millis: Arc::new(AtomicU64::new(0)),
       finished: Arc::new(AtomicBool::new(false)),
     }
   }
