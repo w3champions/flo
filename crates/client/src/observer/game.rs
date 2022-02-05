@@ -2,13 +2,15 @@ use super::send_queue::SendQueue;
 use crate::error::{Error, Result};
 use crate::lan::game::slot::{LanSlotInfo, SelfPlayer};
 use crate::platform::{GetClientPlatformInfo, OpenMap, Platform};
+use std::sync::atomic::{Ordering, AtomicBool};
+use std::sync::{Arc, atomic::AtomicU64};
 use flo_lan::MdnsPublisher;
 use flo_observer::record::GameRecordData;
 use flo_state::Addr;
 use flo_types::observer::GameInfo;
 use flo_util::binary::SockAddr;
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::chat::{ChatFromHost, ChatToHost};
+use flo_w3gs::chat::{ChatFromHost};
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
@@ -22,7 +24,8 @@ use flo_w3gs::protocol::map::{MapCheck, MapSize};
 use flo_w3gs::protocol::packet::ProtoBufPayload;
 use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMessage};
 use flo_w3map::MapChecksum;
-use futures::Stream;
+use futures::{Stream};
+use tokio::sync::Notify;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant, SystemTime};
@@ -39,6 +42,7 @@ pub struct ObserverGameHost<S> {
   info: GameInfo,
   delay_millis: Option<i64>,
   source: S,
+  shared: ObserverHostShared,
 }
 
 impl<S> ObserverGameHost<S>
@@ -97,8 +101,11 @@ where
       info,
       delay_millis: delay_secs.map(|v| v * 1000),
       source,
+      shared: ObserverHostShared::new(),
     })
   }
+
+
 
   pub async fn play(mut self) -> Result<()> {
     let map_sha1: [u8; 20] = self.map_checksum.sha1;
@@ -143,7 +150,11 @@ where
     Ok(())
   }
 
-  async fn play_source(&mut self, slots: &LanSlotInfo, stream: &mut W3GSStream) -> Result<()> {
+  pub fn shared(&self) -> ObserverHostShared {
+    self.shared.clone()
+  }
+
+  async fn play_source(mut self, slots: &LanSlotInfo, stream: &mut W3GSStream) -> Result<()> {
     let mut loaded = false;
     let mut tick: u32 = 0;
     let mut time: u32 = 0;
@@ -181,8 +192,6 @@ where
       winapi::um::timeapi::timeBeginPeriod(1);
     }
 
-    send_queue.set_speed(flo_constants::OBSERVER_FAST_FORWARDING_SPEED);
-
     'main: loop {
       tokio::select! {
         r = self.source.try_next(), if loaded && !source_done => {
@@ -218,15 +227,25 @@ where
 
                 if let Some(time_increment_ms) = pending_ticks.pop_front() {
                   time += time_increment_ms as u32;
+                  self.shared.game_time_millis.store(time as u64, Ordering::Relaxed);
                 }
 
-                if send_queue.speed() != 1. {
-                  let delay_secs = get_delay_secs(time);
+                let delay_secs = get_delay_secs(time);
+                self.shared.delay_secs.store(delay_secs as _, Ordering::Relaxed);
 
+                let new_speed = self.shared.speed();
+                if new_speed != send_queue.speed() {
+                  send_queue.set_speed(new_speed);
+                  stream.send(Packet::simple(
+                    ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Speed: {}x", new_speed))
+                  )?).await?;
+                }
+
+                if send_queue.speed() >= 1. {
                   if send_queue.buffered_duration() <= BUFFER_DURATION {
                     send_queue.set_speed(1.);
                     stream.send(Packet::simple(
-                      ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Fast Forwarding complete: Synced with {}s delay.", delay_secs))
+                      ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Synced with {}s delay.", delay_secs))
                     )?).await?;
                   } else {
                     if let Some(delay_millis) = self.delay_millis.as_ref() {
@@ -238,7 +257,7 @@ where
                       if aprox_game_time.saturating_sub(local_game_time) <= *delay_millis {
                         send_queue.set_speed(1.);
                         stream.send(Packet::simple(
-                          ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Fast Forwarding complete: Synced with {}s delay.", delay_secs))
+                          ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Synced with {}s delay.", delay_secs))
                         )?).await?;
                       }
                     }
@@ -295,59 +314,12 @@ where
                 stream.send(Packet::simple(PlayerLoaded {
                   player_id: slots.my_slot_player_id
                 })?).await?;
-                stream.send(Packet::simple(
-                  ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding...")
-                )?).await?;
                 loaded = true;
               }
               PacketTypeId::LeaveReq => {
                 stream.send(Packet::simple(LeaveAck)?).await?;
                 tracing::debug!("leave ack");
                 break;
-              }
-              PacketTypeId::ChatToHost => {
-                let payload: ChatToHost = pkt.decode_simple()?;
-                if let Some(msg) = payload.chat_message() {
-                  match msg {
-                    b"-ff" => {
-                      if send_queue.speed() != 1. {
-                        send_queue.set_speed(1.);
-                        stream.send(Packet::simple({
-                          ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding stopped.")
-                        })?).await?;
-                      } else {
-                        send_queue.set_speed(flo_constants::OBSERVER_FAST_FORWARDING_SPEED);
-                        stream.send(Packet::simple({
-                          ChatFromHost::private_to_self(slots.my_slot_player_id, "[FLO] Fast Forwarding...")
-                        })?).await?;
-                      }
-                    }
-                    b"-time" => {
-                      let delay_secs = get_delay_secs(time);
-                      let buffer_secs: f64 = send_queue.buffered_duration().as_millis() as f64 / 1000.;
-                      stream.send(Packet::simple({
-                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Game clock: {}s", time as f64 / 1000.))
-                      })?).await?;
-                      stream.send(Packet::simple({
-                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Delay: {}s", delay_secs))
-                      })?).await?;
-                      stream.send(Packet::simple({
-                        ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Buffered: {}s", buffer_secs))
-                      })?).await?;
-                    }
-                    _ => {
-                      let help_messages = &[
-                        "[FLO] Shift+Enter Commands:",
-                        "[FLO]  -ff: Toggle Fast Forward",
-                      ];
-                      for msg in help_messages {
-                        stream.send(Packet::simple({
-                          ChatFromHost::private_to_self(slots.my_slot_player_id, *msg)
-                        })?).await?;
-                      }
-                    },
-                  }
-                }
               }
               id => {
                 tracing::debug!("recv: {:?}", id)
@@ -373,6 +345,9 @@ where
     unsafe {
       winapi::um::timeapi::timeEndPeriod(1);
     }
+
+    self.shared.finished.store(true, Ordering::Relaxed);
+    self.shared.finished_notify.notify_one();
 
     Ok(())
   }
@@ -535,6 +510,7 @@ where
       }
     }
 
+    self.shared.joined.store(true, Ordering::Relaxed);
     tracing::debug!("starting game");
     stream.send(Packet::simple(CountDownStart)?).await?;
     sleep(Duration::from_secs(6)).await;
@@ -642,6 +618,59 @@ where
     stream.send_all(replies).await?;
 
     Ok(())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ObserverHostShared {
+  speed_x10: Arc<AtomicU64>,
+  game_time_millis: Arc<AtomicU64>,
+  delay_secs: Arc<AtomicU64>,
+  finished_notify: Arc<Notify>,
+  joined: Arc<AtomicBool>,
+  finished: Arc<AtomicBool>,
+}
+
+impl ObserverHostShared {
+  pub fn speed(&self) -> f64 {
+    (self.speed_x10.load(Ordering::Relaxed) as f64) / 10. as f64
+  }
+
+  pub fn set_speed(&self, speed: f64) {
+    self.speed_x10.store((speed * 10.).round() as _, Ordering::Relaxed);
+  }
+
+  pub fn game_time_millis(&self) -> u64 {
+    self.game_time_millis.load(Ordering::Relaxed)
+  }
+
+  pub fn delay_secs(&self) -> u64 {
+    self.delay_secs.load(Ordering::Relaxed)
+  }
+
+  pub fn joined(&self) -> bool {
+    self.joined.load(Ordering::Relaxed)
+  }
+
+  pub fn finished(&self) -> bool {
+    self.finished.load(Ordering::Relaxed)
+  }
+
+  pub fn finished_notify(&self) -> &Notify {
+    self.finished_notify.as_ref()
+  }
+}
+
+impl ObserverHostShared {
+  pub fn new() -> Self {
+    Self {
+      speed_x10: Arc::new(AtomicU64::new(10)),
+      game_time_millis: Arc::new(AtomicU64::new(0)),
+      delay_secs: Arc::new(AtomicU64::new(0)),
+      finished_notify: Arc::new(Notify::new()),
+      joined: Arc::new(AtomicBool::new(false)),
+      finished: Arc::new(AtomicBool::new(false)),
+    }
   }
 }
 
