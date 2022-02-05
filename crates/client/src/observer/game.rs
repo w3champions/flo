@@ -2,15 +2,13 @@ use super::send_queue::SendQueue;
 use crate::error::{Error, Result};
 use crate::lan::game::slot::{LanSlotInfo, SelfPlayer};
 use crate::platform::{GetClientPlatformInfo, OpenMap, Platform};
-use std::sync::atomic::{Ordering, AtomicBool};
-use std::sync::{Arc, atomic::AtomicU64};
 use flo_lan::MdnsPublisher;
 use flo_observer::record::GameRecordData;
 use flo_state::Addr;
 use flo_types::observer::GameInfo;
 use flo_util::binary::SockAddr;
 use flo_w3gs::action::IncomingAction;
-use flo_w3gs::chat::{ChatFromHost};
+use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
@@ -24,11 +22,13 @@ use flo_w3gs::protocol::map::{MapCheck, MapSize};
 use flo_w3gs::protocol::packet::ProtoBufPayload;
 use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMessage};
 use flo_w3map::MapChecksum;
-use futures::{Stream};
-use tokio::sync::Notify;
+use futures::Stream;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{atomic::AtomicU64, Arc};
 use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::Notify;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
@@ -104,8 +104,6 @@ where
       shared: ObserverHostShared::new(),
     })
   }
-
-
 
   pub async fn play(mut self) -> Result<()> {
     let map_sha1: [u8; 20] = self.map_checksum.sha1;
@@ -200,6 +198,7 @@ where
           } else {
             source_done = true;
             send_queue.finish();
+            self.shared.stream_finished.store(true, Ordering::Relaxed);
           }
         },
         next = send_queue.next() => {
@@ -241,7 +240,7 @@ where
                   )?).await?;
                 }
 
-                if send_queue.speed() >= 1. {
+                if send_queue.speed() > 1. {
                   if send_queue.buffered_duration() <= BUFFER_DURATION {
                     self.shared.set_speed(1.);
                     send_queue.set_speed(1.);
@@ -630,6 +629,7 @@ pub struct ObserverHostShared {
   delay_secs: Arc<AtomicU64>,
   finished_notify: Arc<Notify>,
   joined: Arc<AtomicBool>,
+  stream_finished: Arc<AtomicBool>,
   finished: Arc<AtomicBool>,
 }
 
@@ -639,7 +639,9 @@ impl ObserverHostShared {
   }
 
   pub fn set_speed(&self, speed: f64) {
-    self.speed_x10.store((speed * 10.).round() as _, Ordering::Relaxed);
+    self
+      .speed_x10
+      .store((speed * 10.).round() as _, Ordering::Relaxed);
   }
 
   pub fn game_time_millis(&self) -> u64 {
@@ -652,6 +654,10 @@ impl ObserverHostShared {
 
   pub fn joined(&self) -> bool {
     self.joined.load(Ordering::Relaxed)
+  }
+
+  pub fn stream_finished(&self) -> bool {
+    self.stream_finished.load(Ordering::Relaxed)
   }
 
   pub fn finished(&self) -> bool {
@@ -671,6 +677,7 @@ impl ObserverHostShared {
       delay_secs: Arc::new(AtomicU64::new(0)),
       finished_notify: Arc::new(Notify::new()),
       joined: Arc::new(AtomicBool::new(false)),
+      stream_finished: Arc::new(AtomicBool::new(false)),
       finished: Arc::new(AtomicBool::new(false)),
     }
   }
