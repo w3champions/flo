@@ -179,9 +179,13 @@ where
         + (Instant::now() - base_instant).as_millis() as i64
     };
     let get_local_game_time = |time| start_time_millis + time as i64;
-    let get_delay_secs = |time| {
-      (get_aprox_game_time().saturating_sub(get_local_game_time(time)) as f32 / 1000.0).ceil()
-        as i64
+    let get_delay_secs = |source_done: bool, q: &SendQueue, time| {
+      if source_done {
+        (q.total_millis().saturating_sub(time as _) / 1000) as i64
+      } else {
+        (get_aprox_game_time().saturating_sub(get_local_game_time(time)) as f32 / 1000.0).ceil()
+          as i64
+      }
     };
 
     #[cfg(windows)]
@@ -197,7 +201,9 @@ where
           } else {
             source_done = true;
             send_queue.finish();
+            self.shared.stream_total_millis.store(send_queue.total_millis(), Ordering::Relaxed);
             self.shared.stream_finished.store(true, Ordering::Relaxed);
+            tracing::debug!("source finished, received {}ms", send_queue.total_millis());
           }
         },
         next = send_queue.next() => {
@@ -207,13 +213,11 @@ where
                 let time_increment_ms =
                   IncomingAction::peek_time_increment_ms(pkt.payload.as_ref())?;
                 pending_ticks.push_back(time_increment_ms);
-                self.shared.stream_total_millis.fetch_add(time_increment_ms as _, Ordering::Relaxed);
               },
               _ => {}
             }
             stream.send(pkt).await?;
           } else {
-            tracing::debug!("source finished, received {}ms", self.shared.stream_total_millis());
             break;
           }
         },
@@ -228,7 +232,7 @@ where
                   self.shared.game_time_millis.store(time as u64, Ordering::Relaxed);
                 }
 
-                let delay_secs = get_delay_secs(time);
+                let delay_secs = get_delay_secs(source_done, &send_queue, time);
                 self.shared.delay_secs.store(delay_secs as _, Ordering::Relaxed);
 
                 let new_speed = self.shared.speed();

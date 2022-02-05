@@ -13,6 +13,7 @@ pub struct SendQueue {
   speed: Option<f64>,
   packets: VecDeque<(W3GSPacket, Option<u64>)>,
   buffered_millis: u64,
+  total_millis: u64,
   finished: bool,
   exhausted_waker: Option<Waker>,
   delayed: Option<W3GSPacket>,
@@ -25,6 +26,7 @@ impl SendQueue {
       sleep: Box::pin(sleep(Default::default())),
       packets: VecDeque::new(),
       buffered_millis: 0,
+      total_millis: 0,
       speed: None,
       finished: false,
       exhausted_waker: None,
@@ -51,6 +53,10 @@ impl SendQueue {
     Duration::from_millis(self.buffered_millis)
   }
 
+  pub fn total_millis(&self) -> u64 {
+    self.total_millis
+  }
+
   pub fn finish(&mut self) {
     self.finished = true;
   }
@@ -62,6 +68,7 @@ impl SendQueue {
 
     if let Some(millis) = increase_millis.clone() {
       self.buffered_millis += millis;
+      self.total_millis += millis;
     }
 
     self.packets.push_back((packet, increase_millis));
