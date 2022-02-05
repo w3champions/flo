@@ -52,10 +52,16 @@ jobs:
       - name: Archive
         uses: thedoctor0/zip-release@master
         with:
+          if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
           type: 'zip'
           filename: ${{ steps.vars.outputs.release_file_name }}
           directory: target/release
           exclusions: '.* /*.fingerprint/* /*build/* /*deps/* /*examples/* /*incremental/* *.pdb *.d *.rlib'
+          
+      - name: Archive
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          7z a target\release\${{ steps.vars.outputs.release_file_name }} target\release\flo-worker.exe target\release\flo-ping.exe
 
       - uses: actions/upload-artifact@v2
         with:
