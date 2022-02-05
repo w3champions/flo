@@ -243,6 +243,7 @@ where
 
                 if send_queue.speed() >= 1. {
                   if send_queue.buffered_duration() <= BUFFER_DURATION {
+                    self.shared.set_speed(1.);
                     send_queue.set_speed(1.);
                     stream.send(Packet::simple(
                       ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Synced with {}s delay.", delay_secs))
@@ -255,6 +256,7 @@ where
                       tracing::debug!("delay = {}s, buffered duration = {}s", delay_secs, (send_queue.buffered_duration().as_millis() as f64 / 1000.));
 
                       if aprox_game_time.saturating_sub(local_game_time) <= *delay_millis {
+                        self.shared.set_speed(1.);
                         send_queue.set_speed(1.);
                         stream.send(Packet::simple(
                           ChatFromHost::private_to_self(slots.my_slot_player_id, format!("[FLO] Synced with {}s delay.", delay_secs))
