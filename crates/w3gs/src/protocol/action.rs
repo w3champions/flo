@@ -1,6 +1,7 @@
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
+use crate::actions::Action;
 use crate::error::*;
 use crate::protocol::constants::PacketTypeId;
 use crate::protocol::packet::{PacketPayload, PacketPayloadDecode, PacketPayloadEncode};
@@ -322,6 +323,12 @@ impl PlayerAction {
       None
     }
   }
+
+  pub fn actions(&self) -> ActionIter {
+    ActionIter {
+      data: self.data.clone(),
+    }
+  }
 }
 
 #[derive(Debug, PartialEq, BinDecode, BinEncode)]
@@ -338,6 +345,22 @@ fn crc16(data: &[u8]) -> u16 {
   let mut crc32 = crc32fast::Hasher::new();
   crc32.update(data);
   (crc32.finalize() & 0x0000FFFF) as u16
+}
+
+pub struct ActionIter {
+  data: Bytes,
+}
+
+impl Iterator for ActionIter {
+  type Item = Result<Action>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.data.has_remaining() {
+      Some(Action::decode(&mut self.data).map_err(Into::into))
+    } else {
+      None
+    }
+  }
 }
 
 #[test]

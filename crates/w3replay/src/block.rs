@@ -140,10 +140,25 @@ where
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, BinEncode)]
 pub struct Block {
   pub header: BlockHeader,
   pub data: Bytes,
+}
+
+impl Block {
+  pub fn new(data: Bytes) -> Result<Self> {
+    let mut header = BlockHeader {
+      crc16_header: 0,
+      crc16_compressed_data: 0,
+      compressed_data_size: crate::constants::SUPPORTED_BLOCK_SIZE as _,
+      decompressed_data_size: data.len() as u32,
+    };
+
+    
+
+    todo!()
+  }
 }
 
 #[test]
