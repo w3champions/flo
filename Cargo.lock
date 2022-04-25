@@ -2037,7 +2037,6 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "bytes",
- "crc32fast",
  "flate2",
  "flo-util",
  "flo-w3gs",

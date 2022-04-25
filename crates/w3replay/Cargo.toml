@@ -11,5 +11,4 @@ flo-w3gs = { path = "../w3gs" }
 flate2 = "1.0"
 thiserror = "1"
 bitflags = "1"
-crc32fast = "1.2"
 bytes = "1.1.0"

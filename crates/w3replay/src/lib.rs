@@ -16,6 +16,8 @@ pub use constants::*;
 use error::*;
 pub use header::Header;
 pub use records::*;
+pub mod replay;
+pub use replay::*;
 
 #[derive(Debug)]
 pub struct W3Replay<R> {
