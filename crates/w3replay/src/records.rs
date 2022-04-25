@@ -464,10 +464,28 @@ fn test_record_iter() {
 
   let blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
   let iter = RecordIter::new(blocks);
-  let mut n = 0;
+  let mut records = 0;
+  let mut actions = 0;
   for record in iter {
-    let _record = record.unwrap();
-    n = n + 1;
+    match record.unwrap() {
+        Record::TimeSlotFragment(_) => {
+          unreachable!()
+        },
+        Record::TimeSlot(slot) => {
+          for chunk in slot.actions {
+            for action in chunk.actions() {
+              if action.is_err() {
+                flo_util::dump_hex(&chunk.data);
+              }
+              let _action = action.unwrap();
+              actions += 1;
+            }
+          }
+        },
+        _ => {},
+    }
+    records = records + 1;
   }
-  dbg!(n);
+  dbg!(records);
+  dbg!(actions);
 }

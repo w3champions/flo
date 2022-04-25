@@ -81,6 +81,10 @@ pub enum ActionTypeId {
   Unknown0x74,
   #[bin(value = 0x75)]
   Unknown0x75,
+  #[bin(value = 0x7A)]
+  Unknown0x7A,
+  #[bin(value = 0x7B)]
+  Unknown0x7B,
   UnknownValue(u8),
 }
 
@@ -126,7 +130,7 @@ macro_rules! action_enum {
             action_enum!(@TYPE_ID $type_id, $($data),*) =>
             action_enum!(@DECODE buf, $type_id, $($data),*),
           )*
-          ActionTypeId::UnknownValue(v) => Err(BinDecodeError::failure(format!("unknown action type id: {}", v)))
+          ActionTypeId::UnknownValue(v) => Err(BinDecodeError::failure(format!("unknown action type id: 0x{:X}", v)))
         }
       }
     }
@@ -195,7 +199,9 @@ action_enum! {
     Unknown0x94(Unknown<4>),
     Unknown0x6C(Unknown<6>),
     Unknown0x74(Unknown<2>),
-    Unknown0x75(Unknown<2>)
+    Unknown0x75(Unknown<2>),
+    Unknown0x7A(Unknown<20>),
+    Unknown0x7B(Unknown<16>)
   }
 }
 
@@ -302,7 +308,7 @@ pub struct SelectGroupHotkey {
 
 #[derive(Debug, BinDecode)]
 pub struct SelectSubgroup114b {
-  pub item_id: u16,
+  pub item_id: u32,
   pub object: ObjectPair,
 }
 

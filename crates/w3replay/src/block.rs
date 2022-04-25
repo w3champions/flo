@@ -259,9 +259,6 @@ fn test_block() {
   for block in blocks {
     let block = block.unwrap();
     total_size += block.data.len();
-    for r in block {
-      
-    }
   }
   dbg!(total_size);
 }
