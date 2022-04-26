@@ -108,6 +108,7 @@ impl Dispatcher {
       }
       if should_remove {
         self.slots.pop(&game_id);
+        self.snapshots.remove_game(game_id);
       }
     }
   }
