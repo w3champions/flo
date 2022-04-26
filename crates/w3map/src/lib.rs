@@ -248,7 +248,7 @@ impl W3Map {
       Ok(Some(bytes)) => {
         TriggerStringMap::decode(&mut bytes.as_slice()).map_err(Error::ReadTriggerStrings)?
       }
-      Ok(None) => return Err(Error::StorageFileNotFound("war3map.wts".to_string())),
+      Ok(None) => TriggerStringMap::empty(),
       Err(err) => {
         if Archive::is_err_file_not_found(&err) {
           TriggerStringMap::empty()
