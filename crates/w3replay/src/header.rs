@@ -63,12 +63,39 @@ pub struct Header {
   pub crc: u32,
 }
 
+impl Header {
+  pub fn new(game_version: GameVersion, flags: u16) -> Self {
+    Self {
+      _sig: crate::constants::SIGNATURE,
+      size_header: 68,
+      size_file: 0,
+      header_version: 0x01,
+      size_blocks: 0,
+      num_blocks: 0,
+      game_version,
+      flags,
+      duration_ms: 0,
+      crc: 0,
+    }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode)]
 pub struct GameVersion {
   #[bin(eq = b"W3XP")]
   pub product: DwordString,
   pub version: u32,
   pub build_number: u16,
+}
+
+impl Default for GameVersion {
+  fn default() -> Self {
+    Self {
+      product: DwordString::new(b"W3XP"),
+      version: Default::default(),
+      build_number: Default::default(),
+    }
+  }
 }
 
 #[test]

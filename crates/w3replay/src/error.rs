@@ -8,8 +8,12 @@ pub enum Error {
   UnsupportedBlockSize(usize),
   #[error("read block header: {0}")]
   ReadBlockHeader(std::io::Error),
-  #[error("invalid checksum")]
-  InvalidChecksum,
+  #[error("invalid checksum: subject = {subject}, expected = {expected}, got = {got}")]
+  InvalidChecksum {
+    subject: &'static str,
+    expected: u16,
+    got: u16
+  },
   #[error("no game info record")]
   NoGameInfoRecord,
   #[error("no slot info record")]
