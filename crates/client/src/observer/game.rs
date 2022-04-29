@@ -440,7 +440,7 @@ where
             return Ok(false)
           };
 
-          match dbg!(pkt.type_id()) {
+          match pkt.type_id() {
             PacketTypeId::LeaveReq => {
               stream.send(Packet::simple(LeaveAck)?).await?;
               stream.flush().await?;

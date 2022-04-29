@@ -22,13 +22,15 @@
 //! be disregarded.
 
 use flate2::read::ZlibDecoder;
-use flate2::CrcReader;
-use std::io::{Cursor, Read};
+use flate2::write::ZlibEncoder;
+use flate2::{Compression, Crc, CrcReader, CrcWriter};
+use std::io::{Cursor, Read, Write};
 
 use flo_util::binary::*;
 use flo_util::{BinDecode, BinEncode};
 
-use crate::error::*;
+use crate::constants::SUPPORTED_BLOCK_SIZE;
+use crate::{error::*, Record};
 
 #[derive(Debug, BinDecode, BinEncode, Clone)]
 pub struct BlockHeader {
@@ -82,7 +84,7 @@ where
       return None;
     }
 
-    let mut buf: Vec<u8> = Vec::with_capacity(crate::constants::SUPPORTED_BLOCK_SIZE);
+    let mut buf: Vec<u8> = Vec::with_capacity(SUPPORTED_BLOCK_SIZE);
     buf.resize(buf.capacity(), 0);
     if let Err(err) = self.r.read_exact(&mut buf[0..BlockHeader::MIN_SIZE]) {
       return Some(Err(Error::ReadBlockHeader(err)));
@@ -110,10 +112,14 @@ where
     let crc = r.crc().sum();
     let crc = (crc ^ (crc >> 16)) as u16;
     if crc != header.crc16_header {
-      return Some(Err(Error::InvalidChecksum));
+      return Some(Err(Error::InvalidChecksum {
+        subject: "header",
+        expected: header.crc16_header,
+        got: crc,
+      }));
     }
 
-    if header.decompressed_data_size != crate::constants::SUPPORTED_BLOCK_SIZE as u32 {
+    if header.decompressed_data_size != SUPPORTED_BLOCK_SIZE as u32 {
       return Some(Err(Error::UnsupportedBlockSize(
         header.decompressed_data_size as usize,
       )));
@@ -128,7 +134,11 @@ where
     let crc = d.get_ref().crc().sum();
     let crc = (crc ^ (crc >> 16)) as u16;
     if crc != header.crc16_compressed_data {
-      return Some(Err(Error::InvalidChecksum));
+      return Some(Err(Error::InvalidChecksum {
+        subject: "data",
+        expected: header.crc16_compressed_data,
+        got: crc,
+      }));
     }
 
     self.finished_block = self.finished_block + 1;
@@ -140,10 +150,134 @@ where
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, BinEncode)]
 pub struct Block {
   pub header: BlockHeader,
   pub data: Bytes,
+}
+
+pub struct BlocksEncoder<W> {
+  current_data_len: usize,
+  num_of_blocks: usize,
+  num_of_uncompressed_bytes: usize,
+  block_w: ZlibEncoder<CrcWriter<Vec<u8>>>,
+  w: W,
+}
+
+impl<W> BlocksEncoder<W>
+where
+  W: Write,
+{
+  pub fn new(w: W) -> Self {
+    Self {
+      current_data_len: 0,
+      num_of_blocks: 0,
+      num_of_uncompressed_bytes: 0,
+      block_w: Self::make_writer(),
+      w,
+    }
+  }
+
+  pub fn encode(&mut self, record: &Record) -> Result<usize> {
+    let mut buf = record.encode_to_bytes().freeze();
+    let len = buf.len();
+
+    self.num_of_uncompressed_bytes += len;
+
+    if self.current_data_len + len <= SUPPORTED_BLOCK_SIZE {
+      self.block_w.write_all(&buf)?;
+      self.current_data_len += len;
+
+      if self.current_data_len == SUPPORTED_BLOCK_SIZE {
+        self.finish_block()?;
+      }
+    } else {
+      let current_remaining_len = SUPPORTED_BLOCK_SIZE - self.current_data_len;
+      let slice = &buf[0..current_remaining_len];
+
+      self.block_w.write_all(slice)?;
+      self.current_data_len += slice.len();
+
+      buf.advance(current_remaining_len);
+      self.finish_block()?;
+
+      while buf.has_remaining() {
+        let slice_len = std::cmp::min(SUPPORTED_BLOCK_SIZE, buf.remaining());
+        let slice = &buf[0..slice_len];
+
+        self.block_w.write_all(slice)?;
+        self.current_data_len += slice.len();
+
+        buf.advance(slice_len);
+        if self.current_data_len == SUPPORTED_BLOCK_SIZE {
+          self.finish_block()?;
+        }
+      }
+    }
+    Ok(len)
+  }
+
+  pub fn finish(mut self) -> Result<Finished<W>> {
+    if self.current_data_len < SUPPORTED_BLOCK_SIZE {
+      let pad_len = SUPPORTED_BLOCK_SIZE - self.current_data_len;
+      for _ in 0..pad_len {
+        self.block_w.write_all(&[0])?;
+      }
+      self.current_data_len = SUPPORTED_BLOCK_SIZE;
+    }
+    self.finish_block()?;
+    Ok(Finished {
+      num_of_blocks: self.num_of_blocks,
+      num_of_uncompressed_bytes: self.num_of_uncompressed_bytes,
+      inner: self.w,
+    })
+  }
+
+  fn finish_block(&mut self) -> Result<()> {
+    let w = std::mem::replace(&mut self.block_w, Self::make_writer())
+      .finish()?;
+    let data_crc = w.crc().sum();
+    let buf = w.into_inner();
+
+    let mut header = BlockHeader {
+      crc16_header: 0,
+      crc16_compressed_data: 0,
+      compressed_data_size: buf.len() as u32,
+      decompressed_data_size: self.current_data_len as u32,
+    };
+
+    let mut header_crc = Crc::new();
+    header_crc.update(&header.compressed_data_size.to_le_bytes());
+    header_crc.update(&header.decompressed_data_size.to_le_bytes());
+    header_crc.update(&[0, 0, 0, 0]); // crc16_header, crc16_compressed_data
+    let header_crc = header_crc.sum();
+
+    header.crc16_header = (header_crc ^ (header_crc >> 16)) as u16;
+    header.crc16_compressed_data = (data_crc ^ (data_crc >> 16)) as u16;
+
+    let mut header_buf = [0_u8; BlockHeader::MIN_SIZE];
+    header.encode(&mut header_buf.as_mut_slice());
+    self.w.write_all(&header_buf)?;
+    self.w.write_all(&buf)?;
+
+    self.current_data_len = 0;
+    self.num_of_blocks += 1;
+    Ok(())
+  }
+
+  fn make_writer() -> ZlibEncoder<CrcWriter<Vec<u8>>> {
+    ZlibEncoder::new(
+      CrcWriter::new(Vec::with_capacity(SUPPORTED_BLOCK_SIZE)),
+      Compression::best(),
+    )
+  }
+}
+
+#[derive(Debug)]
+pub struct Finished<W> {
+  pub num_of_blocks: usize,
+  pub num_of_uncompressed_bytes: usize,
+  pub inner: W,
 }
 
 #[test]
@@ -154,8 +288,11 @@ fn test_block() {
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);
 
+  let mut total_size = 0;
   let blocks = Blocks::from_buf(buf, header.num_blocks as usize);
   for block in blocks {
-    let _block = block.unwrap();
+    let block = block.unwrap();
+    total_size += block.data.len();
   }
+  dbg!(total_size);
 }

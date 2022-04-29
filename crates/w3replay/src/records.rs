@@ -343,7 +343,7 @@ impl BinEncode for TimeSlot {
         .map(PlayerAction::byte_len)
         .sum::<usize>();
     buf.put_u16_le(len as u16);
-    buf.put_u16(self.time_increment_ms);
+    buf.put_u16_le(self.time_increment_ms);
     for action in &self.actions {
       buf.put_u8(action.player_id);
       buf.put_u16_le(action.data.len() as u16);
@@ -382,7 +382,7 @@ impl BinDecode for PlayerChatMessage {
 impl BinEncode for PlayerChatMessage {
   fn encode<T: BufMut>(&self, buf: &mut T) {
     buf.put_u8(self.player_id);
-    buf.put_u16_le(self.message.encode_len() as u16 + 1);
+    buf.put_u16_le(self.message.encode_len() as u16);
     self.message.encode(buf)
   }
 }
@@ -416,10 +416,7 @@ fn test_record() {
     loop {
       let pos = buf.remaining();
 
-      let r = crate::records::Record::decode(&mut buf).map_err(|e| {
-        // flo_util::dump_hex(buf);
-        e
-      });
+      let r = crate::records::Record::decode(&mut buf);
       match r {
         Ok(rec) => {
           rec_count = rec_count + 1;
@@ -464,10 +461,28 @@ fn test_record_iter() {
 
   let blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
   let iter = RecordIter::new(blocks);
-  let mut n = 0;
+  let mut records = 0;
+  let mut actions = 0;
   for record in iter {
-    let _record = record.unwrap();
-    n = n + 1;
+    match record.unwrap() {
+        Record::TimeSlotFragment(_) => {
+          unreachable!()
+        },
+        Record::TimeSlot(slot) => {
+          for chunk in slot.actions {
+            for action in chunk.actions() {
+              if action.is_err() {
+                flo_util::dump_hex(&chunk.data);
+              }
+              let _action = action.unwrap();
+              actions += 1;
+            }
+          }
+        },
+        _ => {},
+    }
+    records = records + 1;
   }
-  dbg!(n);
+  dbg!(records);
+  dbg!(actions);
 }

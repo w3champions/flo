@@ -10,24 +10,9 @@ FLO is a Warcraft III server implementation written in Rust.
 - CMake
 - Latest Stable Rust
 
-
 ```
 git submodule update --init --recursive
-```
-
-### Windows
-
-```
 cargo build --all
-```
-
-### Linux/macOS
-
-Only `flo-controller-service` and `flo-node-service` can build on *nix. 
-To build release binary for deployment run
-```
-cargo build -p flo-controller-service --release
-cargo build -p flo-node-service --release
 ```
 
 ## Credits
@@ -36,3 +21,6 @@ cargo build -p flo-node-service --release
 - Fingon -- Help in game mechanics and algorithms
 - @Josko -- [Aura Bot](https://github.com/Josko/aura-bot)
 - Varlock -- the author of the GHost++ bot
+- @Miezhiko -- initial Linux support
+- JSamir/tofik-mamisho -- [wc3-replay-parser](https://github.com/JSamir/wc3-replay-parser)
+- PBug90 -- [w3gjs](hhttps://github.com/PBug90/w3gjs)
