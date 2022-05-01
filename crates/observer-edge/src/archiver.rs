@@ -103,7 +103,7 @@ impl Archiver {
 
     loop {
       let req = PutObjectRequest {
-        key: format!("test_{}", game_id),
+        key: format!("{}", game_id),
         body: Some(ByteStream::new_with_size(
           stream::iter(Some(Ok(data.clone()))),
           data.len(),
