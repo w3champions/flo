@@ -210,11 +210,6 @@ impl<W> Md5Writer<W> {
   pub fn finish(self) -> (md5::Digest, W) {
     (self.md5.compute(), self.inner)
   }
-
-  /// Get the writer that is wrapped by this Md5Writer by reference.
-  pub fn get_ref(&self) -> &W {
-    &self.inner
-  }
 }
 
 impl<W: Write> Md5Writer<W> {

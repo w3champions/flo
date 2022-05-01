@@ -52,6 +52,21 @@ impl GameHandler {
       tracing::info!("started at: {}", meta.started_at);
     });
 
+    let archive = if services.archiver.is_some() {
+      let mut archive = GzEncoder::new(Md5Writer::new(vec![]), flate2::Compression::best());
+      let header = flo_observer_fs::FileHeader::new(meta.id);
+      if let Err(err) = archive.write_all(&header.bytes()) {
+        span.in_scope(|| {
+          tracing::error!("write archive header: {}", err);
+        });
+        None  
+      } else {
+        Some(archive)
+      }
+    } else {
+      None
+    };
+
     Self {
       _services: services,
       meta,
@@ -60,7 +75,7 @@ impl GameHandler {
       initial_arrival_time,
       last_arrival_timestamp: None,
       records: vec![],
-      archive: GzEncoder::new(Md5Writer::new(vec![]), flate2::Compression::best()).into(),
+      archive,
       record_encode_buf: BytesMut::new(),
       span,
     }
@@ -241,6 +256,11 @@ impl GameHandler {
     snapshot_map: &mut GameSnapshotMap,
   ) -> Result<()> {
     for record in records {
+      if let Some(archive) = self.archive.as_mut() {
+        self.record_encode_buf.clear();
+        record.encode(&mut self.record_encode_buf);
+        archive.write_all(&self.record_encode_buf)?;
+      }
       match record {
         GameRecordData::W3GS(ref packet) => match packet.type_id() {
           PacketTypeId::IncomingAction | PacketTypeId::IncomingAction2 => {
@@ -316,16 +336,6 @@ impl GameHandler {
           self.game.put_rtt(self.meta.id, stats, snapshot_map)?;
           continue;
         }
-      }
-
-      if let Some(archive) = self.archive.as_mut() {
-        if archive.get_ref().get_ref().is_empty() {
-          let header = flo_observer_fs::FileHeader::new(self.meta.id);
-          archive.write_all(&header.bytes())?;
-        }
-        self.record_encode_buf.clear();
-        record.encode(&mut self.record_encode_buf);
-        archive.write_all(&self.record_encode_buf)?;
       }
 
       self.records.push(record);
