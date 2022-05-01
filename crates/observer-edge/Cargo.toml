@@ -8,6 +8,7 @@ flo-net = { path = "../net" }
 flo-w3gs = { path = "../w3gs" }
 flo-util = { path = "../util" }
 flo-observer = { path = "../observer" }
+flo-observer-fs = { path = "../observer-fs" }
 flo-types = { path = "../types" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 flo-constants = { path = "../constants" }
@@ -27,6 +28,11 @@ backoff = { version = "0.4" }
 tonic = "0.6"
 s2-grpc-utils = "0.2"
 async-graphql = { version = "3.0.20", features = ["chrono"] }
+rusoto_s3 = "0.47.0"
+rusoto_core = "0.47.0"
+base64 = "0.13.0"
+md5 = "0.7.0"
+flate2 = "1.0"
 
 [dev-dependencies]
 dotenv = "0.15"

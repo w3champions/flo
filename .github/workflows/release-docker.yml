@@ -27,14 +27,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p flo-controller-service -p flo-node-service -p flo-observer-service -p flo-stats-service
+          args: --release -p flo-controller-service -p flo-node-service -p flo-stats-service
 
       - name: Move binaries
         run: |
           mkdir -p ./build/release
           mv ./target/release/flo-controller-service ./build/release
           mv ./target/release/flo-node-service ./build/release
-          mv ./target/release/flo-observer-service ./build/release
           mv ./target/release/flo-stats-service ./build/release
 
       - name: Set up QEMU
@@ -61,14 +60,6 @@ jobs:
           push: true
           tags: fluxxu/flo-node:${{ github.sha }},fluxxu/flo-node:latest
           file: './build/node.Dockerfile'
-          context: './build'
-
-      - name: Build and push - flo-observer
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: fluxxu/flo-observer:${{ github.sha }},fluxxu/flo-observer:latest
-          file: './build/observer.Dockerfile'
           context: './build'
 
       - name: Build and push - flo-stats

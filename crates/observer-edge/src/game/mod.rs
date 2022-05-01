@@ -5,10 +5,13 @@ pub mod stream;
 
 use self::snapshot::{GameSnapshot, GameSnapshotMap, GameSnapshotWithStats};
 use self::stats::GameStats;
+use crate::archiver::{Md5Writer, ArchiveInfo};
 use crate::error::{Error, Result};
 use crate::services::Services;
 use async_graphql::{Enum, SimpleObject};
+use bytes::{BytesMut, Bytes};
 use chrono::{DateTime, TimeZone, Utc};
+use flate2::write::GzEncoder;
 use flo_kinesis::iterator::GameChunk;
 use flo_net::observer::GameInfo;
 use flo_observer::record::{GameRecordData, RTTStats};
@@ -17,6 +20,7 @@ use flo_w3gs::protocol;
 use flo_w3gs::protocol::constants::PacketTypeId;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::time::Duration;
 use tracing::Span;
 
@@ -28,6 +32,8 @@ pub struct GameHandler {
   initial_arrival_time: f64,
   last_arrival_timestamp: Option<f64>,
   records: Vec<GameRecordData>,
+  archive: Option<GzEncoder<Md5Writer<Vec<u8>>>>,
+  record_encode_buf: BytesMut,
   span: Span,
 }
 
@@ -54,6 +60,8 @@ impl GameHandler {
       initial_arrival_time,
       last_arrival_timestamp: None,
       records: vec![],
+      archive: GzEncoder::new(Md5Writer::new(vec![]), flate2::Compression::best()).into(),
+      record_encode_buf: BytesMut::new(),
       span,
     }
   }
@@ -165,9 +173,25 @@ impl GameHandler {
           .game_version
           .clone()
           .ok_or_else(|| Error::GameVersionUnknown)?,
-        start_time_millis: (self.initial_arrival_time * 1000.) as i64
+        start_time_millis: (self.initial_arrival_time * 1000.) as i64,
       },
     ))
+  }
+
+  pub fn make_archive(&mut self) -> Result<Option<ArchiveInfo>> {
+    let archive = match self.archive.take() {
+      Some(v) => v,
+      None => return Ok(None)
+    };
+
+    let w = archive.finish()?;
+    let (md5, bytes) = w.finish();
+    let md5 = base64::encode(md5.as_slice());
+    Ok(Some(ArchiveInfo {
+      game_id: self.meta.id,
+      data: Bytes::from(bytes),
+      md5,
+    }))
   }
 
   pub fn handle_chunk(
@@ -293,7 +317,18 @@ impl GameHandler {
           continue;
         }
       }
-      self.records.push(record)
+
+      if let Some(archive) = self.archive.as_mut() {
+        if archive.get_ref().get_ref().is_empty() {
+          let header = flo_observer_fs::FileHeader::new(self.meta.id);
+          archive.write_all(&header.bytes())?;
+        }
+        self.record_encode_buf.clear();
+        record.encode(&mut self.record_encode_buf);
+        archive.write_all(&self.record_encode_buf)?;
+      }
+
+      self.records.push(record);
     }
     Ok(())
   }

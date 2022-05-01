@@ -12,6 +12,7 @@ use backoff::ExponentialBackoff;
 use flo_kinesis::data_stream::DataStreamIterator;
 use flo_kinesis::iterator::Chunk;
 use flo_net::observer::GameInfo;
+use flo_observer::record::GameRecordData;
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
 use lru::LruCache;
 use std::time::Duration;
@@ -56,9 +57,18 @@ impl Dispatcher {
 
       match self.slots.get_mut(&game_id) {
         Some(handler) => {
+          let is_last_chunk = if let Some(&GameRecordData::GameEnd) = game_chunk.records.last() {
+            true
+          } else {
+            false
+          };
           if let Err(err) = handler.handle_chunk(game_chunk, &mut self.snapshots) {
             should_remove = true;
             tracing::error!(game_id, "handle records: {}", err);
+          } else {
+            if is_last_chunk {
+              Self::upload_archive(self.services.clone(), handler);
+            }
           }
         }
         None => {
@@ -78,9 +88,10 @@ impl Dispatcher {
               );
             }
             if self.slots.len() == self.slots.cap() {
-              if let Some((game_id, _removed)) = self.slots.pop_lru() {
+              if let Some((game_id, mut removed)) = self.slots.pop_lru() {
                 tracing::info!(game_id, "expired");
                 self.snapshots.remove_game(game_id);
+                Self::upload_archive(self.services.clone(), &mut removed);
               }
             }
             self.inactive_cache.put(game_id, ());
@@ -96,9 +107,10 @@ impl Dispatcher {
             tracing::error!(game_id, "handle initial records: {}", err);
           } else {
             if self.slots.len() == self.slots.cap() {
-              if let Some((game_id, _removed)) = self.slots.pop_lru() {
+              if let Some((game_id, mut removed)) = self.slots.pop_lru() {
                 tracing::info!(game_id, "expired");
                 self.snapshots.remove_game(game_id);
+                Self::upload_archive(self.services.clone(), &mut removed);
               }
             }
             self.slots.put(game_id, handler);
@@ -107,7 +119,9 @@ impl Dispatcher {
         }
       }
       if should_remove {
-        self.slots.pop(&game_id);
+        if let Some(mut removed) = self.slots.pop(&game_id) {
+          Self::upload_archive(self.services.clone(), &mut removed);
+        }
         self.snapshots.remove_game(game_id);
       }
     }
@@ -155,6 +169,30 @@ impl Dispatcher {
       }
     }
   }
+
+  fn upload_archive(services: Services, handler: &mut GameHandler) {
+    let archiver = if let Some(handle) = services.archiver.clone() {
+      handle
+    } else {
+      return
+    };
+    let game_id = handler.id();
+    match handler.make_archive() {
+      Ok(Some(archive)) => {
+        if !archiver.add_archive(archive) {
+          tracing::warn!(game_id, "archive upload cancelled");
+        }
+      },
+      Ok(None) => {},
+      Err(e) => {
+        tracing::error!(
+          game_id = handler.id(),
+          "archive: {}",
+          e
+        );
+      }
+    }
+  } 
 }
 
 #[async_trait]

@@ -8,7 +8,9 @@ pub mod game;
 mod server;
 mod services;
 mod version;
+mod archiver;
 
+use crate::archiver::Archiver;
 use crate::broadcast::BroadcastReceiver;
 use dispatcher::{
   AddIterator, Dispatcher, GetGame, ListGames, SubscribeGameListUpdate, SubscribeGameUpdate,
@@ -25,12 +27,22 @@ use std::time::Duration;
 pub struct FloObserverEdge {
   dispatcher: Owner<Dispatcher>,
   stream_server: StreamServer,
+  archiver: Option<Archiver>,
 }
 
 impl FloObserverEdge {
   pub async fn from_env() -> Result<Self> {
-    let services = Services::from_env();
+    let mut services = Services::from_env();
+    let archiver = if let Some((archiver, handle)) = Archiver::new()? {
+      services.archiver = Some(handle);
+      tracing::debug!("archiver enabled.");
+      Some(archiver)
+    } else {
+      tracing::debug!("archiver disabled.");
+      None
+    };
     let dispatcher = Dispatcher::new(services).start();
+
     let data_stream = DataStream::from_env();
     let iter_type = ShardIteratorType::at_timestamp_backward(Duration::from_secs(
       crate::env::ENV.record_backscan_secs,
@@ -56,11 +68,26 @@ impl FloObserverEdge {
     Ok(Self {
       dispatcher,
       stream_server,
+      archiver,
     })
   }
 
   pub async fn serve(self) -> Result<()> {
-    self.stream_server.serve().await
+    if let Some(archiver) = self.archiver {
+      tokio::pin! {
+        let f1 = self.stream_server.serve();
+        let f2 = archiver.serve();
+      };
+      let r = futures::future::select(
+        f1, f2
+      ).await;
+      match r {
+        futures::future::Either::Left((r, _)) => r,
+        futures::future::Either::Right((_, f)) => f.await,
+      }
+    } else {
+      self.stream_server.serve().await
+    }
   }
 
   pub fn handle(&self) -> FloObserverEdgeHandle {

@@ -372,7 +372,7 @@ impl GameDataReaderRecords {
 }
 
 #[derive(Debug, BinEncode, BinDecode)]
-struct FileHeader {
+pub struct FileHeader {
   #[bin(eq = FileHeader::SIGNATURE)]
   signature: [u8; 4],
   game_id: i32,
@@ -381,7 +381,7 @@ struct FileHeader {
 impl FileHeader {
   const SIGNATURE: &'static [u8] = b"flo\x01";
 
-  fn new(game_id: i32) -> Self {
+  pub fn new(game_id: i32) -> Self {
     let mut buf = [0; 4];
     buf.copy_from_slice(&Self::SIGNATURE);
     Self {
@@ -390,7 +390,7 @@ impl FileHeader {
     }
   }
 
-  fn bytes(&self) -> [u8; 8] {
+  pub fn bytes(&self) -> [u8; 8] {
     let mut buf = [0; 8];
     let mut s = &mut buf as &mut [u8];
     self.encode(&mut s);
