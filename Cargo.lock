@@ -1498,7 +1498,6 @@ dependencies = [
  "flo-log-subscriber",
  "flo-net",
  "flo-observer",
- "flo-observer-consumer",
  "flo-observer-fs",
  "flo-platform",
  "flo-state",
@@ -1796,42 +1795,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flo-observer-consumer"
-version = "0.1.0"
-dependencies = [
- "backoff 0.3.0",
- "base64 0.13.0",
- "bytes",
- "chrono",
- "dotenv",
- "flate2",
- "flo-constants",
- "flo-grpc",
- "flo-net",
- "flo-observer",
- "flo-observer-fs",
- "flo-state",
- "flo-types",
- "flo-util",
- "flo-w3gs",
- "futures 0.3.19",
- "jsonwebtoken",
- "md5",
- "once_cell",
- "redis",
- "rusoto_core",
- "rusoto_kinesis",
- "rusoto_s3",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "flo-observer-edge"
 version = "0.1.0"
 dependencies = [
@@ -1887,18 +1850,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tracing",
-]
-
-[[package]]
-name = "flo-observer-service"
-version = "0.1.0"
-dependencies = [
- "dotenv",
- "flo-log-subscriber",
- "flo-observer-consumer",
- "tokio",
- "tokio-stream",
  "tracing",
 ]
 

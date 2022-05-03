@@ -56,7 +56,6 @@ winapi = { version = "0.3", features = ["timeapi"] }
 dotenv = "0.15"
 flo-log-subscriber = { path = "../log-subscriber" }
 flo-controller = { path = "../controller" }
-flo-observer-consumer = { path = "../observer-consumer" }
 flo-grpc = { path = "../../deps/flo-grpc" }
 tonic = "0.6"
 

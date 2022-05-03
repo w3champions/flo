@@ -25,7 +25,6 @@ members = [
 
   "crates/controller",
   "crates/node",
-  "crates/observer-consumer",
   "crates/client",
   "crates/observer-edge",
 
@@ -33,7 +32,6 @@ members = [
   "binaries/flo-cli",
   "binaries/flo-controller-service",
   "binaries/flo-node-service",
-  "binaries/flo-observer-service",
   "binaries/flo-worker",
   "binaries/flo-worker-ui",
   "binaries/flo-ping",
