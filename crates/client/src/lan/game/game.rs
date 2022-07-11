@@ -262,6 +262,7 @@ impl<'a> GameHandler<'a> {
           "-mute/mutef <ID>: Mute a player.".to_string(),
           "-unmute/unmutef: Unmute your opponent (1v1), or display a player list.".to_string(),
           "-unmute/unmutef <ID>: Unmute a player.".to_string(),
+          "-rtt: Print round-trip time information.".to_string(),
           "-stats: Print opponent/opponents statistics.".to_string(),
           "-stats <ID>: Print payer statistics, or display a player list.".to_string(),
         ];
