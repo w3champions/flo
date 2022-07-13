@@ -264,7 +264,7 @@ impl<'a> GameHandler<'a> {
           "-unmute/unmutef <ID>: Unmute a player.".to_string(),
           "-rtt: Print round-trip time information.".to_string(),
           "-stats: Print opponent/opponents statistics.".to_string(),
-          "-stats <ID>: Print payer statistics, or display a player list.".to_string(),
+          "-stats <ID>: Print player statistics, or display a player list.".to_string(),
         ];
         self.send_chats_to_self(self.info.slot_info.my_slot_player_id, messages)
       }
