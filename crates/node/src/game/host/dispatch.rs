@@ -119,8 +119,12 @@ impl Dispatcher {
     );
 
     let mut start_messages = vec![];
+    let mut chat_banned_player_names = vec![];
     if !state.chat_banned_player_ids.is_empty() {
-      start_messages.push("One or more players in this game have been muted.".to_string());
+      for p in &state.chat_banned_player_ids {
+        chat_banned_player_names.push(state._player_name_lookup.get(&p).cloned())
+      }
+      start_messages.push(format!("Some players in this game have been muted: {}", chat_banned_player_names.join(", ")));
     }
 
     tokio::spawn(
