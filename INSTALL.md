@@ -11,7 +11,7 @@ apt upgrade
 Install required packages
 
 ```shell
-apt install build-essential cmake postgresql git libpq-dev
+apt install build-essential cmake postgresql git libpq-dev libavahi-compat-libdnssd-dev libbz2-dev libexpat1-dev libpq-dev
 ```
 
 Install rustup
