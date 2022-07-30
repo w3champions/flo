@@ -231,6 +231,7 @@ fn test_parse_trigger_string_ref() {
   );
 }
 
+#[cfg(feature = "w3storage")]
 #[test]
 fn test_parse_inline_trigger_string_ref() {
   use crate::{W3Map, W3Storage};
