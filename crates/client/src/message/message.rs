@@ -69,6 +69,8 @@ pub enum OutgoingMessage {
   GameStatusUpdate(GameStatusUpdate),
   GameDisconnect,
   SetNodeAddrOverridesError(ErrorMessage),
+  WatchGame(WatchGameInfo),
+  WatchGameError(ErrorMessage),
 }
 
 impl FromStr for IncomingMessage {
@@ -179,4 +181,10 @@ pub struct GamePlayerEnter {
   pub game_id: i32,
   pub slot_index: i32,
   pub slot: Slot,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WatchGameInfo {
+  pub game_id: i32,
+  pub delay_secs: Option<i64>,
 }

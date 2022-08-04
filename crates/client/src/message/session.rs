@@ -1,5 +1,6 @@
 use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
+  WatchGameInfo,
 };
 use super::{ConnectController, MessageEvent};
 use crate::controller::{
@@ -40,7 +41,11 @@ impl Session {
   ) -> Self {
     let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
-    let serve_state = Arc::new(Worker { platform, controller_client, observer_client });
+    let serve_state = Arc::new(Worker {
+      platform,
+      controller_client,
+      observer_client,
+    });
     tokio::spawn(
       {
         let scope = scope.handle();
@@ -193,11 +198,30 @@ impl Worker {
         }
       }
       IncomingMessage::ClearNodeAddrOverrides => {
-        self.controller_client.send(ClearNodeAddrOverrides).await??;
+        self
+          .controller_client
+          .send(ClearNodeAddrOverrides)
+          .await??;
       }
       IncomingMessage::WatchGame(msg) => {
-        self.observer_client.send(msg).await??;
-      },
+        let res = self.observer_client.send(msg).await?;
+        match res {
+          Ok(shared) => {
+            reply_sender
+              .send(OutgoingMessage::WatchGame(WatchGameInfo {
+                game_id: shared.game_id,
+                delay_secs: shared.initial_delay_secs.clone(),
+              }))
+              .await?
+          }
+          Err(err) => {
+            tracing::error!("watch game: {}", err);
+            reply_sender
+              .send(OutgoingMessage::WatchGameError(ErrorMessage::new(err)))
+              .await?;
+          }
+        }
+      }
     }
     Ok(())
   }

@@ -1,7 +1,7 @@
 /target
 samples
 flo.toml
-.env
+.env*
 *.iml
 .idea/modules.xml
 .idea/workspace.xml
