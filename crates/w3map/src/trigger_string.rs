@@ -231,11 +231,12 @@ fn test_parse_trigger_string_ref() {
   );
 }
 
-#[test]
-fn test_parse_inline_trigger_string_ref() {
-  use crate::{W3Map, W3Storage};
-  let storage = W3Storage::from_env().unwrap();
-  let map =
-    W3Map::open_storage(&storage, r#"maps\frozenthrone\(2)shrineoftheancients.w3x"#).unwrap();
-  dbg!(map);
-}
+// #[test]
+// fn test_parse_inline_trigger_string_ref() {
+//   use crate::W3Map;
+//   use flo_w3storage::W3Storage;
+//   let storage = W3Storage::from_env().unwrap();
+//   let map =
+//     W3Map::open_storage(&storage, r#"maps\frozenthrone\(2)shrineoftheancients.w3x"#).unwrap();
+//   dbg!(map);
+// }

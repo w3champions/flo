@@ -117,8 +117,8 @@ impl Archiver {
           span.in_scope(|| {
             tracing::info!("uploaded: {} bytes", data.len());
           });
-          break
-        },
+          break;
+        }
         Err(RusotoError::HttpDispatch(err)) => {
           span.in_scope(|| {
             tracing::warn!("http: {}", err);
@@ -153,39 +153,6 @@ pub struct ArchiverHandle {
 impl ArchiverHandle {
   pub fn add_archive(&self, archive: ArchiveInfo) -> bool {
     self.tx.try_send(Msg::AddArchive(archive)).is_ok()
-  }
-
-  #[allow(unused)]
-  pub async fn fetch(&self, game_id: i32) -> Result<Option<Vec<Bytes>>> {
-    use futures::stream::StreamExt;
-    use rusoto_core::RusotoError;
-    use rusoto_s3::GetObjectError;
-    use rusoto_s3::GetObjectRequest;
-
-    let key = game_id.to_string();
-
-    let req = GetObjectRequest {
-      key: key.clone(),
-      bucket: self.s3_bucket.clone(),
-      ..Default::default()
-    };
-    let parts = match self.s3_client.get_object(req).await {
-      Ok(res) => {
-        if let Some(stream) = res.body {
-          stream
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-        } else {
-          return Ok(None);
-        }
-      }
-      Err(RusotoError::Service(GetObjectError::NoSuchKey(_))) => return Ok(None),
-      Err(err) => return Err(err.into()),
-    };
-
-    Ok(Some(parts))
   }
 }
 
@@ -231,5 +198,47 @@ impl<W: Write> Write for Md5Writer<W> {
 
   fn flush(&mut self) -> std::io::Result<()> {
     self.inner.flush()
+  }
+}
+
+pub struct Fetcher {
+  s3_bucket: String,
+  s3_client: Arc<S3Client>,
+}
+
+impl Fetcher {
+  pub fn new() -> Result<Self> {
+    let s3_bucket = ENV
+      .aws_s3_bucket
+      .clone()
+      .clone()
+      .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_S3_BUCKET"))?;
+    let s3_client = Arc::new({
+      let provider = StaticProvider::new(
+        ENV
+          .aws_access_key_id
+          .clone()
+          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_ACCESS_KEY_ID"))?,
+        ENV
+          .aws_secret_access_key
+          .clone()
+          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?,
+        None,
+        None,
+      );
+      let client = HttpClient::new().unwrap();
+      let region = ENV
+        .aws_s3_region
+        .clone()
+        .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?
+        .parse()
+        .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
+      S3Client::new_with(client, provider, region)
+    });
+
+    Ok(Self {
+      s3_bucket: s3_bucket.clone(),
+      s3_client: s3_client.clone(),
+    })
   }
 }

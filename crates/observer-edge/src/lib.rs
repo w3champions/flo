@@ -8,7 +8,7 @@ pub mod game;
 mod server;
 mod services;
 mod version;
-mod archiver;
+pub mod archiver;
 
 use crate::archiver::Archiver;
 use crate::broadcast::BroadcastReceiver;

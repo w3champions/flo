@@ -134,7 +134,11 @@ fn test_encode() {
   let mut v = vec![];
 
   let mut crc = Crc::new();
-  for (i, b) in ReplayDecoder::new(std::fs::File::open(&path).unwrap()).unwrap().into_blocks().enumerate() {
+  for (i, b) in ReplayDecoder::new(std::fs::File::open(&path).unwrap())
+    .unwrap()
+    .into_blocks()
+    .enumerate()
+  {
     let data = b.unwrap().data;
     crc.update(&data);
     if i == 0 {
@@ -145,7 +149,11 @@ fn test_encode() {
   let crc1 = crc.sum();
 
   let mut crc = Crc::new();
-  for (i, b) in ReplayDecoder::new(std::fs::File::open(out_path).unwrap()).unwrap().into_blocks().enumerate() {
+  for (i, b) in ReplayDecoder::new(std::fs::File::open(out_path).unwrap())
+    .unwrap()
+    .into_blocks()
+    .enumerate()
+  {
     let data = b.unwrap().data;
     crc.update(&data);
     if i == 0 {
