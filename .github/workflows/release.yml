@@ -50,9 +50,9 @@ jobs:
           args: --release -p flo-worker
 
       - name: Archive
+        if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
         uses: thedoctor0/zip-release@master
         with:
-          if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
           type: 'zip'
           filename: ${{ steps.vars.outputs.release_file_name }}
           directory: target/release
