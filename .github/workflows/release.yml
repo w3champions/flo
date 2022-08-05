@@ -84,6 +84,6 @@ jobs:
           prerelease: true
           automatic_release_tag: ${{ steps.branch-name.outputs.tag }}
           files: |
-            flo-windows-latest/*.zip
+            flo-windows-2019/*.zip
             flo-macos-latest/*.zip
             flo-ubuntu-latest/*.zip
