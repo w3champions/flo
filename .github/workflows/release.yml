@@ -38,6 +38,12 @@ jobs:
           command: build
           args: --release -p flo-ping
 
+      - name: Setup cmake
+        if: ${{ runner.os == 'Windows' }}
+        uses: jwlawson/actions-setup-cmake@v1.12
+        with:
+          cmake-version: '3.24.x'
+
       - name: Set flo-worker env
         if: ${{ runner.os == 'Windows' }}
         run: |
