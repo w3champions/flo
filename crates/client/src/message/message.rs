@@ -37,6 +37,7 @@ pub enum IncomingMessage {
   SetNodeAddrOverrides(SetNodeAddrOverrides),
   ClearNodeAddrOverrides,
   WatchGame(WatchGame),
+  WatchGameSetSpeed(WatchGameSetSpeed),
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +72,7 @@ pub enum OutgoingMessage {
   SetNodeAddrOverridesError(ErrorMessage),
   WatchGame(WatchGameInfo),
   WatchGameError(ErrorMessage),
+  WatchGameSetSpeedError(ErrorMessage),
 }
 
 impl FromStr for IncomingMessage {
@@ -187,4 +189,10 @@ pub struct GamePlayerEnter {
 pub struct WatchGameInfo {
   pub game_id: i32,
   pub delay_secs: Option<i64>,
+  pub speed: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WatchGameSetSpeed {
+  pub speed: f64,
 }
