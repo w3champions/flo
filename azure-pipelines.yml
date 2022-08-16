@@ -10,52 +10,52 @@ jobs:
       curl https://sh.rustup.rs/ -sSf | sh -s -- --default-toolchain stable -y
     displayName: 'install rust'
   
-  - script: |
-      cargo build -p flo-controller-service --release
-    displayName: 'build flo controller'
+#   - script: |
+#       cargo build -p flo-controller-service --release
+#     displayName: 'build flo controller'
 
-  - script: |
-      cargo build -p flo-node-service --release
-    displayName: 'build flo node'
+#   - script: |
+#       cargo build -p flo-node-service --release
+#     displayName: 'build flo node'
 
-  - script: |
-      cargo build -p flo-observer-service --release
-    displayName: 'build flo observer'
+#   - script: |
+#       cargo build -p flo-observer-service --release
+#     displayName: 'build flo observer'
 
-  - script: |
-      mkdir -p ./build/release &&
-      cp ./target/release/flo-controller-service ./build/release/flo-controller-service &&
-      cp ./target/release/flo-node-service ./build/release/flo-node-service &&
-      cp ./target/release/flo-observer-service ./build/release/flo-observer-service
-    displayName: 'move files for docker'
+#   - script: |
+#       mkdir -p ./build/release &&
+#       cp ./target/release/flo-controller-service ./build/release/flo-controller-service &&
+#       cp ./target/release/flo-node-service ./build/release/flo-node-service &&
+#       cp ./target/release/flo-observer-service ./build/release/flo-observer-service
+#     displayName: 'move files for docker'
 
-  - task: Docker@2
-    inputs:
-      containerRegistry: 'Fluxxu Docker Hub'
-      repository: 'fluxxu/flo-controller'
-      command: 'buildAndPush'
-      Dockerfile: './build/controller.Dockerfile'
-      buildContext: "./build"
-      tags: |
-        $(Build.BuildID)
-        latest
-  - task: Docker@2
-    inputs:
-      containerRegistry: 'Fluxxu Docker Hub'
-      repository: 'fluxxu/flo-node'
-      command: 'buildAndPush'
-      Dockerfile: './build/node.Dockerfile'
-      buildContext: "./build"
-      tags: |
-        $(Build.BuildID)
-        latest
-  - task: Docker@2
-    inputs:
-      containerRegistry: 'Fluxxu Docker Hub'
-      repository: 'fluxxu/flo-observer'
-      command: 'buildAndPush'
-      Dockerfile: './build/observer.Dockerfile'
-      buildContext: "./build"
-      tags: |
-        $(Build.BuildID)
-        latest
+#   - task: Docker@2
+#     inputs:
+#       containerRegistry: 'Fluxxu Docker Hub'
+#       repository: 'fluxxu/flo-controller'
+#       command: 'buildAndPush'
+#       Dockerfile: './build/controller.Dockerfile'
+#       buildContext: "./build"
+#       tags: |
+#         $(Build.BuildID)
+#         latest
+#   - task: Docker@2
+#     inputs:
+#       containerRegistry: 'Fluxxu Docker Hub'
+#       repository: 'fluxxu/flo-node'
+#       command: 'buildAndPush'
+#       Dockerfile: './build/node.Dockerfile'
+#       buildContext: "./build"
+#       tags: |
+#         $(Build.BuildID)
+#         latest
+#   - task: Docker@2
+#     inputs:
+#       containerRegistry: 'Fluxxu Docker Hub'
+#       repository: 'fluxxu/flo-observer'
+#       command: 'buildAndPush'
+#       Dockerfile: './build/observer.Dockerfile'
+#       buildContext: "./build"
+#       tags: |
+#         $(Build.BuildID)
+#         latest

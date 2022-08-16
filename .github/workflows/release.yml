@@ -10,7 +10,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-2019, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -50,9 +50,9 @@ jobs:
           args: --release -p flo-worker
 
       - name: Archive
+        if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
         uses: thedoctor0/zip-release@master
         with:
-          if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
           type: 'zip'
           filename: ${{ steps.vars.outputs.release_file_name }}
           directory: target/release
@@ -84,6 +84,6 @@ jobs:
           prerelease: true
           automatic_release_tag: ${{ steps.branch-name.outputs.tag }}
           files: |
-            flo-windows-latest/*.zip
+            flo-windows-2019/*.zip
             flo-macos-latest/*.zip
             flo-ubuntu-latest/*.zip

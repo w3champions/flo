@@ -33,7 +33,7 @@ pub struct MapInfo {
   pub height: u32,
   pub flags: u32,
   pub tile_set: u8,
-  pub ls_background: u32,
+  pub ls_background: i32,
   #[bin(condition = "version >= MapFormatVersion::TFT")]
   pub ls_path: Option<TriggerStringRef>,
   pub ls_text: TriggerStringRef,
@@ -48,11 +48,11 @@ pub struct MapInfo {
   #[bin(condition = "version >= MapFormatVersion::TFT")]
   pub env: Option<GameEnv>,
   #[bin(condition = "version >= MapFormatVersion::TFT131")]
-  pub code_format: Option<u32>,
+  pub code_format: Option<CodeLanguage>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]
-  pub _unknown_reforged_1: Option<u32>,
+  pub asset_modes: Option<AssetMode>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]
-  pub _unknown_reforged_2: Option<u32>,
+  pub data_version: Option<GameDataVersion>,
   pub num_players: u32,
   #[bin(condition = "version < MapFormatVersion::Reforged")]
   #[bin(repeat = "num_players")]
@@ -85,11 +85,43 @@ pub struct GameEnv {
   pub fog_start: f32,
   pub fog_end: f32,
   pub fog_density: f32,
-  pub fog_color: u32,
+  pub fog_color: [u8; 4],
   pub weather_id: DwordString,
   pub sound_env: TriggerStringRef,
   pub light_env: u8,
-  pub water_color: u32,
+  pub water_color: [u8; 4],
+}
+
+#[derive(Debug, BinEncode, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
+#[bin(enum_repr(u32))]
+pub enum CodeLanguage {
+  #[bin(value = 0)]
+  Jass,
+  #[bin(value = 1)]
+  Lua,
+  UnknownValue(u32),
+}
+
+#[derive(Debug, BinEncode, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
+#[bin(enum_repr(u32))]
+pub enum AssetMode {
+  #[bin(value = 1)]
+  SD,
+  #[bin(value = 2)]
+  HD,
+  #[bin(value = 3)]
+  SDAndHD,
+  UnknownValue(u32),
+}
+
+#[derive(Debug, BinEncode, BinDecode, PartialEq, PartialOrd, Clone, Copy)]
+#[bin(enum_repr(u32))]
+pub enum GameDataVersion {
+  #[bin(value = 1)]
+  ROC,
+  #[bin(value = 2)]
+  TFT,
+  UnknownValue(u32),
 }
 
 #[derive(Debug, Clone, BinDecode)]
@@ -116,8 +148,8 @@ pub struct ReforgedPlayer {
   pub start_pos_y: f32,
   pub ally_prio_low: u32,
   pub ally_prio_high: u32,
-  pub _unknown_1: u32,
-  pub _unknown_2: u32,
+  pub enemy_prio_low: u32,
+  pub enemy_prio_high: u32,
 }
 
 #[derive(Debug, Clone, BinDecode)]

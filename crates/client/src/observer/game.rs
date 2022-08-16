@@ -94,6 +94,8 @@ where
       delay_secs.clone().unwrap_or_default() * 1000
     );
 
+    let game_id = info.id;
+
     Ok(Self {
       map_checksum: map.checksum,
       game_settings,
@@ -101,7 +103,7 @@ where
       info,
       delay_millis: delay_secs.map(|v| v * 1000),
       source,
-      shared: ObserverHostShared::new(),
+      shared: ObserverHostShared::new(game_id, delay_secs),
     })
   }
 
@@ -627,6 +629,8 @@ where
 
 #[derive(Debug, Clone)]
 pub struct ObserverHostShared {
+  pub game_id: i32,
+  pub initial_delay_secs: Option<i64>,
   speed_x10: Arc<AtomicU64>,
   game_time_millis: Arc<AtomicU64>,
   delay_secs: Arc<AtomicU64>,
@@ -678,8 +682,10 @@ impl ObserverHostShared {
 }
 
 impl ObserverHostShared {
-  pub fn new() -> Self {
+  pub fn new(game_id: i32, initial_delay_secs: Option<i64>) -> Self {
     Self {
+      game_id,
+      initial_delay_secs,
       speed_x10: Arc::new(AtomicU64::new(10)),
       game_time_millis: Arc::new(AtomicU64::new(0)),
       delay_secs: Arc::new(AtomicU64::new(0)),
