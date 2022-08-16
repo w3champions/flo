@@ -46,7 +46,12 @@ impl MapChecksum {
       let mut xoro = XoroHasher::new();
 
       let files: &[&[&str]] = &[
-        &["war3map.j", "scripts\\war3map.j", "war3map.lua"],
+        &[
+          "war3map.j",
+          "scripts\\war3map.j",
+          "war3map.lua",
+          "scripts\\war3map.lua",
+        ],
         &["war3map.w3e"],
         &["war3map.wpm"],
         &["war3map.doo"],
@@ -64,12 +69,10 @@ impl MapChecksum {
             if i == 0 {
               xoro.update(&bytes);
             } else {
-              for chunk in bytes.chunks(0x400) {
-                if chunk.len() == 0x400 {
-                  xoro.update(chunk);
-                  xoro.0 = XoroHasher::rol3(xoro.0);
-                }
-              }
+              let mut h = XoroHasher::new();
+              h.update(&bytes);
+              let v = h.finalize();
+              xoro.update(&v.to_le_bytes());
             }
             found = true;
             break;
