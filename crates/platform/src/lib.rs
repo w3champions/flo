@@ -111,7 +111,7 @@ impl ClientPlatformInfo {
       .clone()
       .ok_or_else(|| Error::NoInstallationFolder)?;
 
-    tracing::debug!("executable_path: {:?}", config.version.clone());
+    tracing::debug!("warcraft_3_version: {:?}", config.version.clone());
     let version = config.version.clone().to_string();
 
     let executable_path = installation_path.join("_retail_/x86_64/Warcraft III.exe");
