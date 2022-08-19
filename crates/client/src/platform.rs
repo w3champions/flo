@@ -364,6 +364,7 @@ async fn load(
     let config = ClientConfig {
       installation_path: start_config.installation_path.clone(),
       user_data_path: start_config.user_data_path.clone(),
+      version: start_config.version.clone().unwrap_or_else(|| flo_constants::VERSION.to_string()),
       controller_host: start_config
         .controller_host
         .clone()
