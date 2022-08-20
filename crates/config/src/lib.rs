@@ -13,6 +13,7 @@ pub struct ClientConfig {
   pub installation_path: Option<PathBuf>,
   pub controller_host: String,
   pub stats_host: String,
+  pub version: Option<String>,
 }
 
 impl Default for ClientConfig {
@@ -23,6 +24,7 @@ impl Default for ClientConfig {
       installation_path: None,
       controller_host: flo_constants::CONTROLLER_HOST.to_string(),
       stats_host: flo_constants::STATS_HOST.to_string(),
+      version: None,
     }
   }
 }
@@ -44,6 +46,7 @@ impl ClientConfig {
       pub installation_path: Option<PathBuf>,
       pub controller_host: Option<String>,
       pub stats_host: Option<String>,
+      pub version: Option<String>
     }
 
     let config: TomlConfig = toml::from_str(&fs::read_to_string("flo.toml")?)?;
@@ -57,6 +60,8 @@ impl ClientConfig {
       stats_host: config
         .stats_host
         .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
+      version: config.version,
+      
     };
 
     config.apply_env();
@@ -93,6 +98,10 @@ impl ClientConfig {
 
     if let Ok(domain) = env::var("FLO_STATS_HOST") {
       self.stats_host = domain;
+    }
+
+    if let Ok(version_number) = env::var("FLO_VERSION") {
+      self.version = Some(version_number);
     }
   }
 }
