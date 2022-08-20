@@ -13,7 +13,7 @@ pub struct ClientConfig {
   pub installation_path: Option<PathBuf>,
   pub controller_host: String,
   pub stats_host: String,
-  pub version: String,
+  pub version: Option<String>,
 }
 
 impl Default for ClientConfig {
@@ -24,7 +24,7 @@ impl Default for ClientConfig {
       installation_path: None,
       controller_host: flo_constants::CONTROLLER_HOST.to_string(),
       stats_host: flo_constants::STATS_HOST.to_string(),
-      version: flo_constants::VERSION.to_string(),
+      version: None,
     }
   }
 }
@@ -60,9 +60,7 @@ impl ClientConfig {
       stats_host: config
         .stats_host
         .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
-      version: config
-        .version
-        .unwrap_or_else(|| flo_constants::VERSION.to_string()),
+      version: config.version,
       
     };
 
@@ -103,7 +101,7 @@ impl ClientConfig {
     }
 
     if let Ok(version_number) = env::var("FLO_VERSION") {
-      self.version = version_number;
+      self.version = Some(version_number);
     }
   }
 }

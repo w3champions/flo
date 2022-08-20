@@ -20,6 +20,10 @@ pub enum Error {
   #[cfg(target_os = "macos")]
   #[error("plist: {0}")]
   PList(#[from] plist::Error),
+
+  #[cfg(target_os = "linux")]
+  #[error("no Warcraft 3 version number set")]
+  NoVersionNumber
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

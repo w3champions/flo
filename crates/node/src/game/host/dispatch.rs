@@ -1705,7 +1705,8 @@ impl PeerWorker {
             }
             PlayerStreamCmd::SetDelay(delay) => {
               let expired = if let Some(delay) = delay {
-                self.delay.set_delay(delay)
+                self.delay.set_delay(delay);
+                None
               } else {
                 self.delay.remove_delay()
               };
@@ -1723,20 +1724,8 @@ impl PeerWorker {
             }
           }
         }
-        res = self.delay.recv_expired(&mut delay_buf), if self.delay.enabled() => {
-          match res {
-            Ok(()) => {
-              self.dispatch_delayed(player_id, &delay_buf).await?;
-            }
-            Err(err) => {
-              tracing::error!(
-                game_id = self.game_id,
-                player_id,
-                "delay: {}", err
-              );
-              break;
-            }
-          }
+        _ = self.delay.recv_expired(&mut delay_buf), if self.delay.enabled() => {
+          self.dispatch_delayed(player_id, &delay_buf).await?;
         }
         Some(next) = ping.next(), if ping.started() => {
           match next {
