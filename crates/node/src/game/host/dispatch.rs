@@ -38,7 +38,6 @@ use tokio::time::{interval_at, sleep, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
 
-
 use std::iter::Iterator;
 
 const DISPATCH_ACTIONS_MTU: usize = 1350 - 8;
@@ -123,15 +122,16 @@ impl Dispatcher {
 
     let mut start_messages = vec![];
     let chat_banned_player_names: Vec<String> = state
-        .chat_banned_player_ids
-        .iter()
-        .flat_map(|id| {
-          state._player_name_lookup.get(&id).cloned()
-        })
-        .collect();
+      .chat_banned_player_ids
+      .iter()
+      .flat_map(|id| state._player_name_lookup.get(&id).cloned())
+      .collect();
 
     if !chat_banned_player_names.is_empty() {
-      start_messages.push(format!("Some players in this game have been muted: {}", chat_banned_player_names.join(", ")));
+      start_messages.push(format!(
+        "Some players in this game have been muted: {}",
+        chat_banned_player_names.join(", ")
+      ));
     }
 
     tokio::spawn(
@@ -1726,6 +1726,7 @@ impl PeerWorker {
         }
         _ = self.delay.recv_expired(&mut delay_buf), if self.delay.enabled() => {
           self.dispatch_delayed(player_id, &delay_buf).await?;
+          delay_buf.clear();
         }
         Some(next) = ping.next(), if ping.started() => {
           match next {

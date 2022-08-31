@@ -14,7 +14,7 @@ pub enum DelayedFrame {
 
 pub struct DelayedFrameStream {
   sleep: Pin<Box<Sleep>>,
-  frames: VecDeque<(DelayedFrame, Duration)>,
+  frames: VecDeque<(DelayedFrame, Instant)>,
   duration: Duration,
   waker: Option<Waker>,
   delayed: Option<DelayedFrame>,
@@ -43,7 +43,7 @@ impl DelayedFrameStream {
   pub fn set_delay(&mut self, delay: Duration) {
     let set_value = delay / 2;
     if self.duration == set_value {
-      return
+      return;
     }
 
     self.reset_all(self.duration, set_value);
@@ -58,7 +58,11 @@ impl DelayedFrameStream {
     if self.frames.is_empty() {
       None
     } else {
-      let mut items = Vec::with_capacity(self.frames.len());
+      let mut items =
+        Vec::with_capacity(if self.delayed.is_some() { 1 } else { 0 } + self.frames.len());
+      if let Some(frame) = self.delayed.take() {
+        items.push(frame);
+      }
       while let Some((frame, _)) = self.frames.pop_front() {
         items.push(frame);
       }
@@ -71,16 +75,21 @@ impl DelayedFrameStream {
   }
 
   pub fn insert(&mut self, frame: DelayedFrame) {
-    self.frames.push_back((frame, self.duration));
+    let now = Instant::now();
+    self.frames.push_back((frame, now + self.duration));
     self.waker.take().map(|w| w.wake());
   }
 
   fn reset_all(&mut self, old: Duration, new: Duration) {
-    for (_, duration) in self.frames.iter_mut() {
-      if old > new { // reduce
-        *duration = duration.saturating_sub(old.saturating_sub(new));
-      } else if old < new { // increase
-        *duration = duration.saturating_add(new.saturating_sub(old));
+    let now = Instant::now();
+    for (_, deadline) in self.frames.iter_mut() {
+      let duration = deadline.saturating_duration_since(now);
+      if old > new {
+        // reduce
+        *deadline = now + duration.saturating_sub(old.saturating_sub(new));
+      } else if old < new {
+        // increase
+        *deadline = now + duration.saturating_add(new.saturating_sub(old));
       }
     }
   }
@@ -102,27 +111,25 @@ impl<'a, 'b> Future for ExpiredFuture<'a, 'b> {
       return Poll::Ready(());
     }
 
-    if let Some((frame, delay)) = self.owner.frames.pop_front() {
-      if delay > Duration::ZERO {
-        let now = Instant::now();
-        let last_tick_cost = if let Some(last) = self.owner.last_deadline.take() {
-          now.checked_duration_since(last).unwrap_or_default()
-        } else {
-          Duration::default()
-        };
-        let deadline = now + delay.saturating_sub(last_tick_cost);
-        self.owner.last_deadline.replace(deadline);
-        self.owner.sleep.as_mut().reset(deadline.into());
-        if let Poll::Ready(_) = self.owner.sleep.as_mut().poll(cx) {
-          self.buf.push_back(frame);
-          Poll::Ready(())
-        } else {
-          self.owner.delayed.replace(frame);
-          Poll::Pending
-        }
+    if let Some((frame, deadline)) = self.owner.frames.pop_front() {
+      let now = Instant::now();
+      let last_tick_cost = if let Some(last) = self.owner.last_deadline.take() {
+        now.checked_duration_since(last).unwrap_or_default()
       } else {
+        Duration::ZERO
+      };
+      let deadline = now
+        + deadline
+          .saturating_duration_since(now)
+          .saturating_sub(last_tick_cost);
+      self.owner.last_deadline.replace(deadline);
+      self.owner.sleep.as_mut().reset(deadline.into());
+      if let Poll::Ready(_) = self.owner.sleep.as_mut().poll(cx) {
         self.buf.push_back(frame);
         Poll::Ready(())
+      } else {
+        self.owner.delayed.replace(frame);
+        Poll::Pending
       }
     } else {
       if !self
