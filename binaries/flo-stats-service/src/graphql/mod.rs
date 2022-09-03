@@ -1,4 +1,4 @@
-use async_graphql::{Context, Object, Result, Schema, SimpleObject, Subscription, Union};
+use async_graphql::{Context, Error, Object, Result, Schema, SimpleObject, Subscription, Union};
 use flo_observer_edge::{
   game::snapshot::GameSnapshot,
   game::{
@@ -8,6 +8,8 @@ use flo_observer_edge::{
   FloObserverEdgeHandle,
 };
 use tokio_stream::{once, Stream, StreamExt};
+
+use crate::RequestData;
 
 pub type FloLiveSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 pub struct QueryRoot;
@@ -28,10 +30,26 @@ impl MutationRoot {
     &self,
     ctx: &Context<'_>,
     game_id: i32,
+    delay_secs: Option<u16>,
   ) -> Result<ObserverTokenPayload> {
     let handle: &FloObserverEdgeHandle = ctx.data()?;
     let game = handle.get_game(game_id).await?;
-    let delay_secs = Some(if game.mask_player_names { 15 * 60 } else { 3 * 60 });
+    let data: &RequestData = ctx.data()?;
+
+    let delay_secs = if let Some(value) = delay_secs {
+      if data.is_admin {
+        value as i64
+      } else {
+        return Err(Error::new("Only admin can specify delay value."));
+      }
+    } else {
+      180
+    };
+    let delay_secs = if delay_secs == 0 {
+      None
+    } else {
+      Some(delay_secs)
+    };
     Ok(ObserverTokenPayload {
       game,
       delay_secs: delay_secs.clone(),

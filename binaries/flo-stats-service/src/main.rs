@@ -1,3 +1,4 @@
+mod env;
 mod graphql;
 
 use crate::graphql::{FloLiveSchema, MutationRoot, QueryRoot, SubscriptionRoot};
@@ -10,13 +11,25 @@ use axum::response::{self, IntoResponse};
 use axum::routing::get;
 use axum::{extract, AddExtensionLayer, Router, Server};
 use flo_observer_edge::FloObserverEdge;
+use http::header::HeaderMap;
 use tower_http::cors::{CorsLayer, Origin};
+
+pub struct RequestData {
+  pub is_admin: bool,
+}
 
 async fn graphql_handler(
   schema: extract::Extension<FloLiveSchema>,
   req: GraphQLRequest,
+  headers: HeaderMap,
 ) -> GraphQLResponse {
-  schema.execute(req.into_inner()).await.into()
+  let req = req.into_inner().data(RequestData {
+    is_admin: headers
+      .get("x-flo-admin-secret")
+      .map(|v| v.as_bytes() == crate::env::ADMIN_SECRET.as_bytes())
+      .unwrap_or_default(),
+  });
+  schema.execute(req).await.into()
 }
 
 async fn graphql_playground() -> impl IntoResponse {

@@ -1727,7 +1727,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "backoff 0.3.0",
  "bytes",
@@ -1903,6 +1903,8 @@ dependencies = [
  "flo-log-subscriber",
  "flo-observer",
  "flo-observer-edge",
+ "http",
+ "once_cell",
  "tokio",
  "tokio-stream",
  "tower-http",
@@ -2603,9 +2605,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.2.6"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f4c6746584866f0feabcc69893c5b51beef3831656a968ed7ae254cdc4fd03"
+checksum = "75f43d41e26995c17e71ee126451dd3941010b0514a81a9d11f3b341debc2399"
 dependencies = [
  "bytes",
  "fnv",
@@ -3536,9 +3538,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.9.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
+checksum = "2f7254b99e31cad77da24b08ebf628882739a608578bb1bcdfc1f9c21260d7c0"
 
 [[package]]
 name = "opaque-debug"
