@@ -22,6 +22,7 @@ pub struct StartConfig {
   pub user_data_path: Option<PathBuf>,
   pub controller_host: Option<String>,
   pub stats_host: Option<String>,
+  pub version: Option<String>,
 }
 
 pub struct FloClient {

@@ -194,13 +194,13 @@ impl Handler {
       tokio::select! {
         _ = self.ct.cancelled() => break,
         Some(cmd) = self.rx.recv() => {
-          self.handle_cmd(cmd).await;
+          self.handle_cmd(cmd)
         },
       }
     }
   }
 
-  async fn handle_cmd(&mut self, cmd: Cmd) {
+  fn handle_cmd(&mut self, cmd: Cmd) {
     match cmd {
       Cmd::AddRecord(record) => {
         self.buffer_map.add_record(record);
@@ -384,7 +384,7 @@ impl GameBuffer {
         self.data.len()
       );
     }
-    
+
     self.last_update = Instant::now();
   }
 

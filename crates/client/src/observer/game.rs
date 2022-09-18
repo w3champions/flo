@@ -12,6 +12,7 @@ use flo_w3gs::chat::ChatFromHost;
 use flo_w3gs::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use flo_w3gs::game::{GameSettings, GameSettingsMap};
 use flo_w3gs::lag::{LagPlayer, StartLag, StopLag};
+use flo_w3gs::leave::PlayerLeft;
 use flo_w3gs::net::{W3GSListener, W3GSStream};
 use flo_w3gs::packet::Packet;
 use flo_w3gs::protocol::action::OutgoingKeepAlive;
@@ -32,7 +33,7 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
-const DESYNC_GRACE_PERIOD_TICKS: usize = 128;
+const DESYNC_GRACE_PERIOD_TICKS: usize = 256;
 const BUFFER_DURATION: Duration = Duration::from_secs(1);
 
 pub struct ObserverGameHost<S> {
@@ -94,6 +95,8 @@ where
       delay_secs.clone().unwrap_or_default() * 1000
     );
 
+    let game_id = info.id;
+
     Ok(Self {
       map_checksum: map.checksum,
       game_settings,
@@ -101,7 +104,7 @@ where
       info,
       delay_millis: delay_secs.map(|v| v * 1000),
       source,
-      shared: ObserverHostShared::new(),
+      shared: ObserverHostShared::new(game_id, delay_secs),
     })
   }
 
@@ -189,15 +192,31 @@ where
     };
 
     #[cfg(windows)]
-    unsafe {
-      winapi::um::timeapi::timeBeginPeriod(1);
-    }
+    let _time_period_guard = {
+      unsafe {
+        winapi::um::timeapi::timeBeginPeriod(1);
+      }
+
+      struct Guard;
+
+      impl Drop for Guard {
+        fn drop(&mut self) {
+          unsafe {
+            winapi::um::timeapi::timeEndPeriod(1);
+          }
+        }
+      }
+
+      Guard
+    };
+
+    let mut left_players = vec![];
 
     'main: loop {
       tokio::select! {
         r = self.source.try_next(), if loaded && !source_done => {
           if let Some(r) = r? {
-            self.handle_record(time, r, slots, &mut send_queue, &mut agreed_checksums).await?;
+            self.handle_record(time, r, slots, &mut send_queue, &mut agreed_checksums, &mut left_players).await?;
           } else {
             source_done = true;
             send_queue.finish();
@@ -255,7 +274,7 @@ where
                       let aprox_game_time = get_aprox_game_time();
                       let local_game_time = get_local_game_time(time);
 
-                      tracing::debug!("delay = {}s, buffered duration = {}s", delay_secs, (send_queue.buffered_duration().as_millis() as f64 / 1000.));
+                      // tracing::debug!("delay = {}s, buffered duration = {}s", delay_secs, (send_queue.buffered_duration().as_millis() as f64 / 1000.));
 
                       if aprox_game_time.saturating_sub(local_game_time) <= *delay_millis {
                         self.shared.set_speed(1.);
@@ -267,7 +286,7 @@ where
                     }
                   }
                 } else {
-                  tracing::debug!("buffered duration = {}s", send_queue.buffered_duration().as_millis() as f64 / 1000.0);
+                  // tracing::debug!("buffered duration = {}s", send_queue.buffered_duration().as_millis() as f64 / 1000.0);
                 }
 
                 let mut incoming_checksum = Some(payload.checksum);
@@ -345,11 +364,6 @@ where
       (time as f64) / (play_time as f64)
     );
 
-    #[cfg(windows)]
-    unsafe {
-      winapi::um::timeapi::timeEndPeriod(1);
-    }
-
     self.shared.finished.store(true, Ordering::Relaxed);
     self.shared.finished_notify.notify_one();
 
@@ -363,6 +377,7 @@ where
     slot_info: &LanSlotInfo,
     send_queue: &mut SendQueue,
     checksums: &mut VecDeque<u32>,
+    left_players: &mut Vec<u8>,
   ) -> Result<()> {
     match record {
       GameRecordData::W3GS(pkt) => match pkt.type_id() {
@@ -371,6 +386,9 @@ where
           send_queue.push(pkt, (time_increment_ms as u64).into());
         }
         PacketTypeId::PlayerLeft => {
+          tracing::debug!("player left: {:?}", pkt);
+          let payload: PlayerLeft = pkt.decode_simple()?;
+          left_players.push(payload.player_id);
           send_queue.push(pkt, None);
         }
         id => {
@@ -378,6 +396,7 @@ where
         }
       },
       GameRecordData::StartLag(player_ids) => {
+        tracing::debug!("start lag: {:?}", player_ids);
         send_queue.push(
           Packet::simple(StartLag::new(
             player_ids
@@ -398,18 +417,21 @@ where
         );
       }
       GameRecordData::StopLag(player_id) => {
+        tracing::debug!("stop lag: {:?}", player_id);
         if let Some(slot) = slot_info
           .player_infos
           .iter()
           .find(|p| p.player_id == player_id)
         {
-          send_queue.push(
-            Packet::simple(StopLag(LagPlayer {
-              player_id: slot.slot_player_id,
-              lag_duration_ms: 0,
-            }))?,
-            None,
-          );
+          if !left_players.contains(&slot.slot_player_id) {
+            send_queue.push(
+              Packet::simple(StopLag(LagPlayer {
+                player_id: slot.slot_player_id,
+                lag_duration_ms: 0,
+              }))?,
+              None,
+            );
+          }
         }
       }
       GameRecordData::GameEnd => {}
@@ -627,6 +649,8 @@ where
 
 #[derive(Debug, Clone)]
 pub struct ObserverHostShared {
+  pub game_id: i32,
+  pub initial_delay_secs: Option<i64>,
   speed_x10: Arc<AtomicU64>,
   game_time_millis: Arc<AtomicU64>,
   delay_secs: Arc<AtomicU64>,
@@ -678,8 +702,10 @@ impl ObserverHostShared {
 }
 
 impl ObserverHostShared {
-  pub fn new() -> Self {
+  pub fn new(game_id: i32, initial_delay_secs: Option<i64>) -> Self {
     Self {
+      game_id,
+      initial_delay_secs,
       speed_x10: Arc::new(AtomicU64::new(10)),
       game_time_millis: Arc::new(AtomicU64::new(0)),
       delay_secs: Arc::new(AtomicU64::new(0)),

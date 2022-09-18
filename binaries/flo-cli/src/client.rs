@@ -14,7 +14,6 @@ pub enum Command {
   WsReconnect {
     port: u16,
   },
-  StartTestGame,
 }
 
 impl Command {
@@ -55,11 +54,6 @@ impl Command {
       }
       Command::WsReconnect { port } => {
         server_ws(format!("ws://127.0.0.1:{}", port), token).await?;
-      }
-      Command::StartTestGame => {
-        let client = flo_client::start(Default::default()).await.unwrap();
-        client.start_test_game().await.unwrap();
-        client.serve().await;
       }
     }
 

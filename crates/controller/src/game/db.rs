@@ -41,6 +41,7 @@ pub struct QueryGameParams {
   pub is_live: Option<bool>,
   pub take: Option<i64>,
   pub since_id: Option<i32>,
+  pub player_id: Option<i32>,
 }
 
 #[derive(Debug, S2ProtoPack)]
@@ -124,6 +125,13 @@ pub fn query(conn: &DbConn, params: &QueryGameParams) -> Result<QueryGame> {
 
   if let Some(id) = params.since_id.clone() {
     q = q.filter(dsl::id.lt(id))
+  }
+
+  if let Some(player_id) = params.player_id.clone() {
+    let subq = game_used_slot::table
+      .select(game_used_slot::dsl::game_id)
+      .filter(game_used_slot::dsl::player_id.eq(player_id));
+    q = q.filter(dsl::id.eq(any(subq)));
   }
 
   let mut games: Vec<GameEntry> = q.load(conn)?;

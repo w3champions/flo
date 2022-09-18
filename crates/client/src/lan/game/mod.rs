@@ -63,7 +63,7 @@ impl LanGame {
       &game_name,
       &game.map_path.replace("\\", "/"),
       game.map_sha1,
-      game.map_checksum,
+      map_checksum.xoro,
     )?;
     let token = NodeConnectToken::from_vec(player_token).ok_or_else(|| Error::InvalidNodeToken)?;
 

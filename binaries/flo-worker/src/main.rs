@@ -24,6 +24,9 @@ struct Opt {
 
   #[structopt(long)]
   controller_host: Option<String>,
+
+  #[structopt(long)]
+  version: Option<String>,
 }
 
 fn main() {
@@ -46,6 +49,7 @@ fn main() {
       installation_path: opt.installation_path,
       user_data_path: opt.user_data_path,
       controller_host: opt.controller_host.clone(),
+      version: opt.version.clone(),
       ..Default::default()
     }))?;
     let port = client.port();

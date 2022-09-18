@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+const UTF8_BOM_ALT: &[u8] = &[0xC3, 0xAF, 0xC2, 0xBB, 0xC2, 0xBF];
 
 #[derive(Debug)]
 pub struct TriggerStringMap(BTreeMap<i32, String>);
@@ -44,6 +45,10 @@ impl BinDecode for TriggerStringMap {
 
     if buf.peek_u8() == Some(UTF8_BOM[0]) {
       buf.get_tag(UTF8_BOM)?;
+    }
+
+    if buf.peek_u8() == Some(UTF8_BOM_ALT[0]) {
+      buf.get_tag(UTF8_BOM_ALT)?;
     }
 
     let mut map = BTreeMap::new();
@@ -231,12 +236,12 @@ fn test_parse_trigger_string_ref() {
   );
 }
 
-// #[test]
-// fn test_parse_inline_trigger_string_ref() {
-//   use crate::W3Map;
-//   use flo_w3storage::W3Storage;
-//   let storage = W3Storage::from_env().unwrap();
-//   let map =
-//     W3Map::open_storage(&storage, r#"maps\frozenthrone\(2)shrineoftheancients.w3x"#).unwrap();
-//   dbg!(map);
-// }
+#[cfg(feature = "w3storage")]
+#[test]
+fn test_parse_inline_trigger_string_ref() {
+  use crate::{W3Map, W3Storage};
+  let storage = W3Storage::from_env().unwrap();
+  let map =
+    W3Map::open_storage(&storage, r#"maps\frozenthrone\(2)shrineoftheancients.w3x"#).unwrap();
+  dbg!(map);
+}

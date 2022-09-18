@@ -1,5 +1,6 @@
 use super::message::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
+  WatchGameInfo,
 };
 use super::{ConnectController, MessageEvent};
 use crate::controller::{
@@ -7,7 +8,7 @@ use crate::controller::{
 };
 use crate::error::{Error, Result};
 use crate::message::MessageStream;
-use crate::observer::ObserverClient;
+use crate::observer::{ObserverClient, ObserverHostShared};
 use crate::platform::{
   GetClientPlatformInfo, GetMapDetail, GetMapList, KillTestGame, Platform, PlatformStateError,
   Reload,
@@ -20,6 +21,7 @@ use flo_net::proto::flo_connect::{
 use flo_platform::ClientPlatformInfo;
 use flo_state::Addr;
 use flo_task::{SpawnScope, SpawnScopeHandle};
+use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoPack;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -40,7 +42,12 @@ impl Session {
   ) -> Self {
     let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
-    let serve_state = Arc::new(Worker { platform, controller_client, observer_client });
+    let serve_state = Arc::new(Worker {
+      platform,
+      controller_client,
+      observer_client,
+      current_observer_host: Mutex::new(None),
+    });
     tokio::spawn(
       {
         let scope = scope.handle();
@@ -125,6 +132,7 @@ struct Worker {
   platform: Addr<Platform>,
   controller_client: Addr<ControllerClient>,
   observer_client: Addr<ObserverClient>,
+  current_observer_host: Mutex<Option<ObserverHostShared>>,
 }
 
 impl Worker {
@@ -193,11 +201,50 @@ impl Worker {
         }
       }
       IncomingMessage::ClearNodeAddrOverrides => {
-        self.controller_client.send(ClearNodeAddrOverrides).await??;
+        self
+          .controller_client
+          .send(ClearNodeAddrOverrides)
+          .await??;
       }
       IncomingMessage::WatchGame(msg) => {
-        self.observer_client.send(msg).await??;
-      },
+        let res = self.observer_client.send(msg).await?;
+        match res {
+          Ok(shared) => {
+            reply_sender
+              .send(OutgoingMessage::WatchGame(WatchGameInfo {
+                game_id: shared.game_id,
+                delay_secs: shared.initial_delay_secs.clone(),
+                speed: shared.speed(),
+              }))
+              .await?;
+            self.current_observer_host.lock().replace(shared);
+          }
+          Err(err) => {
+            tracing::error!("watch game: {}", err);
+            reply_sender
+              .send(OutgoingMessage::WatchGameError(ErrorMessage::new(err)))
+              .await?;
+          }
+        }
+      }
+      IncomingMessage::WatchGameSetSpeed(msg) => {
+        let reply = {
+          let host = self.current_observer_host.lock();
+          if let Some(host) = host.as_ref() {
+            host.set_speed(msg.speed);
+            OutgoingMessage::WatchGame(WatchGameInfo {
+              game_id: host.game_id,
+              delay_secs: host.initial_delay_secs.clone(),
+              speed: msg.speed,
+            })
+          } else {
+            OutgoingMessage::WatchGameSetSpeedError(ErrorMessage::new("No active stream."))
+          }
+        };
+        reply_sender
+          .send(reply)
+          .await?;
+      }
     }
     Ok(())
   }

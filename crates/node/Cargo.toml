@@ -1,6 +1,6 @@
 [package]
 name = "flo-node"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
@@ -21,7 +21,7 @@ bytes = "1.1.0"
 futures = "0.3.19"
 tokio = { version = "1.15.0", features = ["time", "sync", "macros", "net"] }
 tokio-stream = { version = "0.1.5", features = ["time", "net"] }
-tokio-util = { version = "0.6", features = ["time"] }
+tokio-util = "0.6"
 tracing = "0.1"
 tracing-futures = "0.2"
 parking_lot = "0.11"

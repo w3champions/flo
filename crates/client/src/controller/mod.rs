@@ -357,7 +357,7 @@ impl Handler<ReplaceSession> for ControllerClient {
         .sender()
         .send_or_discard(OutgoingMessage::Disconnect(message::Disconnect {
           reason: message::DisconnectReason::Multi,
-          message: "Another browser window took up the connection.".to_string(),
+          message: "Another client took up the connection.".to_string(),
         }))
         .await;
     }
