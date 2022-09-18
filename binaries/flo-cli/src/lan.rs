@@ -11,13 +11,14 @@ pub enum Command {
   List,
   Join { name: String },
   JoinMulti { name: String, player_ids: Vec<i32> },
+  StartTestGame,
 }
 
 impl Command {
   pub async fn run(&self) -> Result<()> {
     match *self {
       Command::List => {
-        let games = search_lan_games(Duration::from_secs(3)).await;
+        let games = search_lan_games(Duration::from_secs(1)).await;
         for game in games {
           println!("{}", game.game_info.name.to_string_lossy());
         }
@@ -88,6 +89,11 @@ impl Command {
         for res in res {
           res.unwrap()
         }
+      }
+      Command::StartTestGame => {
+        let client = flo_client::start(Default::default()).await.unwrap();
+        client.start_test_game().await.unwrap();
+        client.serve().await;
       }
     }
 
