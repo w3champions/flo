@@ -1,12 +1,10 @@
-use crate::game::{LanGameSlot, LanGamePlayerInfo};
-pub use crate::game::{Computer, SlotStatus, Race, SlotSettings};
-use s2_grpc_utils::{S2ProtoUnpack};
-use serde::{Deserialize, Serialize};
+pub use crate::game::{Computer, Race, SlotSettings, SlotStatus};
+use crate::game::{LanGamePlayerInfo, LanGameSlot};
 use flo_grpc::game::Game;
+use s2_grpc_utils::S2ProtoUnpack;
+use serde::{Deserialize, Serialize};
 #[derive(Debug, S2ProtoUnpack, Serialize)]
-#[s2_grpc(message_type(
-  flo_net::proto::flo_observer::GameInfo
-))]
+#[s2_grpc(message_type(flo_net::proto::flo_observer::GameInfo))]
 pub struct GameInfo {
   pub id: i32,
   pub name: String,
@@ -26,16 +24,16 @@ impl S2ProtoUnpack<Game> for GameInfo {
       slots: S2ProtoUnpack::unpack(value.slots)?,
       random_seed: value.random_seed,
       game_version: value.game_version.unwrap_or_default(),
-      start_time_millis: value.started_at.map(|v| v.seconds * 1000 + (v.nanos as i64 / 1000000)).unwrap_or_default()
+      start_time_millis: value
+        .started_at
+        .map(|v| v.seconds * 1000 + (v.nanos as i64 / 1000000))
+        .unwrap_or_default(),
     })
   }
 }
 
 #[derive(Debug, S2ProtoUnpack, Serialize)]
-#[s2_grpc(message_type(
-  flo_net::proto::flo_observer::Map,
-  flo_grpc::game::Map
-))]
+#[s2_grpc(message_type(flo_net::proto::flo_observer::Map, flo_grpc::game::Map))]
 pub struct Map {
   pub sha1: Vec<u8>,
   pub checksum: u32,
@@ -55,10 +53,7 @@ impl Map {
 }
 
 #[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
-#[s2_grpc(message_type(
-  flo_net::proto::flo_observer::Slot,
-  flo_grpc::game::Slot
-))]
+#[s2_grpc(message_type(flo_net::proto::flo_observer::Slot, flo_grpc::game::Slot))]
 pub struct Slot {
   pub player: Option<PlayerInfo>,
   pub settings: SlotSettings,
@@ -74,10 +69,7 @@ impl Default for Slot {
 }
 
 #[derive(Debug, S2ProtoUnpack, Serialize, Deserialize, Clone)]
-#[s2_grpc(message_type(
-  flo_net::proto::flo_observer::PlayerInfo,
-  flo_grpc::player::PlayerRef
-))]
+#[s2_grpc(message_type(flo_net::proto::flo_observer::PlayerInfo, flo_grpc::player::PlayerRef))]
 pub struct PlayerInfo {
   pub id: i32,
   pub name: String,
@@ -88,7 +80,7 @@ impl<'a> From<&'a Slot> for LanGameSlot<'a> {
     Self {
       player: slot.player.as_ref().map(|p| LanGamePlayerInfo {
         id: p.id,
-        name: p.name.as_str()
+        name: p.name.as_str(),
       }),
       settings: slot.settings.clone(),
     }

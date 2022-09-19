@@ -8,7 +8,7 @@ edition = "2018"
 flo-util = { path = "../util" }
 flo-w3gs = { path = "../w3gs" }
 
-flate2 = "1.0"
+flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 thiserror = "1"
 bitflags = "1"
 bytes = "1.1.0"

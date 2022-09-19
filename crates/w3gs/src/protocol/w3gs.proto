@@ -11,6 +11,8 @@ message PlayerProfileMessage {
   string unknown_1 = 6;
 }
 
+message PlayerProfileListMessage { repeated PlayerProfileMessage items = 1; }
+
 enum PlayerProfileRealm {
   OFFLINE = 0;
   AMERICAS = 10;

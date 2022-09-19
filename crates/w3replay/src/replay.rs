@@ -3,7 +3,7 @@ use flo_util::binary::{BinDecode, BinEncode};
 
 use crate::{
   block::{Blocks, BlocksEncoder},
-  error::Result,
+  error::{Error, Result},
   header::GameVersion,
   Header, Record, RecordIter,
 };
@@ -46,10 +46,10 @@ pub struct ReplayEncoder<W> {
 }
 
 impl<W: Write + Seek> ReplayEncoder<W> {
-  pub fn new(game_version: GameVersion, flags: u16, mut w: W) -> Result<Self> {
+  pub fn new(game_version: &str, flags: u16, mut w: W) -> Result<Self> {
     w.seek(SeekFrom::Start(Header::MIN_SIZE as u64))?;
     Ok(Self {
-      header: Header::new(game_version, flags),
+      header: Header::new(get_header_game_version(game_version)?, flags),
       w: BlocksEncoder::new(w),
     })
   }
@@ -102,6 +102,22 @@ impl<W: Write + Seek> ReplayEncoder<W> {
   }
 }
 
+fn get_header_game_version(version: &str) -> Result<GameVersion> {
+  match version {
+    version if version.starts_with("1.32.") => Ok(GameVersion {
+      version: 10032,
+      build_number: 6110,
+      ..Default::default()
+    }),
+    version if version.starts_with("1.33.0.") => Ok(GameVersion {
+      version: 10033,
+      build_number: 6114,
+      ..Default::default()
+    }),
+    other => Err(Error::UnsupportedGameVersion(other.to_string())),
+  }
+}
+
 #[test]
 fn test_decode() {
   let r =
@@ -117,16 +133,7 @@ fn test_encode() {
   let path = flo_util::sample_path!("replay", "grubby_happy.w3g");
   let out_path = "../../target/gen.w3g";
   let d = ReplayDecoder::new(std::fs::File::open(&path).unwrap()).unwrap();
-  let mut e = ReplayEncoder::new(
-    GameVersion {
-      version: 10032,
-      build_number: 6110,
-      ..Default::default()
-    },
-    0,
-    std::fs::File::create(out_path).unwrap(),
-  )
-  .unwrap();
+  let mut e = ReplayEncoder::new("1.32.0.0", 0, std::fs::File::create(out_path).unwrap()).unwrap();
   let records = d.into_records().collect::<Result<Vec<_>, _>>().unwrap();
   e.encode_records(&records).unwrap();
   e.finish().unwrap();

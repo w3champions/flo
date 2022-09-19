@@ -8,6 +8,7 @@ edition = "2018"
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-controller = { path = "../../crates/controller" }
 flo-observer-edge = { path = "../../crates/observer-edge" }
+flo-observer-archiver = { path = "../../crates/observer-archiver" }
 flo-net = { path = "../../crates/net" }
 flo-lan = { path = "../../crates/lan" }
 flo-grpc = { path = "../../deps/flo-grpc" }

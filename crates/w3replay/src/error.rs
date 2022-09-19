@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("unsupported game version: {0}")]
+  UnsupportedGameVersion(String),
   #[error("read header: {0}")]
   ReadHeader(std::io::Error),
   #[error("unsupported block size, expected 8192, got {0}")]
@@ -12,7 +14,7 @@ pub enum Error {
   InvalidChecksum {
     subject: &'static str,
     expected: u16,
-    got: u16
+    got: u16,
   },
   #[error("no game info record")]
   NoGameInfoRecord,

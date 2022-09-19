@@ -1,5 +1,4 @@
 use bytes::buf::Chain;
-use flo_w3gs::constants::GameSettingFlags;
 use std::io::prelude::*;
 
 use flo_util::binary::*;
@@ -224,22 +223,13 @@ pub struct GameInfo {
 }
 
 impl GameInfo {
-  pub fn new(name: &str, map_path: &str, map_sha1: [u8; 20], map_checksum: u32) -> Self {
+  pub fn new(host_player_info: PlayerInfo, name: &str, game_settings: GameSettings) -> Self {
     Self {
       num_of_host_records: 1,
-      host_player_info: PlayerInfo::new(24, "FLO"),
+      host_player_info,
       game_name: name.into_c_string_lossy(),
       _unk_1: 0,
-      game_settings: GameSettings {
-        game_setting_flags: GameSettingFlags::default(),
-        unk_1: 0,
-        map_width: 0,
-        map_height: 0,
-        map_checksum,
-        map_path: map_path.into_c_string_lossy(),
-        host_name: "FLO".into_c_string_lossy(),
-        map_sha1,
-      },
+      game_settings,
       player_count: 24,
       game_flags: GameFlags::OBS_FULL,
       language_id: 0,
@@ -287,11 +277,29 @@ pub struct GameStart {
   pub unknown: u32,
 }
 
+impl Default for GameStart {
+  fn default() -> Self {
+    Self { unknown: 1 }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct CountDownStart(GameStart);
 
+impl Default for CountDownStart {
+  fn default() -> Self {
+    CountDownStart(GameStart::default())
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct CountDownEnd(GameStart);
+
+impl Default for CountDownEnd {
+  fn default() -> Self {
+    CountDownEnd(GameStart::default())
+  }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct TimeSlot {
@@ -430,6 +438,15 @@ pub struct TimeSlotAck {
   pub checksum: u32,
 }
 
+impl TimeSlotAck {
+  pub fn new(checksum: u32) -> Self {
+    Self {
+      _size_checksum: 4,
+      checksum,
+    }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct EndTimer {
   pub over: bool,
@@ -525,7 +542,7 @@ fn test_record_iter() {
 
 #[test]
 fn test_game_info() {
-  let bytes = flo_util::sample_bytes!("replay", "133ptr.w3g");
+  let bytes = flo_util::sample_bytes!("replay", "3506801.w3g");
   let mut buf = bytes.as_slice();
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
@@ -555,17 +572,23 @@ fn test_game_info() {
               dbg!(gameinfo);
             }
             Record::PlayerInfo(info) => {
-              // dbg!(info);
-            }
-            Record::PlayerLeft(info) => {
               dbg!(info);
             }
-            // Record::SlotInfo(_) => {},
-            // Record::CountDownStart(_) => todo!(),
-            // Record::CountDownEnd(_) => todo!(),
-            // Record::GameStart(info) => {
+            Record::PlayerLeft(_info) => {
+              // dbg!(info);
+            }
+            // Record::SlotInfo(info) => {
             //   dbg!(info);
             // }
+            Record::CountDownStart(info) => {
+              dbg!(info);
+            }
+            Record::CountDownEnd(info) => {
+              dbg!(info);
+            }
+            Record::GameStart(info) => {
+              dbg!(info);
+            }
             // Record::TimeSlotFragment(_) => todo!(),
             // Record::TimeSlot(_) => todo!(),
             Record::ChatMessage(m) => {
@@ -580,6 +603,10 @@ fn test_game_info() {
                 flo_w3gs::constants::ProtoBufMessageTypeId::PlayerProfile => {
                   let m = p
                     .decode_message::<flo_w3gs::player::PlayerProfileMessage>()
+                    .map_err(|err| {
+                      std::fs::write("1.bin", p.data).unwrap();
+                      err
+                    })
                     .unwrap();
                   dbg!(m);
                 }
