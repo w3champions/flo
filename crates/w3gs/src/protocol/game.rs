@@ -108,6 +108,7 @@ impl BinDecode for GameSettings {
     let map_height = buf.get_u16_le();
     let map_xoro = buf.get_u32_le();
     let map_path = CString::decode(&mut buf)?;
+
     let host_name = CString::decode(&mut buf)?;
 
     if buf.remaining() != 1 + 20 {

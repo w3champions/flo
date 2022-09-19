@@ -85,8 +85,7 @@ impl Command {
           flo_w3gs::game::GameSettings::new(
             Default::default(),
             flo_w3gs::game::GameSettingsMap {
-              // path: game.map.path.clone(),
-              path: r#"Maps/W3Champions\\w3c_s12.2_VanguardPoint_v1.3.w3x"#.to_string(),
+              path: game.map.path.clone(),
               width: 0,
               height: 0,
               sha1: {

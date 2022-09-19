@@ -234,7 +234,7 @@ where
   }
 
   fn finish_block(&mut self) -> Result<()> {
-    let mut w = std::mem::replace(&mut self.block_w, Self::make_writer()).finish()?;
+    let w = std::mem::replace(&mut self.block_w, Self::make_writer()).flush_finish()?;
     let data_crc = w.crc().sum();
     let buf = w.into_inner();
 
@@ -267,7 +267,7 @@ where
   fn make_writer() -> ZlibEncoder<CrcWriter<Vec<u8>>> {
     ZlibEncoder::new(
       CrcWriter::new(Vec::with_capacity(SUPPORTED_BLOCK_SIZE)),
-      Compression::new(1),
+      Compression::default(),
     )
   }
 }
@@ -292,7 +292,6 @@ fn test_block() {
   for block in blocks {
     let block = block.unwrap();
     total_size += block.data.len();
-    dbg!(block.header);
   }
   dbg!(total_size);
 }
