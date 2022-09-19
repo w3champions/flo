@@ -1,12 +1,13 @@
-use crate::env::ENV;
-use crate::error::{Error, Result};
 use backoff::backoff::Backoff;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
-use rusoto_s3::{S3Client, S3};
+use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+
+pub mod error;
+use crate::error::{Error, Result};
 
 pub struct Archiver {
   s3_bucket: String,
@@ -14,31 +15,26 @@ pub struct Archiver {
   rx: mpsc::Receiver<Msg>,
 }
 
+pub struct ArchiverOptions {
+  pub aws_s3_bucket: String,
+  pub aws_access_key_id: String,
+  pub aws_secret_access_key: String,
+  pub aws_s3_region: String,
+}
+
 impl Archiver {
-  pub fn new() -> Result<Option<(Self, ArchiverHandle)>> {
-    let s3_bucket = if let Some(value) = ENV.aws_s3_bucket.clone() {
-      value
-    } else {
-      return Ok(None);
-    };
+  pub fn new(opts: ArchiverOptions) -> Result<(Self, ArchiverHandle)> {
+    let s3_bucket = opts.aws_s3_bucket;
     let s3_client = Arc::new({
       let provider = StaticProvider::new(
-        ENV
-          .aws_access_key_id
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_ACCESS_KEY_ID"))?,
-        ENV
-          .aws_secret_access_key
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?,
+        opts.aws_access_key_id,
+        opts.aws_secret_access_key,
         None,
         None,
       );
       let client = HttpClient::new().unwrap();
-      let region = ENV
+      let region = opts
         .aws_s3_region
-        .clone()
-        .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?
         .parse()
         .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
       S3Client::new_with(client, provider, region)
@@ -46,21 +42,18 @@ impl Archiver {
 
     let (tx, rx) = mpsc::channel(100);
 
-    Ok(
-      (
-        Self {
-          s3_bucket: s3_bucket.clone(),
-          s3_client: s3_client.clone(),
-          rx,
-        },
-        ArchiverHandle {
-          tx,
-          s3_bucket,
-          s3_client,
-        },
-      )
-        .into(),
-    )
+    Ok((
+      Self {
+        s3_bucket: s3_bucket.clone(),
+        s3_client: s3_client.clone(),
+        rx,
+      },
+      ArchiverHandle {
+        tx,
+        s3_bucket,
+        s3_client,
+      },
+    ))
   }
 
   pub async fn serve(self) {
@@ -207,30 +200,18 @@ pub struct Fetcher {
 }
 
 impl Fetcher {
-  pub fn new() -> Result<Self> {
-    let s3_bucket = ENV
-      .aws_s3_bucket
-      .clone()
-      .clone()
-      .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_S3_BUCKET"))?;
+  pub fn new(opts: ArchiverOptions) -> Result<Self> {
+    let s3_bucket = opts.aws_s3_bucket;
     let s3_client = Arc::new({
       let provider = StaticProvider::new(
-        ENV
-          .aws_access_key_id
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_ACCESS_KEY_ID"))?,
-        ENV
-          .aws_secret_access_key
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?,
+        opts.aws_access_key_id,
+        opts.aws_secret_access_key,
         None,
         None,
       );
       let client = HttpClient::new().unwrap();
-      let region = ENV
+      let region = opts
         .aws_s3_region
-        .clone()
-        .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?
         .parse()
         .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
       S3Client::new_with(client, provider, region)
@@ -240,5 +221,35 @@ impl Fetcher {
       s3_bucket: s3_bucket.clone(),
       s3_client: s3_client.clone(),
     })
+  }
+
+  pub async fn fetch(&self, game_id: i32) -> Result<Bytes> {
+    use futures::StreamExt;
+    let res = self
+      .s3_client
+      .get_object(GetObjectRequest {
+        bucket: self.s3_bucket.clone(),
+        key: format!("{}", game_id),
+        ..Default::default()
+      })
+      .await?;
+    let mut chunks = if let Some(body) = res.body {
+      body
+        .collect::<Vec<Result<Bytes, _>>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+    } else {
+      return Ok(Bytes::new());
+    };
+    if chunks.len() == 1 {
+      Ok(chunks.remove(0))
+    } else {
+      let mut buf = BytesMut::new();
+      for chunk in chunks {
+        buf.put(chunk);
+      }
+      Ok(buf.freeze())
+    }
   }
 }

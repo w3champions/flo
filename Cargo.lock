@@ -190,7 +190,7 @@ checksum = "135713bf3439ac3325f29281fd88725a71f95dc621fd49b7f064333d099a5b35"
 dependencies = [
  "async-graphql",
  "async-trait",
- "axum 0.5.16",
+ "axum",
  "bytes",
  "futures-util",
  "http-body",
@@ -306,42 +306,12 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axum"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9f346c92c1e9a71d14fe4aaf7c2a5d9932cc4e5e48d8fb6641524416eb79ddd"
-dependencies = [
- "async-trait",
- "axum-core 0.1.2",
- "bitflags",
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "hyper",
- "matchit 0.4.6",
- "memchr",
- "mime",
- "percent-encoding",
- "pin-project-lite",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper",
- "tokio",
- "tower",
- "tower-http 0.2.5",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "axum"
 version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9e3356844c4d6a6d6467b8da2cffb4a2820be256f50a3a386c9d152bab31043"
 dependencies = [
  "async-trait",
- "axum-core 0.2.8",
+ "axum-core",
  "base64 0.13.0",
  "bitflags",
  "bytes",
@@ -351,7 +321,7 @@ dependencies = [
  "http-body",
  "hyper",
  "itoa 1.0.3",
- "matchit 0.5.0",
+ "matchit",
  "memchr",
  "mime",
  "percent-encoding",
@@ -367,20 +337,6 @@ dependencies = [
  "tower-http 0.3.4",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "axum-core"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dbcda393bef9c87572779cb8ef916f12d77750b27535dd6819fa86591627a51"
-dependencies = [
- "async-trait",
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "mime",
 ]
 
 [[package]]
@@ -1863,6 +1819,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "flo-observer-archiver"
+version = "0.1.0"
+dependencies = [
+ "backoff 0.4.0",
+ "bytes",
+ "futures 0.3.24",
+ "md5",
+ "rusoto_core",
+ "rusoto_s3",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "flo-observer-edge"
 version = "0.1.0"
 dependencies = [
@@ -1880,6 +1851,7 @@ dependencies = [
  "flo-log-subscriber",
  "flo-net",
  "flo-observer",
+ "flo-observer-archiver",
  "flo-observer-fs",
  "flo-state",
  "flo-types",
@@ -1887,10 +1859,7 @@ dependencies = [
  "flo-w3gs",
  "futures 0.3.24",
  "lru",
- "md5",
  "once_cell",
- "rusoto_core",
- "rusoto_s3",
  "s2-grpc-utils",
  "thiserror",
  "tokio",
@@ -1965,7 +1934,7 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "async-graphql-axum",
- "axum 0.4.8",
+ "axum",
  "dotenv",
  "flo-constants",
  "flo-log-subscriber",
@@ -3154,12 +3123,6 @@ checksum = "f099785f7595cc4b4553a174ce30dd7589ef93391ff414dbb67f62392b9e0ce1"
 dependencies = [
  "regex-automata",
 ]
-
-[[package]]
-name = "matchit"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9376a4f0340565ad675d11fc1419227faf5f60cd7ac9cb2e7185a471f30af833"
 
 [[package]]
 name = "matchit"
@@ -5270,7 +5233,6 @@ dependencies = [
  "http-body",
  "http-range-header",
  "pin-project-lite",
- "tower",
  "tower-layer",
  "tower-service",
 ]

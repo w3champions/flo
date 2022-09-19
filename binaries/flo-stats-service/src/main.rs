@@ -5,13 +5,12 @@ use crate::graphql::{FloLiveSchema, MutationRoot, QueryRoot, SubscriptionRoot};
 use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
 use async_graphql::Schema;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
-use axum::headers::HeaderValue;
 use axum::http::Method;
 use axum::response::{self, IntoResponse};
 use axum::routing::get;
-use axum::{extract, AddExtensionLayer, Router, Server};
+use axum::{extract, Extension, Router, Server};
 use flo_observer_edge::FloObserverEdge;
-use http::header::HeaderMap;
+use http::header::{HeaderMap, HeaderValue};
 use tower_http::cors::{CorsLayer, Origin};
 
 pub struct RequestData {
@@ -66,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let app = Router::new()
     .route("/", get(graphql_playground).post(graphql_handler))
     .route("/ws", GraphQLSubscription::new(schema.clone()))
-    .layer(AddExtensionLayer::new(schema))
+    .layer(Extension(schema))
     .layer({
       let allowed_list: [HeaderValue; 4] = [
         "http://localhost:3000".parse().unwrap(),
@@ -77,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       CorsLayer::new()
         .allow_origin(Origin::list(allowed_list))
         .allow_methods(vec![Method::POST])
-        .allow_headers(tower_http::cors::any())
+        .allow_headers(tower_http::cors::Any)
     });
 
   let bind = format!("0.0.0.0:{}", flo_constants::OBSERVER_GRAPHQL_PORT);

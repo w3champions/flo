@@ -1,4 +1,5 @@
-use crate::{controller::Controller, archiver::{ArchiverHandle}};
+use crate::controller::Controller;
+use flo_observer_archiver::ArchiverHandle;
 
 #[derive(Clone)]
 pub struct Services {
