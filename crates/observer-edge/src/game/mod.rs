@@ -5,16 +5,16 @@ pub mod stream;
 
 use self::snapshot::{GameSnapshot, GameSnapshotMap, GameSnapshotWithStats};
 use self::stats::GameStats;
-use crate::archiver::{Md5Writer, ArchiveInfo};
 use crate::error::{Error, Result};
 use crate::services::Services;
 use async_graphql::{Enum, SimpleObject};
-use bytes::{BytesMut, Bytes};
+use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, TimeZone, Utc};
 use flate2::write::GzEncoder;
 use flo_kinesis::iterator::GameChunk;
 use flo_net::observer::GameInfo;
 use flo_observer::record::{GameRecordData, RTTStats};
+use flo_observer_archiver::{ArchiveInfo, Md5Writer};
 use flo_w3gs::action::PlayerAction;
 use flo_w3gs::protocol;
 use flo_w3gs::protocol::constants::PacketTypeId;
@@ -59,7 +59,7 @@ impl GameHandler {
         span.in_scope(|| {
           tracing::error!("write archive header: {}", err);
         });
-        None  
+        None
       } else {
         Some(archive)
       }
@@ -196,7 +196,7 @@ impl GameHandler {
   pub fn make_archive(&mut self) -> Result<Option<ArchiveInfo>> {
     let archive = match self.archive.take() {
       Some(v) => v,
-      None => return Ok(None)
+      None => return Ok(None),
     };
 
     let w = archive.finish()?;

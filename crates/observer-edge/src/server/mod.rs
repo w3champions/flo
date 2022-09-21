@@ -127,7 +127,7 @@ impl Handler {
           patch: crate::version::FLO_OBSERVER_VERSION.patch,
         }),
         game: Some(game),
-        delay_secs: token.delay_secs.clone()
+        delay_secs: token.delay_secs.clone(),
       })
       .await?;
 

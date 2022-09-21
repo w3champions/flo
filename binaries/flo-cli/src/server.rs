@@ -42,6 +42,9 @@ pub enum Command {
     id: i32,
   },
   ListNodes,
+  GetGame {
+    id: i32,
+  },
 }
 
 impl Command {
@@ -126,6 +129,13 @@ impl Command {
       Command::ListNodes => {
         let res = client.list_nodes(()).await;
         tracing::info!("nodes: {:?}", res);
+      }
+      Command::GetGame { id } => {
+        let game = client
+          .clone()
+          .get_game(GetGameRequest { game_id: id })
+          .await?;
+        dbg!(game);
       }
     }
 

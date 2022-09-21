@@ -100,7 +100,7 @@ impl Default for GameVersion {
 
 #[test]
 fn test_header() {
-  let bytes = flo_util::sample_bytes!("replay", "1.w3g");
+  let bytes = flo_util::sample_bytes!("replay", "computers-gen.w3g");
   let mut buf = bytes.as_slice();
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);

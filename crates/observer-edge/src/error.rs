@@ -1,4 +1,3 @@
-use rusoto_core::RusotoError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -33,10 +32,8 @@ pub enum Error {
   Proto(#[from] s2_grpc_utils::result::Error),
   #[error("net: {0}")]
   Net(#[from] flo_net::error::Error),
-  #[error("get archived object: {0}")]
-  GetArchivedObject(#[from] RusotoError<rusoto_s3::GetObjectError>),
-  #[error("invalid S3 credentials: {0}")]
-  InvalidS3Credentials(&'static str),
+  #[error("observer archiver: {0}")]
+  ObserverArchiver(#[from] flo_observer_archiver::error::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

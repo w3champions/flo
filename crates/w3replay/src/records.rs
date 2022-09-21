@@ -222,6 +222,21 @@ pub struct GameInfo {
   pub language_id: u32,
 }
 
+impl GameInfo {
+  pub fn new(host_player_info: PlayerInfo, name: &str, game_settings: GameSettings) -> Self {
+    Self {
+      num_of_host_records: 1,
+      host_player_info,
+      game_name: name.into_c_string_lossy(),
+      _unk_1: 0,
+      game_settings,
+      player_count: 24,
+      game_flags: GameFlags::OBS_FULL,
+      language_id: 0,
+    }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq, Clone)]
 pub struct PlayerInfo {
   pub id: u8,
@@ -229,6 +244,17 @@ pub struct PlayerInfo {
   _size_of_additional_data: u8,
   #[bin(repeat = "_size_of_additional_data")]
   pub additional_data: Vec<u8>,
+}
+
+impl PlayerInfo {
+  pub fn new(id: u8, name: impl IntoCStringLossy) -> Self {
+    Self {
+      id,
+      name: name.into_c_string_lossy(),
+      _size_of_additional_data: 2,
+      additional_data: vec![0, 0],
+    }
+  }
 }
 
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
@@ -251,11 +277,29 @@ pub struct GameStart {
   pub unknown: u32,
 }
 
+impl Default for GameStart {
+  fn default() -> Self {
+    Self { unknown: 1 }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct CountDownStart(GameStart);
 
+impl Default for CountDownStart {
+  fn default() -> Self {
+    CountDownStart(GameStart::default())
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct CountDownEnd(GameStart);
+
+impl Default for CountDownEnd {
+  fn default() -> Self {
+    CountDownEnd(GameStart::default())
+  }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct TimeSlot {
@@ -394,6 +438,15 @@ pub struct TimeSlotAck {
   pub checksum: u32,
 }
 
+impl TimeSlotAck {
+  pub fn new(checksum: u32) -> Self {
+    Self {
+      _size_checksum: 4,
+      checksum,
+    }
+  }
+}
+
 #[derive(Debug, BinEncode, BinDecode, PartialEq)]
 pub struct EndTimer {
   pub over: bool,
@@ -465,24 +518,142 @@ fn test_record_iter() {
   let mut actions = 0;
   for record in iter {
     match record.unwrap() {
-        Record::TimeSlotFragment(_) => {
-          unreachable!()
-        },
-        Record::TimeSlot(slot) => {
-          for chunk in slot.actions {
-            for action in chunk.actions() {
-              if action.is_err() {
-                flo_util::dump_hex(&chunk.data);
-              }
-              let _action = action.unwrap();
-              actions += 1;
+      Record::TimeSlotFragment(_) => {
+        unreachable!()
+      }
+      Record::TimeSlot(slot) => {
+        for chunk in slot.actions {
+          for action in chunk.actions() {
+            if action.is_err() {
+              flo_util::dump_hex(&chunk.data);
             }
+            let _action = action.unwrap();
+            actions += 1;
           }
-        },
-        _ => {},
+        }
+      }
+      _ => {}
     }
     records = records + 1;
   }
   dbg!(records);
   dbg!(actions);
+}
+
+#[test]
+fn test_game_info() {
+  let bytes = flo_util::sample_bytes!("replay", "grubby_happy.w3g");
+  let mut buf = bytes.as_slice();
+  let header = crate::header::Header::decode(&mut buf).unwrap();
+
+  let mut rec_count = 0;
+  let blocks = crate::block::Blocks::from_buf(buf, header.num_blocks as usize);
+  let empty = Bytes::new();
+  let mut tail = empty.clone();
+  for (_i, block) in blocks.enumerate() {
+    let mut block = block.unwrap();
+    let mut buf = tail.chain(block.data.clone());
+    loop {
+      let pos = buf.remaining();
+
+      let r = crate::records::Record::decode(&mut buf);
+      match r {
+        Ok(rec) => {
+          match rec.type_id() {
+            RecordTypeId::TimeSlot | RecordTypeId::TimeSlotAck | RecordTypeId::TimeSlotFragment => {
+            }
+            _ => {
+              println!("#{}: {:?}", rec_count, rec.type_id());
+            }
+          }
+          rec_count = rec_count + 1;
+          match rec {
+            Record::GameInfo(gameinfo) => {
+              // dbg!(gameinfo);
+            }
+            Record::PlayerInfo(info) => {
+              dbg!(info);
+            }
+            Record::PlayerLeft(info) => {
+              dbg!(info);
+            }
+            // Record::SlotInfo(info) => {
+            //   dbg!(info);
+            // }
+            Record::CountDownStart(info) => {
+              // dbg!(info);
+            }
+            Record::CountDownEnd(info) => {
+              // dbg!(info);
+            }
+            Record::GameStart(info) => {
+              // dbg!(info);
+            }
+            // Record::TimeSlotFragment(_) => todo!(),
+            // Record::TimeSlot(_) => todo!(),
+            Record::ChatMessage(m) => {
+              // dbg!(m);
+            }
+            // Record::TimeSlotAck(_) => todo!(),
+            // Record::Desync(_) => todo!(),
+            // Record::EndTimer(_) => todo!(),
+            // Record::ProtoBuf(p) => {
+            //   match dbg!(p.message_type_id()) {
+            //     // flo_w3gs::constants::ProtoBufMessageTypeId::Unknown2 => todo!(),
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerProfile => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerProfileMessage>()
+            //         .map_err(|err| {
+            //           std::fs::write("1.bin", p.data).unwrap();
+            //           err
+            //         })
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerSkins => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerSkinsMessage>()
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerUnknown5 => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerUnknown5Message>()
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     // flo_w3gs::constants::ProtoBufMessageTypeId::UnknownValue(_) => todo!(),
+            //     _ => {}
+            //   }
+            // }
+            _ => {}
+          }
+        }
+        Err(e) => {
+          if e.is_incomplete() {
+            tail = block.data.split_off(block.data.len() - pos);
+            // flo_util::dump_hex(tail.as_ref());
+            break;
+          } else {
+            Err(e).unwrap()
+          }
+        }
+      }
+
+      match buf.peek_u8() {
+        Some(n) if n != 0 => {}
+        // end of block or 0 padding reached
+        _ => {
+          tail = empty.clone();
+          break;
+        }
+      }
+    }
+  }
+
+  if tail.len() > 0 {
+    panic!("extra bytes = {}", tail.len());
+  }
+
+  dbg!(rec_count);
 }

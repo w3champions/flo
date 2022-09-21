@@ -13,6 +13,7 @@ pub struct Env {
   pub aws_s3_bucket: Option<String>,
   pub aws_access_key_id: Option<String>,
   pub aws_secret_access_key: Option<String>,
+  pub admin_secret: Option<String>,
 }
 
 pub static ENV: Lazy<Env> = Lazy::new(|| {
@@ -32,5 +33,6 @@ pub static ENV: Lazy<Env> = Lazy::new(|| {
     aws_s3_bucket: env::var("AWS_S3_BUCKET").ok(),
     aws_access_key_id: env::var("AWS_ACCESS_KEY_ID").ok(),
     aws_secret_access_key: env::var("AWS_SECRET_ACCESS_KEY").ok(),
+    admin_secret: env::var("ADMIN_SECRET").ok(),
   }
 });

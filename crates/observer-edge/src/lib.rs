@@ -8,15 +8,15 @@ pub mod game;
 mod server;
 mod services;
 mod version;
-mod archiver;
 
-use crate::archiver::Archiver;
 use crate::broadcast::BroadcastReceiver;
+use crate::env::Env;
 use dispatcher::{
   AddIterator, Dispatcher, GetGame, ListGames, SubscribeGameListUpdate, SubscribeGameUpdate,
 };
 use error::Result;
 use flo_kinesis::{data_stream::DataStream, iterator::ShardIteratorType};
+use flo_observer_archiver::{Archiver, ArchiverOptions};
 use flo_state::{Actor, Addr, Owner};
 use game::event::{GameListUpdateEvent, GameUpdateEvent};
 use game::snapshot::{GameSnapshot, GameSnapshotWithStats};
@@ -33,13 +33,28 @@ pub struct FloObserverEdge {
 impl FloObserverEdge {
   pub async fn from_env() -> Result<Self> {
     let mut services = Services::from_env();
-    let archiver = if let Some((archiver, handle)) = Archiver::new()? {
-      services.archiver = Some(handle);
-      tracing::debug!("archiver enabled.");
-      Some(archiver)
-    } else {
-      tracing::debug!("archiver disabled.");
-      None
+    let archiver = match &*env::ENV {
+      Env {
+        aws_s3_bucket: Some(ref aws_s3_bucket),
+        aws_access_key_id: Some(ref aws_access_key_id),
+        aws_secret_access_key: Some(ref aws_secret_access_key),
+        aws_s3_region: Some(ref aws_s3_region),
+        ..
+      } => {
+        let opts = ArchiverOptions {
+          aws_s3_bucket: aws_s3_bucket.clone(),
+          aws_access_key_id: aws_access_key_id.clone(),
+          aws_secret_access_key: aws_secret_access_key.clone(),
+          aws_s3_region: aws_s3_region.clone(),
+        };
+        let (archiver, handle) = Archiver::new(opts)?;
+        services.archiver.replace(handle);
+        Some(archiver)
+      }
+      _ => {
+        tracing::debug!("archiver disabled.");
+        None
+      }
     };
     let dispatcher = Dispatcher::new(services).start();
 
@@ -78,9 +93,7 @@ impl FloObserverEdge {
         let f1 = self.stream_server.serve();
         let f2 = archiver.serve();
       };
-      let r = futures::future::select(
-        f1, f2
-      ).await;
+      let r = futures::future::select(f1, f2).await;
       match r {
         futures::future::Either::Left((r, _)) => r,
         futures::future::Either::Right((_, f)) => f.await,

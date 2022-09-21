@@ -234,8 +234,7 @@ where
   }
 
   fn finish_block(&mut self) -> Result<()> {
-    let w = std::mem::replace(&mut self.block_w, Self::make_writer())
-      .finish()?;
+    let w = std::mem::replace(&mut self.block_w, Self::make_writer()).flush_finish()?;
     let data_crc = w.crc().sum();
     let buf = w.into_inner();
 
@@ -268,7 +267,7 @@ where
   fn make_writer() -> ZlibEncoder<CrcWriter<Vec<u8>>> {
     ZlibEncoder::new(
       CrcWriter::new(Vec::with_capacity(SUPPORTED_BLOCK_SIZE)),
-      Compression::best(),
+      Compression::default(),
     )
   }
 }
@@ -283,7 +282,7 @@ pub struct Finished<W> {
 #[test]
 fn test_block() {
   use crate::header::Header;
-  let bytes = flo_util::sample_bytes!("replay", "16k.w3g");
+  let bytes = flo_util::sample_bytes!("replay", "3506801.w3g");
   let mut buf = bytes.as_slice();
   let header = Header::decode(&mut buf).unwrap();
   dbg!(&header);

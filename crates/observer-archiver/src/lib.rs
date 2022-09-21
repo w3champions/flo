@@ -1,12 +1,13 @@
-use crate::env::ENV;
-use crate::error::{Error, Result};
 use backoff::backoff::Backoff;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use rusoto_core::{credential::StaticProvider, request::HttpClient};
-use rusoto_s3::{S3Client, S3};
+use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+
+pub mod error;
+use crate::error::{Error, Result};
 
 pub struct Archiver {
   s3_bucket: String,
@@ -14,31 +15,26 @@ pub struct Archiver {
   rx: mpsc::Receiver<Msg>,
 }
 
+pub struct ArchiverOptions {
+  pub aws_s3_bucket: String,
+  pub aws_access_key_id: String,
+  pub aws_secret_access_key: String,
+  pub aws_s3_region: String,
+}
+
 impl Archiver {
-  pub fn new() -> Result<Option<(Self, ArchiverHandle)>> {
-    let s3_bucket = if let Some(value) = ENV.aws_s3_bucket.clone() {
-      value
-    } else {
-      return Ok(None);
-    };
+  pub fn new(opts: ArchiverOptions) -> Result<(Self, ArchiverHandle)> {
+    let s3_bucket = opts.aws_s3_bucket;
     let s3_client = Arc::new({
       let provider = StaticProvider::new(
-        ENV
-          .aws_access_key_id
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_ACCESS_KEY_ID"))?,
-        ENV
-          .aws_secret_access_key
-          .clone()
-          .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?,
+        opts.aws_access_key_id,
+        opts.aws_secret_access_key,
         None,
         None,
       );
       let client = HttpClient::new().unwrap();
-      let region = ENV
+      let region = opts
         .aws_s3_region
-        .clone()
-        .ok_or_else(|| Error::InvalidS3Credentials("missing env AWS_SECRET_ACCESS_KEY"))?
         .parse()
         .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
       S3Client::new_with(client, provider, region)
@@ -46,21 +42,18 @@ impl Archiver {
 
     let (tx, rx) = mpsc::channel(100);
 
-    Ok(
-      (
-        Self {
-          s3_bucket: s3_bucket.clone(),
-          s3_client: s3_client.clone(),
-          rx,
-        },
-        ArchiverHandle {
-          tx,
-          s3_bucket,
-          s3_client,
-        },
-      )
-        .into(),
-    )
+    Ok((
+      Self {
+        s3_bucket: s3_bucket.clone(),
+        s3_client: s3_client.clone(),
+        rx,
+      },
+      ArchiverHandle {
+        tx,
+        s3_bucket,
+        s3_client,
+      },
+    ))
   }
 
   pub async fn serve(self) {
@@ -117,8 +110,8 @@ impl Archiver {
           span.in_scope(|| {
             tracing::info!("uploaded: {} bytes", data.len());
           });
-          break
-        },
+          break;
+        }
         Err(RusotoError::HttpDispatch(err)) => {
           span.in_scope(|| {
             tracing::warn!("http: {}", err);
@@ -153,39 +146,6 @@ pub struct ArchiverHandle {
 impl ArchiverHandle {
   pub fn add_archive(&self, archive: ArchiveInfo) -> bool {
     self.tx.try_send(Msg::AddArchive(archive)).is_ok()
-  }
-
-  #[allow(unused)]
-  pub async fn fetch(&self, game_id: i32) -> Result<Option<Vec<Bytes>>> {
-    use futures::stream::StreamExt;
-    use rusoto_core::RusotoError;
-    use rusoto_s3::GetObjectError;
-    use rusoto_s3::GetObjectRequest;
-
-    let key = game_id.to_string();
-
-    let req = GetObjectRequest {
-      key: key.clone(),
-      bucket: self.s3_bucket.clone(),
-      ..Default::default()
-    };
-    let parts = match self.s3_client.get_object(req).await {
-      Ok(res) => {
-        if let Some(stream) = res.body {
-          stream
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?
-        } else {
-          return Ok(None);
-        }
-      }
-      Err(RusotoError::Service(GetObjectError::NoSuchKey(_))) => return Ok(None),
-      Err(err) => return Err(err.into()),
-    };
-
-    Ok(Some(parts))
   }
 }
 
@@ -231,5 +191,65 @@ impl<W: Write> Write for Md5Writer<W> {
 
   fn flush(&mut self) -> std::io::Result<()> {
     self.inner.flush()
+  }
+}
+
+pub struct Fetcher {
+  s3_bucket: String,
+  s3_client: Arc<S3Client>,
+}
+
+impl Fetcher {
+  pub fn new(opts: ArchiverOptions) -> Result<Self> {
+    let s3_bucket = opts.aws_s3_bucket;
+    let s3_client = Arc::new({
+      let provider = StaticProvider::new(
+        opts.aws_access_key_id,
+        opts.aws_secret_access_key,
+        None,
+        None,
+      );
+      let client = HttpClient::new().unwrap();
+      let region = opts
+        .aws_s3_region
+        .parse()
+        .map_err(|_| Error::InvalidS3Credentials("invalid env AWS_S3_REGION"))?;
+      S3Client::new_with(client, provider, region)
+    });
+
+    Ok(Self {
+      s3_bucket: s3_bucket.clone(),
+      s3_client: s3_client.clone(),
+    })
+  }
+
+  pub async fn fetch(&self, game_id: i32) -> Result<Bytes> {
+    use futures::StreamExt;
+    let res = self
+      .s3_client
+      .get_object(GetObjectRequest {
+        bucket: self.s3_bucket.clone(),
+        key: format!("{}", game_id),
+        ..Default::default()
+      })
+      .await?;
+    let mut chunks = if let Some(body) = res.body {
+      body
+        .collect::<Vec<Result<Bytes, _>>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+    } else {
+      return Ok(Bytes::new());
+    };
+    if chunks.len() == 1 {
+      Ok(chunks.remove(0))
+    } else {
+      let mut buf = BytesMut::new();
+      for chunk in chunks {
+        buf.put(chunk);
+      }
+      Ok(buf.freeze())
+    }
   }
 }

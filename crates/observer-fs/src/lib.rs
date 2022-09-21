@@ -279,9 +279,8 @@ pub struct GameDataArchiveReader {
 }
 
 impl GameDataArchiveReader {
-  pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-    let content = fs::read(path).await?;
-    let mut r = GzDecoder::new(Cursor::new(content));
+  pub async fn open_bytes(bytes: &[u8]) -> Result<Self> {
+    let mut r = GzDecoder::new(Cursor::new(bytes));
 
     let mut header_buf: [u8; FileHeader::MIN_SIZE] = [0; FileHeader::MIN_SIZE];
     r.read_exact(&mut header_buf)?;
@@ -294,6 +293,11 @@ impl GameDataArchiveReader {
     })?;
 
     Ok(Self { header, content })
+  }
+
+  pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+    let content = fs::read(path).await?;
+    Self::open_bytes(&content).await
   }
 
   pub fn game_id(&self) -> i32 {

@@ -14,7 +14,7 @@ tokio-stream = { version = "0.1.5", features = ["time"] }
 tracing = "0.1"
 async-graphql = "3.0.20"
 async-graphql-axum = "3.0.20"
-axum = "0.4"
+axum = "0.5"
 tower-http = { version = "0.2.0", features = ["cors"] }
 dotenv = "0.15"
 http = "0.2.8"

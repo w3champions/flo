@@ -5,7 +5,8 @@ use crate::protocol::constants::{PacketTypeId, ProtoBufMessageTypeId};
 use crate::protocol::join::ReqJoin;
 use crate::protocol::packet::{PacketPayload, PacketProtoBufMessage};
 pub use crate::protocol::protobuf::{
-  PlayerProfileMessage, PlayerProfileRealm, PlayerSkin, PlayerSkinsMessage, PlayerUnknown5Message,
+  PlayerProfileListMessage, PlayerProfileMessage, PlayerProfileRealm, PlayerSkin,
+  PlayerSkinsMessage, PlayerUnknown5Message,
 };
 
 #[derive(Debug, BinDecode, BinEncode, PartialEq)]
@@ -69,6 +70,10 @@ impl PlayerProfileMessage {
 }
 
 impl PacketProtoBufMessage for PlayerProfileMessage {
+  const MESSAGE_TYPE_ID: ProtoBufMessageTypeId = ProtoBufMessageTypeId::PlayerProfile;
+}
+
+impl PacketProtoBufMessage for PlayerProfileListMessage {
   const MESSAGE_TYPE_ID: ProtoBufMessageTypeId = ProtoBufMessageTypeId::PlayerProfile;
 }
 

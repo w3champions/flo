@@ -1,0 +1,15 @@
+[package]
+name = "flo-replay"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flo-net = { path = "../net" }
+flo-w3gs = { path = "../w3gs" }
+flo-types = { path = "../types" }
+flo-w3replay = { path = "../w3replay" }
+flo-observer = { path = "../observer" }
+flo-observer-fs = { path = "../observer-fs" }
+bytes = "1.1.0"
+thiserror = "1.0"
+tracing = "0.1"

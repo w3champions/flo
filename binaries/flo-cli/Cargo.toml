@@ -7,6 +7,8 @@ edition = "2018"
 [dependencies]
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-controller = { path = "../../crates/controller" }
+flo-observer-edge = { path = "../../crates/observer-edge" }
+flo-observer-archiver = { path = "../../crates/observer-archiver" }
 flo-net = { path = "../../crates/net" }
 flo-lan = { path = "../../crates/lan" }
 flo-grpc = { path = "../../deps/flo-grpc" }
@@ -18,6 +20,10 @@ flo-debug = { path = "../../crates/debug" }
 flo-observer = { path = "../../crates/observer" }
 flo-observer-fs = { path = "../../crates/observer-fs" }
 flo-kinesis = { path = "../../crates/kinesis" }
+flo-w3replay = { path = "../../crates/w3replay" }
+flo-util = { path = "../../crates/util" }
+flo-types = { path = "../../crates/types" }
+flo-replay = { path = "../../crates/replay" }
 
 anyhow = "1"
 tonic = "0.6"
@@ -35,4 +41,4 @@ futures = "0.3.19"
 serde_json = "1"
 once_cell = "1.7"
 bytes = "1.1.0"
-
+s2-grpc-utils = "0.2"

@@ -421,10 +421,8 @@ fn test_open_storage_with_checksum() {
 
 #[test]
 fn test_open_map_special() {
-  let map = W3Map::open(flo_util::sample_path!(
-    "map",
-    "Frostcraft Classic v2.00a_wc3_champions.w3x"
-  ))
-  .unwrap();
-  dbg!(map.flags());
+  let map =
+    crate::W3Map::open_with_checksum(flo_util::sample_path!("map", "(2)bootybay-133ptr.w3m"))
+      .unwrap();
+  dbg!(map.1.xoro);
 }
