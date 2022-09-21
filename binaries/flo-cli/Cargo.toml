@@ -23,6 +23,7 @@ flo-kinesis = { path = "../../crates/kinesis" }
 flo-w3replay = { path = "../../crates/w3replay" }
 flo-util = { path = "../../crates/util" }
 flo-types = { path = "../../crates/types" }
+flo-replay = { path = "../../crates/replay" }
 
 anyhow = "1"
 tonic = "0.6"

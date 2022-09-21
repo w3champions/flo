@@ -1485,6 +1485,7 @@ dependencies = [
  "flo-observer-archiver",
  "flo-observer-edge",
  "flo-observer-fs",
+ "flo-replay",
  "flo-types",
  "flo-util",
  "flo-w3gs",
@@ -1915,6 +1916,21 @@ dependencies = [
  "tracing",
  "widestring",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "flo-replay"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "flo-net",
+ "flo-observer",
+ "flo-observer-fs",
+ "flo-types",
+ "flo-w3gs",
+ "flo-w3replay",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]

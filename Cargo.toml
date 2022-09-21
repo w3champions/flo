@@ -23,6 +23,7 @@ members = [
   "crates/observer-fs",
   "crates/observer-archiver",
   "crates/kinesis",
+  "crates/replay",
 
   "crates/controller",
   "crates/node",

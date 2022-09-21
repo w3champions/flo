@@ -542,7 +542,7 @@ fn test_record_iter() {
 
 #[test]
 fn test_game_info() {
-  let bytes = flo_util::sample_bytes!("replay", "3506801.w3g");
+  let bytes = flo_util::sample_bytes!("replay", "grubby_happy.w3g");
   let mut buf = bytes.as_slice();
   let header = crate::header::Header::decode(&mut buf).unwrap();
 
@@ -569,63 +569,63 @@ fn test_game_info() {
           rec_count = rec_count + 1;
           match rec {
             Record::GameInfo(gameinfo) => {
-              dbg!(gameinfo);
+              // dbg!(gameinfo);
             }
             Record::PlayerInfo(info) => {
               dbg!(info);
             }
-            Record::PlayerLeft(_info) => {
-              // dbg!(info);
+            Record::PlayerLeft(info) => {
+              dbg!(info);
             }
             // Record::SlotInfo(info) => {
             //   dbg!(info);
             // }
             Record::CountDownStart(info) => {
-              dbg!(info);
+              // dbg!(info);
             }
             Record::CountDownEnd(info) => {
-              dbg!(info);
+              // dbg!(info);
             }
             Record::GameStart(info) => {
-              dbg!(info);
+              // dbg!(info);
             }
             // Record::TimeSlotFragment(_) => todo!(),
             // Record::TimeSlot(_) => todo!(),
             Record::ChatMessage(m) => {
-              dbg!(m);
+              // dbg!(m);
             }
             // Record::TimeSlotAck(_) => todo!(),
             // Record::Desync(_) => todo!(),
             // Record::EndTimer(_) => todo!(),
-            Record::ProtoBuf(p) => {
-              match dbg!(p.message_type_id()) {
-                // flo_w3gs::constants::ProtoBufMessageTypeId::Unknown2 => todo!(),
-                flo_w3gs::constants::ProtoBufMessageTypeId::PlayerProfile => {
-                  let m = p
-                    .decode_message::<flo_w3gs::player::PlayerProfileMessage>()
-                    .map_err(|err| {
-                      std::fs::write("1.bin", p.data).unwrap();
-                      err
-                    })
-                    .unwrap();
-                  dbg!(m);
-                }
-                flo_w3gs::constants::ProtoBufMessageTypeId::PlayerSkins => {
-                  let m = p
-                    .decode_message::<flo_w3gs::player::PlayerSkinsMessage>()
-                    .unwrap();
-                  dbg!(m);
-                }
-                flo_w3gs::constants::ProtoBufMessageTypeId::PlayerUnknown5 => {
-                  let m = p
-                    .decode_message::<flo_w3gs::player::PlayerUnknown5Message>()
-                    .unwrap();
-                  dbg!(m);
-                }
-                // flo_w3gs::constants::ProtoBufMessageTypeId::UnknownValue(_) => todo!(),
-                _ => {}
-              }
-            }
+            // Record::ProtoBuf(p) => {
+            //   match dbg!(p.message_type_id()) {
+            //     // flo_w3gs::constants::ProtoBufMessageTypeId::Unknown2 => todo!(),
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerProfile => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerProfileMessage>()
+            //         .map_err(|err| {
+            //           std::fs::write("1.bin", p.data).unwrap();
+            //           err
+            //         })
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerSkins => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerSkinsMessage>()
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     flo_w3gs::constants::ProtoBufMessageTypeId::PlayerUnknown5 => {
+            //       let m = p
+            //         .decode_message::<flo_w3gs::player::PlayerUnknown5Message>()
+            //         .unwrap();
+            //       dbg!(m);
+            //     }
+            //     // flo_w3gs::constants::ProtoBufMessageTypeId::UnknownValue(_) => todo!(),
+            //     _ => {}
+            //   }
+            // }
             _ => {}
           }
         }
