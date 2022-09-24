@@ -1,6 +1,11 @@
 # Overview
 
-FLO is a Warcraft III server implementation written in Rust.
+FLO is a Warcraft III toolkit written in Rust:
+
+- Warcraft III server implementation with reconnect, artificial delay, live streaming, and many other features
+- Containerized-micro services for easy-to-use server-side API and rapid nodes deployment
+- Cross-platform client-side application to run internet games through LAN emulation
+- Libraries, for example, W3GS protocol parsing, map file parsing, replay parsing/generating, and LAN game creation
 
 ## Build
 
