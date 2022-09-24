@@ -12,8 +12,8 @@ flo-log-subscriber = { path = "../../crates/log-subscriber" }
 tokio = { version = "1.15.0", features = ["time", "sync", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.5", features = ["time"] }
 tracing = "0.1"
-async-graphql = "3.0.20"
-async-graphql-axum = "3.0.20"
+async-graphql = "4.0.13"
+async-graphql-axum = "4.0.13"
 axum = "0.5"
 tower-http = { version = "0.2.0", features = ["cors"] }
 dotenv = "0.15"
