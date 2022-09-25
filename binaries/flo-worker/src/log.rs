@@ -38,4 +38,43 @@ pub fn init(debug: bool) {
     .with_writer(non_blocking)
     .with_ansi(false)
     .init();
+
+  tokio::spawn(async {
+    start_log_vacuum("flo-logs").await.map_err(|err| {
+      tracing::error!("log_vacuum: {}", err);
+    })
+  });
+}
+
+#[cfg(not(debug_assertions))]
+async fn start_log_vacuum(path: &str) -> anyhow::Result<()> {
+  use std::time::{Duration, SystemTime};
+  use tokio::fs;
+
+  const MAX_RETENTION: Duration = Duration::from_secs(3 * 3600 * 24);
+  const RUN_INTERVAL: Duration = Duration::from_secs(3600);
+
+  loop {
+    let mut dir = fs::read_dir(path).await?;
+    while let Some(entry) = dir.next_entry().await? {
+      if let Ok(meta) = entry.metadata().await {
+        if let Ok(created) = meta.created() {
+          if let Ok(d) = SystemTime::now().duration_since(created) {
+            if d > MAX_RETENTION {
+              fs::remove_file(entry.path()).await.ok();
+            }
+          }
+        }
+      }
+    }
+    tokio::time::sleep(RUN_INTERVAL).await;
+  }
+}
+
+#[cfg(not(debug_assertions))]
+#[tokio::test]
+async fn test_log_vacuum() {
+  start_log_vacuum("/Applications/w3champions.app/Contents/Resources/app.asar.unpacked/flo-logs")
+    .await
+    .unwrap();
 }
