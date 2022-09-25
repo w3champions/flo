@@ -244,7 +244,7 @@ impl Handler<PingReply> for PingCollectActor {
     let batch_id = bytes[1];
 
     if batch_id != self.batch_id {
-      tracing::warn!(
+      tracing::debug!(
         address = self.address_str(),
         "ping reply discarded: seq = {}, batch_id = {}, expected_batch_id = {}",
         seq,
@@ -261,7 +261,7 @@ impl Handler<PingReply> for PingCollectActor {
     let seq_max = (PACKETS as u8) - 1;
 
     if seq > seq_max {
-      tracing::warn!(
+      tracing::debug!(
         address = self.address_str(),
         "received out of range seq: {}",
         seq
