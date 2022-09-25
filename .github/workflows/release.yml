@@ -61,7 +61,8 @@ jobs:
       - name: Archive
         if: ${{ runner.os == 'Windows' }}
         run: |
-          7z a target\release\${{ steps.vars.outputs.release_file_name }} target\release\flo-worker.exe target\release\flo-ping.exe
+          cd target\release
+          7z a ${{ steps.vars.outputs.release_file_name }} flo-worker.exe flo-ping.exe
 
       - uses: actions/upload-artifact@v2
         with:
