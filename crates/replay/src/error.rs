@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("Game has no player")]
+  GameHasNoPlayer,
   #[error("flo observer slot occupied")]
   FloObserverSlotOccupied,
   #[error("w3gs: {0}")]

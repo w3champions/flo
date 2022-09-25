@@ -48,7 +48,7 @@ where
       let name = slot.player.as_ref().map(|p| p.name.clone())?;
       Some((PlayerInfo::new(index_to_player_id(*i), &name), name))
     })
-    .unwrap();
+    .ok_or_else(|| Error::GameHasNoPlayer)?;
   let first_player_id = first_player_info.id;
 
   let game_info = GameInfo::new(
@@ -261,12 +261,14 @@ where
           active_player_ids.retain(|id| *id != payload.player_id);
         }
         W3GSPacketTypeId::ChatFromHost => {
-          let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
-          if include_chats && payload.0.to_players.contains(&FLO_PLAYER_ID) {
-            records.push(Record::ChatMessage(PlayerChatMessage {
-              player_id: payload.from_player(),
-              message: payload.0.message,
-            }));
+          if include_chats {
+            let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
+            if payload.0.to_players.contains(&FLO_PLAYER_ID) {
+              records.push(Record::ChatMessage(PlayerChatMessage {
+                player_id: payload.from_player(),
+                message: payload.0.message,
+              }));
+            }
           }
         }
         W3GSPacketTypeId::IncomingAction => {
