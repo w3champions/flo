@@ -38,16 +38,10 @@ pub fn init(debug: bool) {
     .with_writer(non_blocking)
     .with_ansi(false)
     .init();
-
-  tokio::spawn(async {
-    start_log_vacuum("flo-logs").await.map_err(|err| {
-      tracing::error!("log_vacuum: {}", err);
-    })
-  });
 }
 
 #[cfg(not(debug_assertions))]
-async fn start_log_vacuum(path: &str) -> anyhow::Result<()> {
+pub async fn start_log_vacuum(path: &str) -> anyhow::Result<()> {
   use std::time::{Duration, SystemTime};
   use tokio::fs;
 

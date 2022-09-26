@@ -61,6 +61,13 @@ fn main() {
 
   match res {
     Ok((port, rt)) => {
+      #[cfg(not(debug_assertions))]
+      rt.spawn(async {
+        log::start_log_vacuum("flo-logs").await.map_err(|err| {
+          tracing::error!("log_vacuum: {}", err);
+        })
+      });
+
       let msg = serde_json::to_string(&serde_json::json!({
         "version": flo_client::FLO_VERSION.to_string(),
         "port": port
