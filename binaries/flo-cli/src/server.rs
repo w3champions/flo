@@ -1,4 +1,5 @@
 use flo_grpc::controller::*;
+use flo_grpc::player::PlayerSource;
 use structopt::StructOpt;
 
 use crate::game::{
@@ -6,7 +7,6 @@ use crate::game::{
 };
 use crate::grpc::get_grpc_client;
 use crate::Result;
-use flo_controller::player::PlayerSource;
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
@@ -45,6 +45,9 @@ pub enum Command {
   GetGame {
     id: i32,
   },
+  GetPlayerPingByName {
+    name: String,
+  }
 }
 
 impl Command {
@@ -136,6 +139,39 @@ impl Command {
           .get_game(GetGameRequest { game_id: id })
           .await?;
         dbg!(game);
+      }
+      Command::GetPlayerPingByName { name } => {
+        let nodes = client.list_nodes(()).await?.into_inner().nodes;
+        let reply = client.get_players_by_source_ids(
+          GetPlayersBySourceIdsRequest {
+            source: PlayerSource::Api.into(),
+            source_ids: vec![ name.clone() ],
+          }
+        ).await?.into_inner();
+        let player = reply.player_map.get(&name).unwrap();
+        tracing::info!("player_id = {}", player.id);
+        let reply = client.get_player_ping_maps(
+          GetPlayerPingMapsRequest {
+            ids: vec![player.id]
+          }
+        ).await?.into_inner();
+        let map = reply.ping_maps.iter().find(|m| m.player_id == player.id).expect("player ping map not available");
+        for node in nodes {
+          if let Some(stats) = map.ping_map.get(&node.id) {
+            println!(
+              "{node}: current = {current:?}, avg = {avg:?}, min = {min:?}, max = {max:?}, loss_rate = {loss_rate:?}",
+              node = node.name,
+              current = stats.current,
+              avg = stats.avg,
+              min = stats.min,
+              max = stats.max,
+              loss_rate = stats.loss_rate,
+            );
+          } else {
+            println!("{node}: N/A", node = node.name);
+          }
+          
+        }
       }
     }
 
