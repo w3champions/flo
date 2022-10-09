@@ -17,8 +17,61 @@ FLO is a Warcraft III toolkit written in Rust:
 
 ```
 git submodule update --init --recursive
-cargo build --all
 ```
+
+### Setup Local Development Environment
+
+#### Create a .env file:
+```
+RUST_LOG=debug
+DATABASE_URL=postgres://postgres:postgres@localhost/flo
+FLO_CONTROLLER_SECRET='1111'
+FLO_NODE_SECRET='1111'
+JWT_SECRET_BASE64=MTExMQ==
+```
+
+#### Run migration to create db schema
+
+```
+diesel migration run
+```
+
+#### Add an API client
+Insert a row into `api_client` table with secret = `1111` (Corresponds to the values in above .env file)
+
+#### Add Players
+Insert 2 rows into `player` table with `source_id` = `0` and `api_client_id` equals to the API client id you created in the previous step.
+Assuming added player ids are `1` and `2`
+
+#### Add Node
+Insert a row into `node` with `secret` = `1111` (Corresponds to the values in above .env file)
+
+#### Start Node & Controller
+```
+cargo run -p flo-node-service
+cargo run -p flo-controller-service
+```
+
+#### Start 2 Clients
+```
+# for player 1
+cargo run -p flo-cli -- client 1 connect
+
+# for player 2
+cargo run -p flo-cli -- client 2 connect
+```
+
+#### Create a test game and invite player 1 & 2 to join 
+
+```
+cargo run -p flo-cli -- server run-game 1 2
+```
+
+#### Join the game using LOCAL AREA NETWORK
+
+You will see 2 games correspond to the 2 players
+
+Open 2 Warcraft III to join both games and the game will start.
 
 ## Credits
 
