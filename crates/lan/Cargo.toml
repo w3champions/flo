@@ -13,11 +13,11 @@ flo-w3storage = { path = "../w3storage" }
 flo-w3replay = { path = "../w3replay" }
 flo-platform = { path = "../platform" }
 
-tokio = { version = "1.15.0", features = ["time", "sync", "macros"] }
-tokio-stream = { version = "0.1.5", features = ["time"] }
+tokio = { version = "1.21.2", features = ["time", "sync", "macros"] }
+tokio-stream = { version = "0.1.10", features = ["time"] }
 hostname = "^0.3"
 pretty-hex = "0.1"
-bytes = "1.1.0"
+bytes = "1.2.1"
 prost = "0.9"
 base64 = "0.12"
 thiserror = "1"
@@ -25,7 +25,7 @@ lazy_static = "1"
 parking_lot = "0.11"
 tracing = "0.1"
 tracing-futures = "0.2"
-futures = "0.3.19"
+futures = "0.3.24"
 async-dnssd = "0.5.0"
 
 [build-dependencies]

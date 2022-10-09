@@ -16,7 +16,7 @@ winapi = { version = "0.3", features = ["processthreadsapi", "shlobj", "knownfol
 widestring = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-plist = "1.0"
+plist = "1.3"
 home-dir = "0.1"
 
 [build-dependencies]
