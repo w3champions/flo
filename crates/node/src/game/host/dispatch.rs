@@ -1707,21 +1707,8 @@ impl PeerWorker {
           match next {
             Ok(frame) => {
               match frame.type_id {
-                PingStream::PONG_TYPE_ID => {
-                  if ping.started() {
-                    if let Some(rtt) = ping.capture_pong(frame) {
-                      if self.dispatcher_tx.send(PeerMsg::Pong {
-                        player_id,
-                        rtt
-                      }).await.is_err() {
-                        break;
-                      }
-                    }
-                  }
-                  continue;
-                },
                 PacketTypeId::ClientShutdown => {
-                  self.shutdown(player_id, None).await;
+                  self.shutdown(&mut ping, player_id, None).await;
                   break;
                 },
                 PacketTypeId::W3GS if frame.payload.w3gs_type_id() == Some(W3GSPacketTypeId::LeaveReq) => {
@@ -1733,9 +1720,24 @@ impl PeerWorker {
                     "leave reason: {:?}",
                     req.reason()
                   );
-                  self.shutdown(player_id, Some(req.reason())).await;
+                  self.shutdown(&mut ping, player_id, Some(req.reason())).await;
                   break;
                 }
+                PingStream::PONG_TYPE_ID => {
+                  if !self.delay.enabled() {
+                    if ping.started() {
+                      if let Some(rtt) = ping.capture_pong(frame) {
+                        if self.dispatcher_tx.send(PeerMsg::Pong {
+                          player_id,
+                          rtt
+                        }).await.is_err() {
+                          break;
+                        }
+                      }
+                    }
+                    continue;
+                  }
+                },
                 _ => {}
               }
 
@@ -1774,7 +1776,7 @@ impl PeerWorker {
                 self.delay.remove_delay()
               };
               if let Some(frames) = expired {
-                self.dispatch_delayed(player_id, &frames).await?;
+                self.dispatch_delayed(&mut ping, player_id, &frames).await?;
               }
             }
             PlayerStreamCmd::SetBlock(duration) => {
@@ -1788,13 +1790,17 @@ impl PeerWorker {
           }
         }
         _ = self.delay.recv_expired(&mut delay_buf), if self.delay.enabled() => {
-          self.dispatch_delayed(player_id, &delay_buf).await?;
+          self.dispatch_delayed(&mut ping, player_id, &delay_buf).await?;
           delay_buf.clear();
         }
         Some(next) = ping.next(), if ping.started() => {
           match next {
             PingMsg::Ping(frame) => {
-              self.stream.get_mut().send_frame(frame).await?;
+              if self.delay.enabled() {
+                self.delay.insert(DelayedFrame::Out(frame));
+              } else {
+                self.stream.get_mut().send_frame(frame).await?;
+              }
             },
             PingMsg::Timeout => {
               tracing::info!(
@@ -1812,7 +1818,12 @@ impl PeerWorker {
     Ok(())
   }
 
-  async fn shutdown(&mut self, player_id: i32, leave_reason: Option<LeaveReason>) {
+  async fn shutdown(
+    &mut self,
+    ping: &mut PingStream,
+    player_id: i32,
+    leave_reason: Option<LeaveReason>,
+  ) {
     if self.shutdown {
       return;
     }
@@ -1829,7 +1840,7 @@ impl PeerWorker {
             }
           })
           .collect::<Vec<_>>();
-        let res = self.dispatch_delayed(player_id, &in_frames).await;
+        let res = self.dispatch_delayed(ping, player_id, &in_frames).await;
         if let Err(err) = res {
           tracing::error!(
             game_id = self.game_id,
@@ -1863,7 +1874,12 @@ impl PeerWorker {
       .ok();
   }
 
-  async fn dispatch_delayed<'a, I>(&mut self, player_id: i32, frames: I) -> Result<()>
+  async fn dispatch_delayed<'a, I>(
+    &mut self,
+    ping: &mut PingStream,
+    player_id: i32,
+    frames: I,
+  ) -> Result<()>
   where
     I: IntoIterator<Item = &'a DelayedFrame>,
   {
@@ -1873,6 +1889,19 @@ impl PeerWorker {
     for frame in iter {
       match frame {
         DelayedFrame::In(frame) => {
+          if frame.type_id == PingStream::PONG_TYPE_ID {
+            if ping.started() {
+              if let Some(rtt) = ping.capture_pong(frame.clone()) {
+                self
+                  .dispatcher_tx
+                  .send(PeerMsg::Pong { player_id, rtt })
+                  .await
+                  .ok();
+              }
+              continue;
+            }
+          }
+
           let msg = PeerMsg::Incoming {
             player_id,
             frame: frame.clone(),
