@@ -36,6 +36,10 @@ impl MutationRoot {
     let game = handle.get_game(game_id).await?;
     let data: &RequestData = ctx.data()?;
 
+    if game.is_private && !data.is_admin {
+      return Err(Error::new("Can not stream a private game."));
+    }
+
     let delay_secs = if let Some(value) = delay_secs {
       if data.is_admin {
         value as i64

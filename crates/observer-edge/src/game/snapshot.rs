@@ -142,6 +142,7 @@ pub struct GameSnapshot {
   pub random_seed: i32,
   pub game_version: Option<String>,
   pub mask_player_names: bool,
+  pub is_private: bool,
 }
 
 impl GameSnapshot {
@@ -180,6 +181,7 @@ impl GameSnapshot {
       random_seed: game.random_seed,
       game_version: game.game_version.clone(),
       mask_player_names: game.mask_player_names,
+      is_private: game.is_private,
     }
   }
 }

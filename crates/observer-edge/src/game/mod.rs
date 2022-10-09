@@ -492,6 +492,7 @@ pub struct Game {
   pub random_seed: i32,
   pub game_version: Option<String>,
   pub mask_player_names: bool,
+  pub is_private: bool,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]
