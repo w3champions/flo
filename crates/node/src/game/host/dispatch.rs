@@ -678,10 +678,10 @@ impl State {
     let mut shared = self.shared.lock();
     let delay = if shared.delay_equalizer.is_some() {
       if shared.active_players.contains(&player_id) {
-        shared.delay_equalizer.as_mut().and_then(|de| {
-          tracing::debug!(player_id, "delay_equalizer insert: {}", rtt);
-          de.insert_rtt(player_id, rtt)
-        })
+        shared
+          .delay_equalizer
+          .as_mut()
+          .and_then(|de| de.insert_rtt(player_id, rtt))
       } else {
         None
       }
@@ -932,6 +932,13 @@ impl State {
 
           if ms == 0 {
             let mut guard = self.shared.lock();
+            if !debug && guard.delay_equalizer.is_some() {
+              self.shared.lock().private_message(
+                player_id,
+                format!("Cannot set delay because ping equalizer is enabled"),
+              );
+              return Ok(true);
+            }
             match guard
               .get_player(player_id)
               .map(|player| -> Result<_> {
