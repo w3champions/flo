@@ -1,12 +1,12 @@
-use std::collections::BTreeMap;
-use chrono::{DateTime, Utc};
-use async_graphql::SimpleObject;
-use super::stats::{PingStats, ActionStats, GameStatsSnapshot};
 use super::event::*;
+use super::stats::{ActionStats, GameStatsSnapshot, PingStats};
+use super::{Game, Race};
 use super::{GameMeta, PlayerLeaveReason};
-use super::{Race, Game};
-use crate::error::{Result, Error};
-use crate::broadcast::{BroadcastSender, BroadcastReceiver};
+use crate::broadcast::{BroadcastReceiver, BroadcastSender};
+use crate::error::{Error, Result};
+use async_graphql::SimpleObject;
+use chrono::{DateTime, Utc};
+use std::collections::BTreeMap;
 
 pub struct GameSnapshotMap {
   map: BTreeMap<i32, GameSnapshot>,
@@ -24,7 +24,11 @@ impl GameSnapshotMap {
   }
 
   pub fn get_snapshot(&self, game_id: i32) -> Result<GameSnapshot> {
-    self.map.get(&game_id).cloned().ok_or_else(|| Error::GameNotFound(game_id))
+    self
+      .map
+      .get(&game_id)
+      .cloned()
+      .ok_or_else(|| Error::GameNotFound(game_id))
   }
 
   pub fn list_snapshots(&self) -> Vec<GameSnapshot> {
@@ -42,10 +46,15 @@ impl GameSnapshotMap {
         g.ended_at = Some(ended_at);
       }
       self.send_game_list_update_event(|| GameListUpdateEvent::ended(meta.id, ended_at));
-      self.send_game_update_event(meta.id, || GameUpdateEvent::ended(meta.id, GameUpdateEventDataEnded {
-        ended_at,
-        duration_millis: duration.as_millis() as i64,
-      }))
+      self.send_game_update_event(meta.id, || {
+        GameUpdateEvent::ended(
+          meta.id,
+          GameUpdateEventDataEnded {
+            ended_at,
+            duration_millis: duration.as_millis() as i64,
+          },
+        )
+      })
     }
   }
 
@@ -53,38 +62,42 @@ impl GameSnapshotMap {
     self.send_game_list_update_event(|| GameListUpdateEvent::removed(game_id));
     self.tx_map_game_update.remove(&game_id);
     if let Some(snapshot) = self.map.remove(&game_id) {
-      self.send_game_update_event(game_id, || {
-        GameUpdateEvent::removed(snapshot)
-      })
+      self.send_game_update_event(game_id, || GameUpdateEvent::removed(snapshot))
     }
   }
 
   pub fn insert_game_rtt_stats(&mut self, game_id: i32, item: PingStats) {
-    self.send_game_update_event(game_id, || {
-      GameUpdateEvent::ping_stats(game_id, item)
-    })
+    self.send_game_update_event(game_id, || GameUpdateEvent::ping_stats(game_id, item))
   }
 
   pub fn insert_game_action_stats(&mut self, game_id: i32, item: ActionStats) {
-    self.send_game_update_event(game_id, || {
-      GameUpdateEvent::action_stats(game_id, item)
-    })
+    self.send_game_update_event(game_id, || GameUpdateEvent::action_stats(game_id, item))
   }
 
-  pub fn insert_game_player_left(&mut self, game_id: i32, time: u32, player_id: i32, reason: PlayerLeaveReason) {
+  pub fn insert_game_player_left(
+    &mut self,
+    game_id: i32,
+    time: u32,
+    player_id: i32,
+    reason: PlayerLeaveReason,
+  ) {
     self.send_game_update_event(game_id, || {
       GameUpdateEvent::player_left(game_id, time, player_id, reason)
     })
   }
 
   pub fn subscribe_game_updates(&mut self, game_id: i32) -> BroadcastReceiver<GameUpdateEvent> {
-    match self.tx_map_game_update.get(&game_id).map(|tx| tx.subscribe()) {
+    match self
+      .tx_map_game_update
+      .get(&game_id)
+      .map(|tx| tx.subscribe())
+    {
       Some(rx) => rx,
       None => {
         let (tx, rx) = BroadcastSender::channel();
         self.tx_map_game_update.insert(game_id, tx);
         rx
-      },
+      }
     }
   }
 
@@ -95,12 +108,13 @@ impl GameSnapshotMap {
         let (tx, rx) = BroadcastSender::channel();
         self.tx_list.replace(tx);
         rx
-      },
+      }
     }
   }
 
   fn send_game_list_update_event<F>(&mut self, f: F)
-  where F: FnOnce() -> GameListUpdateEvent
+  where
+    F: FnOnce() -> GameListUpdateEvent,
   {
     let mut should_remove_tx = false;
     if let Some(tx) = self.tx_list.as_ref() {
@@ -112,8 +126,9 @@ impl GameSnapshotMap {
     }
   }
 
-  fn send_game_update_event<F>(&mut self, game_id: i32, f: F) 
-  where F: FnOnce() -> GameUpdateEvent
+  fn send_game_update_event<F>(&mut self, game_id: i32, f: F)
+  where
+    F: FnOnce() -> GameUpdateEvent,
   {
     let mut should_remove_tx = false;
     if let Some(tx) = self.tx_map_game_update.get(&game_id) {
@@ -147,25 +162,30 @@ pub struct GameSnapshot {
 
 impl GameSnapshot {
   pub fn new(meta: &GameMeta, game: &Game) -> Self {
-    let players = game.slots.iter().enumerate().filter_map(|(i, slot)| {
-      if let Some(ref player) = slot.player {
-        let left = meta.player_left_reason_map.get(&player.id);
-        Some(Player {
-          id: player.id,
-          name: if game.mask_player_names {
-            format!("Player {}", i + 1)
-          } else {
-            player.name.clone()
-          },
-          race: slot.settings.race,
-          team: slot.settings.team,
-          left_at: left.as_ref().map(|(time, _)| *time),
-          leave_reason: left.as_ref().map(|(_, reason)| *reason),
-        })
-      } else {
-        None
-      }
-    }).collect();
+    let players = game
+      .slots
+      .iter()
+      .enumerate()
+      .filter_map(|(i, slot)| {
+        if let Some(ref player) = slot.player {
+          let left = meta.player_left_reason_map.get(&player.id);
+          Some(Player {
+            id: player.id,
+            name: if game.mask_player_names {
+              format!("Player {}", i + 1)
+            } else {
+              player.name.clone()
+            },
+            race: slot.settings.race,
+            team: slot.settings.team,
+            left_at: left.as_ref().map(|(time, _)| *time),
+            leave_reason: left.as_ref().map(|(_, reason)| *reason),
+          })
+        } else {
+          None
+        }
+      })
+      .collect();
     Self {
       id: game.id,
       game_name: game.name.clone(),

@@ -3,7 +3,7 @@ use crate::Result;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
-const MAP: &str = r#"maps\frozenthrone\(10)ragingstream.w3x"#;
+const MAP: &str = r#"maps\frozenthrone\(12)emeraldgardens.w3x"#;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
@@ -107,6 +107,7 @@ pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32
       map: Some(get_map()?),
       node_id,
       slots,
+      enable_ping_equalizer: true,
       ..Default::default()
     })
     .await?;
@@ -197,7 +198,7 @@ pub async fn create_ffa_game(players: Vec<i32>) -> Result<i32> {
       map: Some(get_map()?),
       node_id,
       slots,
-      mask_player_names: Some(true),
+      mask_player_names: true,
       ..Default::default()
     })
     .await?;

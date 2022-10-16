@@ -31,6 +31,7 @@ pub struct Game {
   pub updated_at: DateTime<Utc>,
   pub mask_player_names: bool,
   pub game_version: Option<String>,
+  pub enable_ping_equalizer: bool,
 }
 
 impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {

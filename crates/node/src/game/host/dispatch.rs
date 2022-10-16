@@ -1,8 +1,9 @@
-use super::broadcast;
 use super::clock::ActionTickStream;
 use super::delay::{DelayedFrame, DelayedFrameStream};
+use super::delay_equalizer::DelayEqualizer;
 use super::player::{PlayerDispatchInfo, PlayerSendError};
 use super::sync::SyncMap;
+use super::{broadcast, GameHostOptions};
 use crate::error::*;
 use crate::game::host::clock::Tick;
 use crate::game::host::stream::{PlayerStream, PlayerStreamCmd, PlayerStreamHandle};
@@ -101,6 +102,7 @@ impl Drop for Dispatcher {
 impl Dispatcher {
   pub fn new(
     game_id: i32,
+    opts: GameHostOptions,
     slots: &[PlayerSlot],
     obs: ObserverPublisherHandle,
     out_tx: GameEventSender,
@@ -110,9 +112,11 @@ impl Dispatcher {
     let (status_tx, status_rx) = watch::channel(DispatchStatus::Pending);
     let (cmd_tx, cmd_rx) = channel(10);
     let (action_tx, action_rx) = channel(32);
+    let enabled_ping_equalizer = opts.enabled_ping_equalizer;
 
     let state = State::new(
       game_id,
+      opts,
       slots,
       obs.clone(),
       status_rx,
@@ -121,6 +125,11 @@ impl Dispatcher {
     );
 
     let mut start_messages = vec![];
+
+    if enabled_ping_equalizer {
+      start_messages.push("Ping equalizer is enabled.".to_string());
+    }
+
     let chat_banned_player_names: Vec<String> = state
       .chat_banned_player_ids
       .iter()
@@ -387,16 +396,29 @@ struct State {
 impl State {
   fn new(
     game_id: i32,
+    opts: GameHostOptions,
     slots: &[PlayerSlot],
     obs: ObserverPublisherHandle,
     status_rx: watch::Receiver<DispatchStatus>,
     _action_tx: Sender<ActionMsg>,
     ct: CancellationToken,
   ) -> Self {
+    let delay_equalizer = if opts.enabled_ping_equalizer {
+      Some(DelayEqualizer::new(
+        slots.iter().filter(|s| s.settings.team != 24).count(),
+      ))
+    } else {
+      None
+    };
     State {
       game_id,
       ct,
-      shared: Arc::new(Mutex::new(Shared::new(game_id, slots, obs))),
+      shared: Arc::new(Mutex::new(Shared::new(
+        game_id,
+        slots,
+        obs,
+        delay_equalizer,
+      ))),
       status_rx,
       game_player_id_lookup: slots
         .into_iter()
@@ -654,7 +676,31 @@ impl State {
 
   fn handle_pong(&mut self, player_id: i32, rtt: u32) {
     let mut shared = self.shared.lock();
-    shared.get_player(player_id).map(|info| info.push_rtt(rtt));
+    let delay = if shared.delay_equalizer.is_some() {
+      if shared.active_players.contains(&player_id) {
+        shared.delay_equalizer.as_mut().and_then(|de| {
+          tracing::debug!(player_id, "delay_equalizer insert: {}", rtt);
+          de.insert_rtt(player_id, rtt)
+        })
+      } else {
+        None
+      }
+    } else {
+      None
+    };
+    shared.get_player(player_id).map(|info| {
+      info.push_rtt(rtt);
+      if let Some(delay) = delay {
+        tracing::debug!(player_id, "auto set delay: {}", delay);
+        if delay > 0 {
+          info
+            .set_delay(Duration::from_millis(delay as _).into())
+            .ok();
+        } else {
+          info.set_delay(None).ok();
+        }
+      }
+    });
   }
 
   async fn dispatch_incoming_w3gs(
@@ -1042,12 +1088,20 @@ struct Shared {
   lagging_player_ids: BTreeSet<i32>,
   drop_votes: BTreeSet<i32>,
   obs: ObserverPublisherHandle,
+  active_players: BTreeSet<i32>,
+  delay_equalizer: Option<DelayEqualizer>,
 }
 
 impl Shared {
-  fn new(game_id: i32, slots: &[PlayerSlot], obs: ObserverPublisherHandle) -> Self {
+  fn new(
+    game_id: i32,
+    slots: &[PlayerSlot],
+    obs: ObserverPublisherHandle,
+    delay_equalizer: Option<DelayEqualizer>,
+  ) -> Self {
     let sync = SyncMap::new(slots.iter().map(|s| s.player.player_id).collect());
     let mut slot_id_lookup = BTreeMap::new();
+    let mut active_players = BTreeSet::new();
     Self {
       game_id,
       started: false,
@@ -1056,6 +1110,9 @@ impl Shared {
         .map(|slot| {
           let p = PlayerDispatchInfo::new(slot);
           slot_id_lookup.insert(slot.player.player_id, p.slot_player_id());
+          if !p.is_observer() {
+            active_players.insert(slot.player.player_id);
+          }
           (slot.player.player_id, p)
         })
         .collect(),
@@ -1064,6 +1121,8 @@ impl Shared {
       lagging_player_ids: BTreeSet::new(),
       drop_votes: BTreeSet::new(),
       obs,
+      active_players,
+      delay_equalizer,
     }
   }
 
@@ -1323,6 +1382,10 @@ impl Shared {
     player_id: i32,
     reason: Option<LeaveReason>,
   ) -> Result<()> {
+    self
+      .delay_equalizer
+      .as_mut()
+      .map(|de| de.remove_player(player_id));
     let mut player = if let Some(v) = self.map.remove(&player_id) {
       v
     } else {

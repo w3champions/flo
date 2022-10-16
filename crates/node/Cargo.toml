@@ -1,6 +1,6 @@
 [package]
 name = "flo-node"
-version = "0.6.3"
+version = "0.7.0"
 authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
