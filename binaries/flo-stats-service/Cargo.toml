@@ -17,3 +17,5 @@ async-graphql-axum = "4.0"
 axum = "0.5"
 tower-http = { version = "0.2.0", features = ["cors"] }
 dotenv = "0.15"
+once_cell = "1.15.0"
+http = "0.2.8"
