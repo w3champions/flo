@@ -23,6 +23,7 @@ pub struct PlayerDispatchInfo {
   last_disconnect: Option<Instant>,
   rtt_stats: PlayerRTTStats,
   last_rtt_stats: Option<PlayerRTTStats>,
+  is_observer: bool,
 }
 
 impl PlayerDispatchInfo {
@@ -41,6 +42,7 @@ impl PlayerDispatchInfo {
       last_disconnect: None,
       rtt_stats: PlayerRTTStats::default(),
       last_rtt_stats: None,
+      is_observer: slot.settings.team == 24,
     }
   }
 
@@ -50,6 +52,10 @@ impl PlayerDispatchInfo {
 
   pub fn slot_player_id(&self) -> u8 {
     self.slot_player_id
+  }
+
+  pub fn is_observer(&self) -> bool {
+    self.is_observer
   }
 
   pub fn ack_queue(&self) -> &W3GSAckQueue {
@@ -194,12 +200,13 @@ impl PlayerDispatchInfo {
     self.delay.as_ref()
   }
 
-  pub fn set_delay(&mut self, delay: Option<Duration>) -> Result<()> {
+  pub fn set_delay(&mut self, delay: Option<Duration>) -> Result<bool> {
     self.delay = delay;
     if let Some(tx) = self.tx.as_ref() {
       tx.set_delay(self.delay.clone())?;
+      return Ok(true);
     }
-    Ok(())
+    Ok(false)
   }
 
   pub fn set_block(&mut self, delay: Duration) -> Result<()> {

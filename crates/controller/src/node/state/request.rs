@@ -279,6 +279,7 @@ impl NodeRequestExt for Addr<NodeRequestActor> {
         }),
         slots,
         status: Default::default(),
+        enable_ping_equalizer: game.enable_ping_equalizer,
       }),
     };
 

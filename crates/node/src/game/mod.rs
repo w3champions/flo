@@ -24,6 +24,8 @@ use crate::state::event::GlobalEventSender;
 use crate::state::GlobalEvent;
 use flo_w3gs::constants::LeaveReason;
 
+use self::host::GameHostOptions;
+
 mod host;
 
 #[derive(Debug)]
@@ -64,7 +66,15 @@ impl GameSession {
     let state = Arc::new(Mutex::new(State {
       game_id,
       g_event_sender,
-      host: GameHost::new(game_id, &slots, obs.clone(), tx.clone()),
+      host: GameHost::new(
+        game_id,
+        GameHostOptions {
+          enabled_ping_equalizer: game.enable_ping_equalizer,
+        },
+        &slots,
+        obs.clone(),
+        tx.clone(),
+      ),
       status: NodeGameStatus::Created,
       player_slots: slots
         .into_iter()

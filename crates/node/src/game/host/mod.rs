@@ -13,6 +13,7 @@ use flo_w3gs::constants::LeaveReason;
 mod broadcast;
 mod clock;
 mod delay;
+mod delay_equalizer;
 mod dispatch;
 mod player;
 pub mod stream;
@@ -24,14 +25,20 @@ pub struct GameHost {
   dispatcher: Dispatcher,
 }
 
+#[derive(Debug)]
+pub struct GameHostOptions {
+  pub enabled_ping_equalizer: bool,
+}
+
 impl GameHost {
   pub fn new(
     game_id: i32,
+    opts: GameHostOptions,
     slots: &[PlayerSlot],
     obs: ObserverPublisherHandle,
     event_sender: GameEventSender,
   ) -> Self {
-    let dispatcher = Dispatcher::new(game_id, slots, obs, event_sender);
+    let dispatcher = Dispatcher::new(game_id, opts, slots, obs, event_sender);
     Self {
       game_id,
       dispatcher,

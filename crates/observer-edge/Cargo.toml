@@ -28,7 +28,9 @@ once_cell = "1.15"
 backoff = { version = "0.4" }
 tonic = "0.6"
 s2-grpc-utils = "0.2"
-async-graphql = { version = "4.0.15", features = ["chrono"] }
+async-graphql = { version = "4.0", features = ["chrono"] }
+rusoto_s3 = "0.47.0"
+rusoto_core = "0.47.0"
 base64 = "0.13.0"
 flate2 = "1.0"
 

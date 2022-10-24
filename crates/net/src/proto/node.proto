@@ -136,6 +136,7 @@ message Game {
   NodeGameStatus status = 2;
   GameSettings settings = 3;
   repeated GameSlot slots = 4;
+  bool enable_ping_equalizer = 5;
 }
 
 enum NodeGameStatus {

@@ -206,6 +206,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     locked: false,
     node_id: None,
     mask_player_names: false,
+    enable_ping_equalizer: false,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -229,7 +230,8 @@ pub struct CreateGameAsBotParams {
   pub is_live: bool,
   pub node_id: i32,
   pub slots: Vec<CreateGameSlot>,
-  pub mask_player_names: Option<bool>,
+  pub mask_player_names: bool,
+  pub enable_ping_equalizer: bool,
 }
 
 /// Creates a full game and lock it
@@ -345,7 +347,8 @@ pub fn create_as_bot(
     random_seed: rand::random(),
     locked: true,
     node_id: Some(params.node_id),
-    mask_player_names: params.mask_player_names.unwrap_or_default(),
+    mask_player_names: params.mask_player_names,
+    enable_ping_equalizer: params.enable_ping_equalizer,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -1010,6 +1013,7 @@ pub struct GameRowWithRelated {
   pub random_seed: i32,
   pub mask_player_names: bool,
   pub game_version: Option<String>,
+  pub enable_ping_equalizer: bool,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -1031,6 +1035,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::random_seed,
   game::dsl::mask_player_names,
   game::dsl::game_version,
+  game::dsl::enable_ping_equalizer,
 );
 
 impl GameRowWithRelated {
@@ -1054,6 +1059,7 @@ impl GameRowWithRelated {
       game::dsl::random_seed,
       game::dsl::mask_player_names,
       game::dsl::game_version,
+      game::dsl::enable_ping_equalizer,
     )
   }
 
@@ -1079,6 +1085,7 @@ impl GameRowWithRelated {
       random_seed: self.random_seed,
       mask_player_names: self.mask_player_names,
       game_version: self.game_version,
+      enable_ping_equalizer: self.enable_ping_equalizer,
     })
   }
 }
@@ -1097,6 +1104,7 @@ pub struct GameInsert<'a> {
   pub locked: bool,
   pub node_id: Option<i32>,
   pub mask_player_names: bool,
+  pub enable_ping_equalizer: bool,
 }
 
 #[derive(Debug, Insertable)]
