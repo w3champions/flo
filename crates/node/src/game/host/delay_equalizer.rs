@@ -62,7 +62,11 @@ impl DelayEqualizer {
             // Old top will be updated on its next `insert_rtt` call
             slot.try_update_delay(0)
           } else {
-            let new_delay = get_new_delay_value(slot.delay.clone(), top.rtt, rtt);
+            let new_delay = get_new_delay_value(
+              slot.delay.clone(),
+              top.rtt,
+              rtt.saturating_sub(slot.delay.clone().unwrap_or_default()),
+            );
             slot.try_update_delay(new_delay)
           };
         } else {
@@ -184,7 +188,7 @@ fn test_get_new_delay_value() {
   assert_eq!(v, 100 - 10 - HOME_ADVANTAGE_MS);
 
   // diff >= MIN_ADJUST_DIFFERENCE
-  let v = get_new_delay_value(Some(79 - HOME_ADVANTAGE_MS), 100, 10);
+  let v = get_new_delay_value(Some(79 - HOME_ADVANTAGE_MS /* 64 */), 100, 10);
   assert_eq!(v, 100 - 10 - HOME_ADVANTAGE_MS);
 
   // diff < MIN_ADJUST_DIFFERENCE
