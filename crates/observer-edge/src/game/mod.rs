@@ -493,6 +493,7 @@ pub struct Game {
   pub game_version: Option<String>,
   pub mask_player_names: bool,
   pub is_private: bool,
+  pub is_live: bool,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]

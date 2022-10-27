@@ -158,6 +158,7 @@ pub struct GameSnapshot {
   pub game_version: Option<String>,
   pub mask_player_names: bool,
   pub is_private: bool,
+  pub is_live: bool,
 }
 
 impl GameSnapshot {
@@ -202,6 +203,7 @@ impl GameSnapshot {
       game_version: game.game_version.clone(),
       mask_player_names: game.mask_player_names,
       is_private: game.is_private,
+      is_live: game.is_live,
     }
   }
 }
