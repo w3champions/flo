@@ -275,6 +275,13 @@ impl W3Map {
       image: {
         archive
           .read_file_all_opt("war3mapMap.blp")?
+          .and_then(|bytes| {
+            if bytes.is_empty() {
+              None
+            } else {
+              Some(bytes)
+            }
+          })
           .map(|bytes| BLPImage::decode(&mut bytes.as_slice()).map_err(Error::ReadImage))
           .transpose()?
       },
@@ -422,7 +429,7 @@ fn test_open_storage_with_checksum() {
 #[test]
 fn test_open_map_special() {
   let map =
-    crate::W3Map::open_with_checksum(flo_util::sample_path!("map", "(2)bootybay-133ptr.w3m"))
+    crate::W3Map::open_with_checksum(flo_util::sample_path!("map", "(8)Uther Party Ultima-X fix0.66.w3x"))
       .unwrap();
   dbg!(map.1.xoro);
 }
