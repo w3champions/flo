@@ -1,0 +1,1 @@
+drop index game_used_slot_client_status;

@@ -1,6 +1,4 @@
-// @generated automatically by Diesel CLI.
-
-diesel::table! {
+table! {
     api_client (id) {
         id -> Int4,
         name -> Text,
@@ -9,7 +7,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     game (id) {
         id -> Int4,
         name -> Text,
@@ -34,7 +32,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     game_used_slot (id) {
         id -> Int4,
         game_id -> Int4,
@@ -54,7 +52,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     map_checksum (id) {
         id -> Int4,
         sha1 -> Text,
@@ -62,7 +60,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     node (id) {
         id -> Int4,
         name -> Text,
@@ -76,7 +74,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     player (id) {
         id -> Int4,
         name -> Text,
@@ -90,7 +88,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     player_ban (id) {
         id -> Int4,
         player_id -> Int4,
@@ -100,7 +98,7 @@ diesel::table! {
     }
 }
 
-diesel::table! {
+table! {
     player_mute (id) {
         id -> Int4,
         player_id -> Int4,
@@ -109,14 +107,14 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(game -> node (node_id));
-diesel::joinable!(game -> player (created_by));
-diesel::joinable!(game_used_slot -> game (game_id));
-diesel::joinable!(game_used_slot -> player (player_id));
-diesel::joinable!(player -> api_client (api_client_id));
-diesel::joinable!(player_ban -> player (player_id));
+joinable!(game -> node (node_id));
+joinable!(game -> player (created_by));
+joinable!(game_used_slot -> game (game_id));
+joinable!(game_used_slot -> player (player_id));
+joinable!(player -> api_client (api_client_id));
+joinable!(player_ban -> player (player_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
+allow_tables_to_appear_in_same_query!(
     api_client,
     game,
     game_used_slot,
