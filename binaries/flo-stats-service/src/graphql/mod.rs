@@ -47,7 +47,11 @@ impl MutationRoot {
         return Err(Error::new("Only admin can specify delay value."));
       }
     } else {
-      180
+      if game.is_live {
+        0
+      } else {
+        180
+      }
     };
     let delay_secs = if delay_secs == 0 {
       None

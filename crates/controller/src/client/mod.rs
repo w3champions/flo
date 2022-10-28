@@ -39,7 +39,13 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
   let mut listener = FloListener::bind_v4(flo_constants::CONTROLLER_SOCKET_PORT).await?;
   tracing::info!("listening on port {}", listener.port());
 
-  while let Some(mut stream) = listener.incoming().try_next().await? {
+  while let Some(Ok(mut stream)) = listener
+    .incoming()
+    .try_next()
+    .await
+    .map_err(|err| tracing::error!("tcp accept: {err}"))
+    .transpose()
+  {
     let state = state.clone();
     tokio::spawn(async move {
       tracing::debug!("connected: {}", stream.peer_addr()?);

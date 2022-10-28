@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use once_cell::sync::Lazy;
+
 /// Max value of rtt + delay
 const MAX_RTT: u32 = 150;
 
@@ -12,7 +14,12 @@ const MAX_ADDED_DELAY_MS: u32 = 100;
 /// Retain a certain latency advantage to avoid dynamically
 /// added latency resulting in higher actual latency for players
 /// with fast internet speeds
-const HOME_ADVANTAGE_MS: u32 = 15;
+const HOME_ADVANTAGE_MS: Lazy<u32> = Lazy::new(|| {
+  std::env::var("FLO_HOME_ADVANTAGE_MS")
+    .ok()
+    .and_then(|v| v.parse().ok())
+    .unwrap_or(5)
+});
 
 /// The delay is adjusted only if the difference between the new value and the old value is
 /// greater than this value. (`DelayedFrameStream::set_delay` is expensive)
@@ -120,7 +127,7 @@ impl DelayEqualizer {
 fn get_new_delay_value(current_delay: Option<u32>, top_rtt: u32, rtt: u32) -> u32 {
   let mut rtt_diff = top_rtt
     .saturating_sub(rtt)
-    .saturating_sub(HOME_ADVANTAGE_MS);
+    .saturating_sub(*HOME_ADVANTAGE_MS);
   if rtt_diff == 0 {
     return 0;
   }
