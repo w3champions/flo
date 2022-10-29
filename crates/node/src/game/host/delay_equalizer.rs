@@ -9,10 +9,6 @@ const MAX_RTT: u32 = 200;
 /// Only up to this much delay is allowed to be added
 const MAX_ADDED_DELAY_MS: u32 = 150;
 
-/// The delay is adjusted only if the difference between the new value and the old value is
-/// greater than this value. (`DelayedFrameStream::set_delay` is expensive)
-const MIN_ADJUST_DIFFERENCE: u32 = 10;
-
 /// Smoothen RTT adjustment
 const RTT_ROLLING_SAMPLE_SIZE: usize = 60;
 
@@ -70,7 +66,7 @@ impl<const N: usize> DelayEqualizer<N> {
             None
           }
         } else {
-          return if real_rtt > top.real_rtt && real_rtt - top.real_rtt >= MIN_ADJUST_DIFFERENCE {
+          return if real_rtt > top.real_rtt {
             // Found a new top
             self.top.replace(Top {
               player_id,
@@ -152,7 +148,7 @@ fn get_new_delay_value(current_delay: Option<u32>, top_rtt: u32, rtt: u32) -> u3
     } else {
       rtt_diff - current_delay
     };
-    if delay_diff >= MIN_ADJUST_DIFFERENCE {
+    if delay_diff > 0 {
       rtt_diff
     } else {
       current_delay
@@ -213,7 +209,7 @@ impl<const N: usize> Slot<N> {
     } else {
       new_delay - delay
     };
-    if delay_diff >= MIN_ADJUST_DIFFERENCE {
+    if delay_diff > 0 {
       self.delay.replace(new_delay);
       Some(new_delay)
     } else {
@@ -232,14 +228,6 @@ struct Top {
 fn test_get_new_delay_value() {
   let v = get_new_delay_value(None, 100, 10);
   assert_eq!(v, 100 - 10);
-
-  // diff >= MIN_ADJUST_DIFFERENCE
-  let v = get_new_delay_value(Some(79), 100, 10);
-  assert_eq!(v, 100 - 10);
-
-  // diff < MIN_ADJUST_DIFFERENCE
-  let v = get_new_delay_value(Some(85), 100, 10);
-  assert_eq!(v, 85);
 
   // MAX_DELAY
   let v = get_new_delay_value(None, MAX_ADDED_DELAY_MS + 100, 10);
@@ -271,10 +259,6 @@ fn test_delay_equalizer() {
   assert!(e.check_ready().is_some());
 
   assert_eq!(e.top.clone().unwrap().player_id, 1);
-
-  assert_eq!(e.insert_rtt(2, 9 + 90), None);
-  assert_eq!(e.insert_rtt(2, 14 + 90), None);
-  assert_eq!(e.insert_rtt(2, 5 + 90), None);
 
   assert_eq!(e.insert_rtt(2, 60 + 90), Some(40)); // 2 <- 150-90=60, 2 = +40 ==> 1 = TOP = 100, 2 = 60+40
   assert_eq!(e.top.clone().unwrap().player_id, 1);

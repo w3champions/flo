@@ -46,7 +46,6 @@ impl DelayedFrameStream {
       return;
     }
 
-    self.reset_all(self.duration, set_value);
     self.duration = set_value;
     self.sleep.as_mut().reset(Instant::now().into());
     self.waker.take().map(|w| w.wake());
@@ -78,20 +77,6 @@ impl DelayedFrameStream {
     let now = Instant::now();
     self.frames.push_back((frame, now + self.duration));
     self.waker.take().map(|w| w.wake());
-  }
-
-  fn reset_all(&mut self, old: Duration, new: Duration) {
-    let now = Instant::now();
-    for (_, deadline) in self.frames.iter_mut() {
-      let duration = deadline.saturating_duration_since(now);
-      if old > new {
-        // reduce
-        *deadline = now + duration.saturating_sub(old.saturating_sub(new));
-      } else if old < new {
-        // increase
-        *deadline = now + duration.saturating_add(new.saturating_sub(old));
-      }
-    }
   }
 }
 
