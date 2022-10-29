@@ -43,7 +43,10 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
     .incoming()
     .try_next()
     .await
-    .map_err(|err| tracing::error!("tcp accept: {err}"))
+    .or_else(|err| -> Result<_> {
+      tracing::error!("tcp accept: {err}");
+      Ok(None)
+    })
     .transpose()
   {
     let state = state.clone();
