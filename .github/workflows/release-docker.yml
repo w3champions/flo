@@ -27,7 +27,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release -p flo-controller-service -p flo-node-service -p flo-stats-service
+          args: --profile=release-with-debug -p flo-controller-service -p flo-node-service -p flo-stats-service
 
       - name: Move binaries
         run: |
