@@ -329,7 +329,7 @@ impl StartGameState {
     }
   }
 
-  async fn ack_player_and_check(
+  fn ack_player_and_check(
     &mut self,
     player_id: i32,
     pkt: proto::flo_connect::PacketGameStartPlayerClientInfoRequest,
@@ -441,7 +441,7 @@ impl Handler<StartGamePlayerAckInner> for StartGameState {
       packet.war3_version,
       packet.map_sha1
     );
-    self.ack_player_and_check(player_id, packet).await
+    self.ack_player_and_check(player_id, packet)
   }
 }
 
