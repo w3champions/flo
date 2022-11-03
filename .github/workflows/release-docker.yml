@@ -32,9 +32,9 @@ jobs:
       - name: Move binaries
         run: |
           mkdir -p ./build/release
-          mv ./target/release/flo-controller-service ./build/release
-          mv ./target/release/flo-node-service ./build/release
-          mv ./target/release/flo-stats-service ./build/release
+          mv ./target/release-with-debug/flo-controller-service ./build/release
+          mv ./target/release-with-debug/flo-node-service ./build/release
+          mv ./target/release-with-debug/flo-stats-service ./build/release
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
