@@ -12,6 +12,9 @@ const MAX_ADDED_DELAY_MS: u32 = 150;
 /// Smoothen RTT adjustment
 const RTT_ROLLING_SAMPLE_SIZE: usize = 60;
 
+/// Only start adjust pings after 5 samples have been obtained
+const MIN_SAMPLES: usize = 5;
+
 #[derive(Debug)]
 pub struct DelayEqualizer<const N: usize = RTT_ROLLING_SAMPLE_SIZE> {
   slots: BTreeMap<i32, Slot<N>>,
@@ -107,6 +110,11 @@ impl<const N: usize> DelayEqualizer<N> {
       return self.top.as_ref();
     }
     if self.max_player_count == self.slots.len() {
+      for (_, slot) in &self.slots {
+        if !slot.removed && slot.count < MIN_SAMPLES {
+          return None;
+        }
+      }
       self.ready = true;
       self.top = self.find_top();
       return self.top.as_ref();
