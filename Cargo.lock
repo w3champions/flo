@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "backoff 0.3.0",
  "bytes",
@@ -1987,9 +1987,9 @@ dependencies = [
 
 [[package]]
 name = "flo-state"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f904daa69914e432b7ea96fb7225ef3561a3e3d3f770c941042ae66a6c3c422f"
+checksum = "2e966d0a790054682bced8b31065e56ab3b95ac3a13e3815aa085ae81ea5b130"
 dependencies = [
  "async-trait",
  "futures 0.3.24",
@@ -5494,7 +5494,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand",
  "static_assertions",
 ]
