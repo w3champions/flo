@@ -183,6 +183,12 @@ struct Slot<const N: usize> {
 impl<const N: usize> Slot<N> {
   fn update_real_rtt(&mut self, new_real_rtt: u32) -> u32 {
     self.count = std::cmp::min(N, self.count + 1);
+
+    if self.count < MIN_SAMPLES {
+      self.rolling_average.replace(new_real_rtt as f32);
+      return new_real_rtt;
+    }
+
     let v = if let Some(v) = self.rolling_average.clone() {
       let rolling_average = v * ((self.count - 1) as f32) / (self.count as f32)
         + (new_real_rtt as f32) / (self.count as f32);
