@@ -316,7 +316,7 @@ async fn test_emu_join() -> Result<()> {
   flo_log_subscriber::init();
 
   let storage = W3Storage::from_env()?;
-  let mut games = flo_lan::search_lan_games(Duration::from_secs(1)).await;
+  let mut games = flo_lan::search_lan_games("1.34.0.00000".into(), Duration::from_secs(1)).await;
   let game = games.first_mut().unwrap();
   tracing::info!(
     "joining lan game: {} at {:?}",

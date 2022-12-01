@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+  #[error("invalid version string: {0}")]
+  InvalidVersionString(String),
   #[error("invalid game info: {0}")]
   InvalidGameInfo(&'static str),
   #[error("bonjour register: {0}")]

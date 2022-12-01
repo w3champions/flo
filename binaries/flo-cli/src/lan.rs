@@ -8,24 +8,36 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
-  List,
-  Join { name: String },
-  JoinMulti { name: String, player_ids: Vec<i32> },
+  List {
+    game_version: String,
+  },
+  Join {
+    game_version: String,
+    name: String,
+  },
+  JoinMulti {
+    game_version: String,
+    name: String,
+    player_ids: Vec<i32>,
+  },
   StartTestGame,
 }
 
 impl Command {
-  pub async fn run(&self) -> Result<()> {
-    match *self {
-      Command::List => {
-        let games = search_lan_games(Duration::from_secs(1)).await;
+  pub async fn run(self) -> Result<()> {
+    match self {
+      Command::List { game_version } => {
+        let games = search_lan_games(game_version, Duration::from_secs(1)).await;
         for game in games {
           println!("{}", game.game_info.name.to_string_lossy());
         }
       }
-      Command::Join { ref name } => {
+      Command::Join {
+        game_version,
+        ref name,
+      } => {
         let storage = W3Storage::from_env()?;
-        let games = search_lan_games(Duration::from_secs(3)).await;
+        let games = search_lan_games(game_version, Duration::from_secs(3)).await;
         let game = games
           .iter()
           .find(|g| g.game_info.name.as_bytes() == name.as_bytes())
@@ -50,12 +62,13 @@ impl Command {
         }
       }
       Command::JoinMulti {
+        game_version,
         ref name,
         ref player_ids,
       } => {
         tracing::info!("join multi: name = {}, player_ids = {:?}", name, player_ids);
         let storage = W3Storage::from_env()?;
-        let games = search_lan_games(Duration::from_secs(5)).await;
+        let games = search_lan_games(game_version, Duration::from_secs(5)).await;
         let games = games
           .iter()
           .filter_map(|g| {

@@ -339,11 +339,26 @@ impl Platform {
         W3Map::open_storage_with_checksum(storage, MAP_PATH).map_err(Error::from)
       })
       .await?;
+    let info = self.info.clone();
     let (f, handle) = abortable(async move {
       let (width, height) = map.dimension();
-      let res =
-        crate::lan::diag::run_test_lobby(&name, MAP_PATH, width as u16, height as u16, checksum)
-          .await;
+      let res = {
+        let game_version = info.map(|info| info.version.clone());
+        match game_version {
+          Ok(game_version) => {
+            crate::lan::diag::run_test_lobby(
+              game_version,
+              &name,
+              MAP_PATH,
+              width as u16,
+              height as u16,
+              checksum,
+            )
+            .await
+          }
+          Err(_) => Err(Error::War3NotLocated),
+        }
+      };
       match res {
         Ok(res) => tracing::debug!("test game ended: {:?}", res),
         Err(err) => {

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::sync::watch::channel;
 
 pub async fn run_test_lobby(
+  game_version: String,
   name: &str,
   map_path: &str,
   map_width: u16,
@@ -87,7 +88,7 @@ pub async fn run_test_lobby(
     game_info
   };
 
-  let _p = MdnsPublisher::start(lan_game_info).await?;
+  let _p = MdnsPublisher::start(game_version, lan_game_info).await?;
 
   while let Some(mut stream) = listener.incoming().try_next().await? {
     return LobbyHandler::new(&info, &mut stream, None, &mut rx)

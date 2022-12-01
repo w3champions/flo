@@ -44,6 +44,7 @@ pub struct LanGameInfo {
 
 impl LanGame {
   pub async fn create(
+    game_version: String,
     my_player_id: i32,
     node: Arc<NodeInfo>,
     player_token: Vec<u8>,
@@ -93,7 +94,7 @@ impl LanGame {
       {
         let mut scope = scope.handle();
         let mdns_shutdown_notify = mdns_shutdown_notify.clone();
-        let publisher = MdnsPublisher::start(game_info).await?;
+        let publisher = MdnsPublisher::start(game_version, game_info).await?;
         async move {
           let _publisher = publisher;
           tokio::select! {

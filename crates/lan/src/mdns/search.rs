@@ -15,11 +15,11 @@ pub struct LanGame {
   pub addr: SocketAddrV4,
 }
 
-pub async fn search_lan_games(timeout: Duration) -> Vec<LanGame> {
+pub async fn search_lan_games(game_version: String, timeout: Duration) -> Vec<LanGame> {
   let (tx, mut rx) = channel(32);
 
   let mut task = tokio::spawn(async move {
-    let mut browse_stream = browse(super::REG_TYPE);
+    let mut browse_stream = browse(&super::get_reg_type(&game_version)?);
     let mut found_names = BTreeSet::new();
 
     while let Some(res) = browse_stream.try_next().await? {
@@ -108,5 +108,5 @@ pub async fn search_lan_games(timeout: Duration) -> Vec<LanGame> {
 
 #[tokio::test]
 async fn test_search() {
-  dbg!(search_lan_games(Duration::from_secs(5)).await);
+  dbg!(search_lan_games("1.34.0.00000".into(), Duration::from_secs(5)).await);
 }

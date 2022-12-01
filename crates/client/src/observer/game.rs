@@ -44,6 +44,7 @@ pub struct ObserverGameHost<S> {
   delay_millis: Option<i64>,
   source: S,
   shared: ObserverHostShared,
+  game_version: String,
 }
 
 impl<S> ObserverGameHost<S>
@@ -105,6 +106,7 @@ where
       delay_millis: delay_secs.map(|v| v * 1000),
       source,
       shared: ObserverHostShared::new(game_id, delay_secs),
+      game_version: client_info.version,
     })
   }
 
@@ -122,7 +124,7 @@ where
       game_info
     };
 
-    let _p = MdnsPublisher::start(lan_game_info).await?;
+    let _p = MdnsPublisher::start(self.game_version.clone(), lan_game_info).await?;
     let slot_info = crate::lan::game::slot::build_player_slot_info(
       SelfPlayer::StreamObserver,
       self.info.random_seed,

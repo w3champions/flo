@@ -12,7 +12,7 @@ use crate::error::*;
 use crate::game::LocalGameInfo;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
-use crate::platform::{CalcMapChecksum, Platform};
+use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
 use crate::StartConfig;
 use flo_state::{
   async_trait, Actor, Addr, Context, Deferred, Handler, Message, RegistryRef, Service,
@@ -87,7 +87,15 @@ impl Handler<ReplaceLanGame> for Lan {
         last_game.shutdown();
       }
 
+      let game_version = self
+        .platform
+        .send(GetClientPlatformInfo::default())
+        .await?
+        .map_err(|_| Error::War3NotLocated)?
+        .version;
+
       let lan_game = LanGame::create(
+        game_version,
         my_player_id,
         node,
         player_token,

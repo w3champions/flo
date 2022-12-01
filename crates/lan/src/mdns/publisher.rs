@@ -17,13 +17,13 @@ pub struct MdnsPublisher {
 }
 
 impl MdnsPublisher {
-  pub async fn start(game_info: GameInfo) -> Result<Self> {
+  pub async fn start(game_version: String, game_info: GameInfo) -> Result<Self> {
     let game_name = game_info.name.to_string_lossy().to_string();
     let game_info = Arc::new(RwLock::new(game_info));
     let (update_tx, update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
 
     tokio::spawn(
-      Self::worker(game_info.clone(), game_name, update_rx)
+      Self::worker(game_version, game_info.clone(), game_name, update_rx)
         .map_err(|err| {
           tracing::error!("worker exited with error: {}", err);
         })
@@ -37,6 +37,7 @@ impl MdnsPublisher {
   }
 
   async fn worker(
+    game_version: String,
     game_info: GameInfoRef,
     game_name: String,
     mut update_rx: mpsc::Receiver<oneshot::Sender<()>>,
@@ -64,8 +65,9 @@ impl MdnsPublisher {
       game_info.message_id = game_info.message_id + 1;
       (game_info.data.port, game_info.encode_to_bytes()?)
     };
+    let reg_type = super::get_reg_type(&game_version)?;
     let reg = register_extended(
-      super::REG_TYPE,
+      &reg_type,
       port,
       RegisterData {
         flags: async_dnssd::RegisterFlags::NO_AUTO_RENAME | async_dnssd::RegisterFlags::UNIQUE,
