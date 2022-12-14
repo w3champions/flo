@@ -38,9 +38,9 @@ fn get_known_folder_path(id: GUID) -> Option<PathBuf> {
   Some(path)
 }
 
-pub fn detect_user_data_path() -> Option<PathBuf> {
+pub fn detect_user_data_path(ptr: bool) -> Option<PathBuf> {
   let mut path = get_known_folder_path(winapi::um::knownfolders::FOLDERID_Documents)?;
-  path.push("Warcraft III");
+  path.push(if ptr {"Warcraft III Public Test"} else {"Warcraft III"});
   if std::fs::metadata(&path).is_ok() {
     Some(path)
   } else {
@@ -74,6 +74,6 @@ pub fn detect_installation_path() -> Option<PathBuf> {
 
 #[test]
 fn test_windows() {
-  assert!(dbg!(detect_user_data_path()).is_some());
+  assert!(dbg!(detect_user_data_path(false)).is_some());
   assert!(dbg!(detect_installation_path()).is_some());
 }

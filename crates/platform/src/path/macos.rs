@@ -1,8 +1,10 @@
 use home_dir::HomeDirExt;
 use std::path::PathBuf;
 
-pub fn detect_user_data_path() -> Option<PathBuf> {
-  let path = PathBuf::from("~/Library/Application Support/Blizzard/Warcraft III")
+pub fn detect_user_data_path(ptr: bool) -> Option<PathBuf> {
+  let path = PathBuf::from(
+    if ptr {"~/Library/Application Support/Blizzard/Warcraft III Public Test"}
+      else {"~/Library/Application Support/Blizzard/Warcraft III"})
     .expand_home()
     .ok()?;
   if std::fs::metadata(&path).is_ok() {

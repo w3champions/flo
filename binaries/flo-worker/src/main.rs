@@ -27,6 +27,9 @@ struct Opt {
 
   #[structopt(long)]
   version: Option<String>,
+  
+  #[structopt(long)]
+  ptr: Option<bool>,
 }
 
 fn main() {
@@ -50,6 +53,7 @@ fn main() {
       user_data_path: opt.user_data_path,
       controller_host: opt.controller_host.clone(),
       version: opt.version.clone(),
+      ptr: opt.ptr.clone(),
       ..Default::default()
     }))?;
     let port = client.port();
