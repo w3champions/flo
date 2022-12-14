@@ -24,6 +24,7 @@ async fn run_flo_worker(opt: Opt) -> Result<u16> {
     installation_path: opt.installation_path,
     user_data_path: opt.user_data_path,
     controller_host: opt.controller_host.clone(),
+    ptr: opt.ptr,
     ..Default::default()
   }))?;
   let port = client.port();

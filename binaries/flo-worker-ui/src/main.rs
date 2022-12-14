@@ -40,11 +40,12 @@ pub fn main() {
     opt.installation_path = Some(installation_path);
   }
   if let Some(user_data_path) = opt_from_args.user_data_path {
-    opt.installation_path = Some(user_data_path);
+    opt.user_data_path = Some(user_data_path);
   }
   if let Some(controller_host) = opt_from_args.controller_host {
     opt.controller_host = Some(controller_host);
   }
+  opt.ptr = opt_from_args.ptr;
 
   log::init(opt.debug);
 
