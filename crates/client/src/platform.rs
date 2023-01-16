@@ -388,6 +388,7 @@ async fn load(
         .stats_host
         .clone()
         .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
+      ptr: start_config.ptr,
       ..Default::default()
     };
 

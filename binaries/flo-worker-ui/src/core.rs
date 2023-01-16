@@ -25,6 +25,9 @@ pub struct Opt {
 
   #[structopt(long)]
   pub use_flo_web: bool,
+  
+  #[structopt(long)]
+  pub ptr: Option<bool>,
 }
 
 impl Default for Opt {
@@ -36,6 +39,7 @@ impl Default for Opt {
       user_data_path: None,
       controller_host: None,
       use_flo_web: true,
+      ptr: None
     }
   }
 }

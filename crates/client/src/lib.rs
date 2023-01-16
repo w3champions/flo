@@ -23,6 +23,7 @@ pub struct StartConfig {
   pub controller_host: Option<String>,
   pub stats_host: Option<String>,
   pub version: Option<String>,
+  pub ptr: Option<bool>,
 }
 
 pub struct FloClient {
