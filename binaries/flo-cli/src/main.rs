@@ -4,10 +4,11 @@ mod client;
 mod env;
 mod game;
 mod grpc;
-mod lan;
-mod server;
-mod observer;
 mod kinesis;
+mod lan;
+mod observer;
+mod replay;
+mod server;
 
 pub use anyhow::Result;
 
@@ -33,7 +34,11 @@ enum Opt {
   Kinesis {
     #[structopt(subcommand)]
     cmd: kinesis::Command,
-  }
+  },
+  Replay {
+    #[structopt(subcommand)]
+    cmd: replay::Command,
+  },
 }
 
 #[tokio::main]
@@ -58,6 +63,9 @@ async fn main() -> Result<()> {
       cmd.run().await?;
     }
     Opt::Kinesis { cmd } => {
+      cmd.run().await?;
+    }
+    Opt::Replay { cmd } => {
       cmd.run().await?;
     }
   }

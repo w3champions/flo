@@ -390,7 +390,7 @@ fn get_map() -> Result<Map> {
 }
 
 fn get_rpg_map() -> Result<Map> {
-  let path = "maps/W3Champions/Legion_TD_7.0b_Team_OZE_W3C.w3x";
+  let path = "maps/SurvivalChaos4.0p.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
   dbg!(&map);

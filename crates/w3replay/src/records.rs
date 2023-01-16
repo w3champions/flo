@@ -213,8 +213,7 @@ pub struct GameInfo {
   pub num_of_host_records: u32,
   pub host_player_info: PlayerInfo,
   pub game_name: CString,
-  #[bin(eq = 0)]
-  _unk_1: u8,
+  _unk_1: CString,
   pub game_settings: GameSettings,
   pub player_count: u32,
   #[bin(bitflags(u32))]
@@ -228,7 +227,7 @@ impl GameInfo {
       num_of_host_records: 1,
       host_player_info,
       game_name: name.into_c_string_lossy(),
-      _unk_1: 0,
+      _unk_1: CString::default(),
       game_settings,
       player_count: 24,
       game_flags: GameFlags::OBS_FULL,
