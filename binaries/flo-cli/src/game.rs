@@ -253,7 +253,7 @@ pub async fn create_4v4_game(players: Vec<i32>) -> Result<i32> {
 pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> {
   let mut client = get_grpc_client().await;
 
-  assert_eq!(players.len(), 2);
+  assert_eq!(players.len(), 4);
 
   let nodes = client.list_nodes(()).await?.into_inner().nodes;
   let node_id = nodes.first().unwrap().id;
@@ -266,6 +266,58 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
   let slots = (0..24)
     .map(|i| match i {
       0 => CreateGameSlot {
+        player_id: None,
+        settings: Some(SlotSettings {
+          team: 2,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      1 => CreateGameSlot {
+        player_id: None,
+        settings: Some(SlotSettings {
+          team: 1,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      2 => CreateGameSlot {
+        player_id: None,
+        settings: Some(SlotSettings {
+          team: 3,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      3 => CreateGameSlot {
+        player_id: None,
+        settings: Some(SlotSettings {
+          team: 0,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      4 => CreateGameSlot {
         player_id: Some(players[0]),
         settings: Some(SlotSettings {
           team: 0,
@@ -278,9 +330,22 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
         }),
         ..Default::default()
       },
-      1 => CreateGameSlot {
+      5 => CreateGameSlot {
         player_id: Some(players[1]),
         settings: Some(SlotSettings {
+          team: 2,
+          color: i as i32,
+          computer: 2,
+          handicap: 100,
+          status: 2,
+          race: 0,
+          ..Default::default()
+        }),
+        ..Default::default()
+      },
+      6 => CreateGameSlot {
+        player_id: Some(players[2]),
+        settings: Some(SlotSettings {
           team: 1,
           color: i as i32,
           computer: 2,
@@ -291,21 +356,10 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
         }),
         ..Default::default()
       },
-      8 | 11 | 12 | 13 => CreateGameSlot {
+      7 => CreateGameSlot {
+        player_id: Some(players[3]),
         settings: Some(SlotSettings {
-          team: 0,
-          color: i as i32,
-          computer: 2,
-          handicap: 100,
-          status: 2,
-          race: 0,
-          ..Default::default()
-        }),
-        ..Default::default()
-      },
-      9 | 10 | 14 | 15 => CreateGameSlot {
-        settings: Some(SlotSettings {
-          team: 1,
+          team: 3,
           color: i as i32,
           computer: 2,
           handicap: 100,

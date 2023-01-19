@@ -37,11 +37,12 @@ impl Command {
           match r {
             flo_w3replay::Record::SlotInfo(slot) => {
               // println!("{:#?}", slot);
-              println!("#\tTEAM\tSTATUS\tTYPE");
+              println!("#\tCOLOR\tTEAM\tSTATUS\tTYPE");
               for (i, slot) in slot.slots().into_iter().enumerate() {
                 println!(
-                  "{}\t{}\t{:?}\t{}",
+                  "{}\t{}\t{}\t{:?}\t{}",
                   i,
+                  slot.color,
                   slot.team,
                   slot.slot_status,
                   if slot.computer { "COMPUTER" } else { "PLAYER" }
