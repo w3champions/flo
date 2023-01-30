@@ -5,7 +5,7 @@ authors = ["Flux Xu <fluxxu@gmail.com>"]
 edition = "2018"
 
 [features]
-default = ["ws"]
+default = []
 ws = ["async-tungstenite"]
 worker = ["ws"]
 blacklist = ["flo-w3c/blacklist"]

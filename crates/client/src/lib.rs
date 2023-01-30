@@ -8,12 +8,9 @@ pub mod observer;
 mod ping;
 pub mod platform;
 mod version;
-
-use crate::message::{GetPort, Listener};
-use flo_state::Registry;
-use observer::{ObserverClient, WatchGame};
-use std::path::PathBuf;
 pub use version::FLO_VERSION;
+
+use std::path::PathBuf;
 
 #[derive(Debug, Default, Clone)]
 pub struct StartConfig {
@@ -26,50 +23,6 @@ pub struct StartConfig {
   pub ptr: Option<bool>,
 }
 
-pub struct FloClient {
-  _registry: Registry<StartConfig>,
-  port: u16,
-}
-
-impl FloClient {
-  pub fn port(&self) -> u16 {
-    self.port
-  }
-
-  pub async fn start_test_game(&self) -> Result<(), error::Error> {
-    use crate::platform::{Platform, StartTestGame};
-    let platform = self._registry.resolve::<Platform>().await?;
-
-    platform
-      .send(StartTestGame {
-        name: "TEST".to_string(),
-      })
-      .await??;
-
-    Ok(())
-  }
-
-  pub async fn watch(&self, token: String) -> Result<(), error::Error> {
-    let obs = self._registry.resolve::<ObserverClient>().await?;
-
-    obs.send(WatchGame { token }).await??;
-
-    Ok(())
-  }
-
-  pub async fn serve(self) {
-    futures::future::pending().await
-  }
-}
-
-pub async fn start(config: StartConfig) -> Result<FloClient, error::Error> {
-  tracing::info!("version: {}", version::FLO_VERSION);
-
-  let registry = Registry::with_data(config);
-  let listener = registry.resolve::<Listener>().await?;
-
-  Ok(FloClient {
-    port: listener.send(GetPort).await?,
-    _registry: registry,
-  })
-}
+pub use crate::message::embed::{start_embed, FloEmbedClient, FloEmbedClientHandle};
+#[cfg(feature = "ws")]
+pub use crate::message::ws::{start_ws, FloWsClient};

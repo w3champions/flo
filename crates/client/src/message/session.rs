@@ -7,7 +7,7 @@ use crate::controller::{
   ClearNodeAddrOverrides, ControllerClient, SendFrame, SetNodeAddrOverrides,
 };
 use crate::error::{Error, Result};
-use crate::message::MessageStream;
+use crate::message::stream::MessageStream;
 use crate::observer::{ObserverClient, ObserverHostShared};
 use crate::platform::{
   GetClientPlatformInfo, GetMapDetail, GetMapList, KillTestGame, Platform, PlatformStateError,
@@ -38,7 +38,7 @@ impl Session {
     platform: Addr<Platform>,
     controller_client: Addr<ControllerClient>,
     observer_client: Addr<ObserverClient>,
-    stream: MessageStream,
+    stream: Box<dyn MessageStream>,
   ) -> Self {
     let (tx, rx) = channel(3);
     let scope = SpawnScope::new();
@@ -64,15 +64,15 @@ impl Session {
     Self { _scope: scope, tx }
   }
 
-  pub fn sender(&self) -> WsSender {
-    WsSender(self.tx.clone())
+  pub fn sender(&self) -> MessageSender {
+    MessageSender(self.tx.clone())
   }
 }
 
 #[derive(Debug, Clone)]
-pub struct WsSender(Sender<OutgoingMessage>);
+pub struct MessageSender(Sender<OutgoingMessage>);
 
-impl WsSender {
+impl MessageSender {
   pub async fn send_or_discard(&self, msg: OutgoingMessage) {
     self.0.clone().send(msg).await.ok();
   }
@@ -82,7 +82,7 @@ async fn serve_stream(
   state: Arc<Worker>,
   mut rx: Receiver<OutgoingMessage>,
   mut scope: SpawnScopeHandle,
-  mut stream: MessageStream,
+  mut stream: Box<dyn MessageStream>,
 ) -> Result<()> {
   let msg = state.get_client_info_message().await?;
 
@@ -104,7 +104,7 @@ async fn serve_stream(
         if let Some(msg) = msg {
           stream.send(msg).await?;
         } else {
-          tracing::debug!("ws sender dropped");
+          tracing::debug!("message sender dropped");
           break;
         }
       }
@@ -241,9 +241,7 @@ impl Worker {
             OutgoingMessage::WatchGameSetSpeedError(ErrorMessage::new("No active stream."))
           }
         };
-        reply_sender
-          .send(reply)
-          .await?;
+        reply_sender.send(reply).await?;
       }
     }
     Ok(())

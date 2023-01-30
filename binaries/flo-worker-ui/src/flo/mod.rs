@@ -11,7 +11,7 @@ static RT: Lazy<Mutex<Runtime>> = Lazy::new(|| Mutex::new(Runtime::new().unwrap(
 
 async fn run_flo() -> Result<u16> {
   let rt = RT.lock().await;
-  let client = rt.block_on(flo_client::start(Default::default()))?;
+  let client = rt.block_on(flo_client::start_ws(Default::default()))?;
   let port = client.port();
   rt.spawn(client.serve());
   Ok(port)
@@ -19,7 +19,7 @@ async fn run_flo() -> Result<u16> {
 
 async fn run_flo_worker(opt: Opt) -> Result<u16> {
   let rt = RT.lock().await;
-  let client = rt.block_on(flo_client::start(StartConfig {
+  let client = rt.block_on(flo_client::start_ws(StartConfig {
     token: opt.token,
     installation_path: opt.installation_path,
     user_data_path: opt.user_data_path,

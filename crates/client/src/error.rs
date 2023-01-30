@@ -46,6 +46,8 @@ pub enum Error {
   Timeout(anyhow::Error),
   #[error("Task cancelled: {0:?}")]
   TaskCancelled(anyhow::Error),
+  #[error("Embed message stream broken")]
+  EmbedMessageStreamBroken,
   #[error("Lan: {0}")]
   Lan(#[from] flo_lan::error::Error),
   #[error("Observer record: {0}")]

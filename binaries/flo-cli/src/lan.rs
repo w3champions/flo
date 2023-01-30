@@ -104,7 +104,7 @@ impl Command {
         }
       }
       Command::StartTestGame => {
-        let client = flo_client::start(Default::default()).await.unwrap();
+        let client = flo_client::start_ws(Default::default()).await.unwrap();
         client.start_test_game().await.unwrap();
         client.serve().await;
       }

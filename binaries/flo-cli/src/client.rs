@@ -28,7 +28,7 @@ impl Command {
         tracing::info!("controller host: {}", ENV.controller_host);
 
         if ws {
-          let client = flo_client::start(flo_client::StartConfig {
+          let client = flo_client::start_ws(flo_client::StartConfig {
             controller_host: ENV.controller_host.clone().into(),
             ..Default::default()
           })
@@ -43,7 +43,7 @@ impl Command {
             }
           });
         } else {
-          let client = flo_client::start(flo_client::StartConfig {
+          let client = flo_client::start_ws(flo_client::StartConfig {
             token: Some(token),
             controller_host: ENV.controller_host.clone().into(),
             ..Default::default()

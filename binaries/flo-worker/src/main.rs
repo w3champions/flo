@@ -27,7 +27,7 @@ struct Opt {
 
   #[structopt(long)]
   version: Option<String>,
-  
+
   #[structopt(long)]
   ptr: Option<bool>,
 }
@@ -47,7 +47,7 @@ fn main() {
 
   let res = std::panic::catch_unwind(|| -> Result<_> {
     let rt = Runtime::new()?;
-    let client = rt.block_on(flo_client::start(StartConfig {
+    let client = rt.block_on(flo_client::start_ws(StartConfig {
       token: opt.token,
       installation_path: opt.installation_path,
       user_data_path: opt.user_data_path,

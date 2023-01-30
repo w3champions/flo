@@ -31,7 +31,7 @@ impl Command {
         delay_secs,
       } => {
         let token = flo_observer::token::create_observer_token(game_id, delay_secs)?;
-        let client = flo_client::start(flo_client::StartConfig {
+        let client = flo_client::start_ws(flo_client::StartConfig {
           stats_host: ENV.stats_host.clone().into(),
           ..Default::default()
         })
