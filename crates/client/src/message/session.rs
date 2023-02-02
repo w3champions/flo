@@ -1,4 +1,4 @@
-use super::message::{
+use super::messages::{
   ClientInfo, ErrorMessage, IncomingMessage, MapList, MapPath, OutgoingMessage, War3Info,
   WatchGameInfo,
 };

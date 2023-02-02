@@ -10,7 +10,7 @@ use crate::lan::{
   KillLanGame, Lan, LanEvent, ReplaceLanGame, StopLanGame, UpdateLanGamePlayerStatus,
   UpdateLanGameStatus,
 };
-use crate::message::message::{self, OutgoingMessage};
+use crate::message::messages::{self, OutgoingMessage};
 use crate::message::ConnectController;
 use crate::message::{MessageEvent, Session};
 use crate::node::stream::NodeStreamEvent;
@@ -103,13 +103,13 @@ impl ControllerClient {
     {
       tracing::error!("update lan game: {}", err);
       self
-        .ws_send(OutgoingMessage::GameStartError(message::ErrorMessage::new(
-          err,
-        )))
+        .ws_send(OutgoingMessage::GameStartError(
+          messages::ErrorMessage::new(err),
+        ))
         .await;
     } else {
       self
-        .ws_send(OutgoingMessage::GameStarted(message::GameStarted {
+        .ws_send(OutgoingMessage::GameStarted(messages::GameStarted {
           game_id,
           lan_game_name: { crate::lan::get_lan_game_name(game_id, player_session.player.id) },
         }))
@@ -287,11 +287,11 @@ impl Handler<UpdateNodes> for ControllerClient {
         nodes: nodes.clone(),
       }))
       .await??;
-    let mut list = message::NodeList {
+    let mut list = messages::NodeList {
       nodes: Vec::with_capacity(nodes.len()),
     };
     for node in nodes {
-      list.nodes.push(message::Node {
+      list.nodes.push(messages::Node {
         id: node.id,
         name: node.name,
         location: node.location,
@@ -300,7 +300,7 @@ impl Handler<UpdateNodes> for ControllerClient {
       })
     }
     self
-      .ws_send(message::OutgoingMessage::ListNodes(list))
+      .ws_send(messages::OutgoingMessage::ListNodes(list))
       .await;
     Ok(())
   }
@@ -355,8 +355,8 @@ impl Handler<ReplaceSession> for ControllerClient {
     if let Some(replaced) = self.ws_conn.replace(sess) {
       replaced
         .sender()
-        .send_or_discard(OutgoingMessage::Disconnect(message::Disconnect {
-          reason: message::DisconnectReason::Multi,
+        .send_or_discard(OutgoingMessage::Disconnect(messages::Disconnect {
+          reason: messages::DisconnectReason::Multi,
           message: "Another client took up the connection.".to_string(),
         }))
         .await;

@@ -24,5 +24,7 @@ pub struct StartConfig {
 }
 
 pub use crate::message::embed::{start_embed, FloEmbedClient, FloEmbedClientHandle};
+pub use message::messages;
+
 #[cfg(feature = "ws")]
 pub use crate::message::ws::{start_ws, FloWsClient};

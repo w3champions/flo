@@ -1,4 +1,4 @@
-use super::message::{IncomingMessage, OutgoingMessage};
+use super::messages::{IncomingMessage, OutgoingMessage};
 use super::stream::MessageStream;
 use super::Session;
 use crate::controller::{ControllerClient, ReplaceSession};

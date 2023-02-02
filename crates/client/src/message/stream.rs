@@ -1,4 +1,4 @@
-use super::message::{IncomingMessage, OutgoingMessage};
+use super::messages::{IncomingMessage, OutgoingMessage};
 use crate::error::Result;
 use flo_state::async_trait;
 

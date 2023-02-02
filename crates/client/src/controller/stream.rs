@@ -1,8 +1,8 @@
 use crate::controller::{ControllerClient, SendWs, UpdateMuteList};
 use crate::error::*;
 use crate::game::LocalGameInfo;
-use crate::message::message;
-use crate::message::message::OutgoingMessage;
+use crate::message::messages;
+use crate::message::messages::OutgoingMessage;
 use crate::node::{AddNode, GetNodePingMap, NodeRegistry, RemoveNode, UpdateNodes};
 use crate::ping::PingUpdate;
 use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
@@ -147,7 +147,7 @@ impl ControllerStream {
     parent
       .notify(SendWs::new(
         id,
-        message::OutgoingMessage::PlayerSession(session),
+        messages::OutgoingMessage::PlayerSession(session),
       ))
       .await?;
 
@@ -202,8 +202,8 @@ impl ControllerStream {
     parent
       .notify(SendWs::new(
         id,
-        OutgoingMessage::Disconnect(message::Disconnect {
-          reason: message::DisconnectReason::Unknown,
+        OutgoingMessage::Disconnect(messages::Disconnect {
+          reason: messages::DisconnectReason::Unknown,
           message: "Server connection closed".to_string(),
         }),
       ))
@@ -231,7 +231,7 @@ impl ControllerStream {
     flo_net::try_flo_packet! {
       frame => {
         p: proto::PacketClientDisconnect => {
-          SendWs::new(id, OutgoingMessage::Disconnect(message::Disconnect {
+          SendWs::new(id, OutgoingMessage::Disconnect(messages::Disconnect {
               reason: S2ProtoEnum::unpack_i32(p.reason)?,
               message: format!("Server closed the connection: {:?}", p.reason)
             })).notify(parent).await?;
@@ -463,7 +463,7 @@ impl Actor for ControllerStream {
 
             SendWs::new(
               id,
-              OutgoingMessage::ConnectRejected(message::ErrorMessage::new(match &err {
+              OutgoingMessage::ConnectRejected(messages::ErrorMessage::new(match &err {
                 Error::ConnectionRequestRejected(reason) => {
                   format!("server rejected: {:?}", reason)
                 }

@@ -1,4 +1,4 @@
-pub mod message;
+pub mod messages;
 mod session;
 mod stream;
 use flo_state::Message;
