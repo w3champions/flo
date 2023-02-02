@@ -57,7 +57,7 @@ pub enum RejectReason {
   InvalidToken = 2,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::GameInfo")]
 pub struct GameInfo {
   pub id: i32,
@@ -93,7 +93,7 @@ pub struct Node {
   pub country_id: String,
 }
 
-#[derive(Debug, S2ProtoUnpack, Serialize)]
+#[derive(Debug, S2ProtoUnpack, Serialize, Clone)]
 #[s2_grpc(message_type = "flo_net::proto::flo_connect::Map")]
 pub struct Map {
   pub sha1: Vec<u8>,
@@ -135,7 +135,7 @@ impl<'a> From<&'a Slot> for LanGameSlot<'a> {
     Self {
       player: slot.player.as_ref().map(|p| LanGamePlayerInfo {
         id: p.id,
-        name: p.name.as_str()
+        name: p.name.as_str(),
       }),
       settings: slot.settings.clone(),
     }
@@ -173,10 +173,7 @@ impl Default for SlotSettings {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type(
-  flo_net::proto::flo_connect::Computer,
-  flo_grpc::game::Computer
-))]
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_connect::Computer, flo_grpc::game::Computer))]
 pub enum Computer {
   Easy = 0,
   Normal = 1,
@@ -195,10 +192,7 @@ impl From<Computer> for flo_w3gs::slot::AI {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type(
-  flo_net::proto::flo_connect::Race,
-  flo_grpc::game::Race,
-))]
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_connect::Race, flo_grpc::game::Race,))]
 pub enum Race {
   Human = 0,
   Orc = 1,
@@ -221,10 +215,7 @@ impl From<Race> for flo_w3gs::slot::RacePref {
 }
 
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[s2_grpc(proto_enum_type(
-  flo_net::proto::flo_connect::SlotStatus,
-  flo_grpc::game::SlotStatus,
-))]
+#[s2_grpc(proto_enum_type(flo_net::proto::flo_connect::SlotStatus, flo_grpc::game::SlotStatus,))]
 pub enum SlotStatus {
   Open = 0,
   Closed = 1,
@@ -259,7 +250,7 @@ impl From<flo_net::proto::flo_node::PacketNodeGameStatusUpdate> for GameStatusUp
   }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MapDetail {
   pub path: String,
   pub sha1: String,
@@ -276,7 +267,7 @@ pub struct MapDetail {
   pub forces: Vec<MapForceOwned>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MapPlayerOwned {
   pub name: String,
   pub r#type: u32,
@@ -284,7 +275,7 @@ pub struct MapPlayerOwned {
   pub flags: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MapForceOwned {
   pub name: String,
   pub flags: u32,

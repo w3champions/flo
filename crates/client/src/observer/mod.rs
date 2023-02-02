@@ -1,12 +1,12 @@
 use crate::error::{Error, Result};
 use crate::observer::game::ObserverGameHost;
+pub use crate::observer::game::ObserverHostShared;
 use crate::observer::source::NetworkSource;
 use crate::platform::{GetClientConfig, Platform};
 use crate::StartConfig;
 use flo_state::{async_trait, Actor, Addr, Handler, Message, RegistryRef, Service};
 use serde::Deserialize;
 use tokio_util::sync::CancellationToken;
-pub use crate::observer::game::ObserverHostShared;
 
 pub mod game;
 mod send_queue;
@@ -38,7 +38,7 @@ impl Service<StartConfig> for ObserverClient {
   }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct WatchGame {
   pub token: String,
 }

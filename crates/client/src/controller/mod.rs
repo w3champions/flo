@@ -537,12 +537,12 @@ impl Handler<UnmutePlayer> for ControllerClient {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetNodeAddrOverrides {
   pub overrides: Vec<SetNodeAddrOverride>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetNodeAddrOverride {
   pub node_id: i32,
   pub address: String,

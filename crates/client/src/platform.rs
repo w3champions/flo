@@ -255,7 +255,7 @@ impl Handler<GetMapDetail> for Platform {
   }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct StartTestGame {
   pub name: String,
 }

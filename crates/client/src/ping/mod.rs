@@ -280,7 +280,7 @@ impl Message for PingError {
   type Result = ();
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PingUpdate {
   pub ping_map: BTreeMap<i32, PingStats>,
 }
