@@ -328,11 +328,19 @@ fn get_war3_info(info: Result<ClientPlatformInfo, PlatformStateError>) -> War3In
       located: true,
       version: info.version.clone().into(),
       error: None,
+      user_data_path: info.user_data_path.to_string_lossy().into_owned().into(),
+      installation_path: info.installation_path.to_string_lossy().into_owned().into(),
+      executable_path: info.executable_path.to_string_lossy().into_owned().into(),
+      ptr: info.ptr,
     },
     Err(e) => War3Info {
       located: false,
       version: None,
       error: Some(e),
+      user_data_path: None,
+      installation_path: None,
+      executable_path: None,
+      ptr: false,
     },
   }
 }

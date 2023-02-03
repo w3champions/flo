@@ -98,8 +98,12 @@ pub struct ClientInfo {
 #[derive(Debug, Serialize, Clone)]
 pub struct War3Info {
   pub located: bool,
-  pub version: Option<String>,
   pub error: Option<PlatformStateError>,
+  pub version: Option<String>,
+  pub user_data_path: Option<String>,
+  pub installation_path: Option<String>,
+  pub executable_path: Option<String>,
+  pub ptr: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]

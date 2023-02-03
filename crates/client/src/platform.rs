@@ -375,7 +375,6 @@ async fn load(
   start_config: &StartConfig,
 ) -> (ClientConfig, Result<ClientPlatformInfo, PlatformStateError>) {
   tokio::task::block_in_place(move || {
-    #[cfg(feature = "worker")]
     let config = ClientConfig {
       installation_path: start_config.installation_path.clone(),
       user_data_path: start_config.user_data_path.clone(),
@@ -392,11 +391,6 @@ async fn load(
       ..Default::default()
     };
 
-    #[cfg(not(feature = "worker"))]
-    let config = {
-      let _ = start_config;
-      ClientConfig::load().unwrap_or_default()
-    };
     let info = ClientPlatformInfo::with_config(&config).map_err(|e| match e {
       PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
       PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
