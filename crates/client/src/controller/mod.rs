@@ -54,6 +54,10 @@ impl ControllerClient {
     self.conn.replace(stream.start());
   }
 
+  fn disconnect(&mut self) {
+    self.conn.take();
+  }
+
   async fn ws_send(&self, message: OutgoingMessage) {
     if let Some(sender) = self.ws_conn.as_ref().map(|v| v.sender()) {
       sender.send_or_discard(message).await;
@@ -317,6 +321,7 @@ impl Handler<MessageEvent> for ControllerClient {
       MessageEvent::ConnectController(ConnectController { token }) => {
         self.connect(ctx, token);
       }
+      MessageEvent::Disconnect => self.disconnect(),
       MessageEvent::WorkerError(_) => {}
     }
   }

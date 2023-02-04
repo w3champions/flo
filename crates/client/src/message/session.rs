@@ -148,6 +148,9 @@ impl Worker {
       IncomingMessage::Connect(connect) => {
         self.handle_connect(connect.token).await?;
       }
+      IncomingMessage::Disconnect => {
+        self.handle_disconnect().await?;
+      }
       IncomingMessage::ListMaps => {
         self.handle_map_list(reply_sender.clone()).await?;
       }
@@ -264,6 +267,14 @@ impl Worker {
     self
       .controller_client
       .notify(MessageEvent::ConnectController(ConnectController { token }))
+      .await?;
+    Ok(())
+  }
+
+  async fn handle_disconnect(&self) -> Result<()> {
+    self
+      .controller_client
+      .notify(MessageEvent::Disconnect)
       .await?;
     Ok(())
   }

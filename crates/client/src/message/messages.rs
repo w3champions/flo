@@ -25,6 +25,7 @@ use flo_types::game::{GameInfo, GameStatusUpdate, PlayerInfo, Slot, SlotSettings
 pub enum IncomingMessage {
   ReloadClientInfo,
   Connect(Connect),
+  Disconnect,
   ListMaps,
   GetMapDetail(MapPath),
   GameSlotUpdateRequest(GameSlotUpdateRequest),

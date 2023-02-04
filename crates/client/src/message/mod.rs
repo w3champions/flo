@@ -13,6 +13,7 @@ pub mod ws;
 #[derive(Debug)]
 pub enum MessageEvent {
   ConnectController(ConnectController),
+  Disconnect,
   WorkerError(Error),
 }
 
