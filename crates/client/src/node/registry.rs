@@ -344,7 +344,17 @@ impl Handler<SetNodeAddrOverrides> for NodeRegistry {
     _: &mut Context<Self>,
     SetNodeAddrOverrides { overrides }: SetNodeAddrOverrides,
   ) -> <SetNodeAddrOverrides as Message>::Result {
-    let mut addresses: Vec<_> = self.map.values().map(|v| v.socket_addr).collect();
+    let mut addresses: Vec<_> = self
+      .map
+      .values()
+      .filter_map(|v| {
+        if !overrides.contains_key(&v.id) {
+          Some(v.socket_addr)
+        } else {
+          None
+        }
+      })
+      .collect();
     for (id, addr) in overrides.iter() {
       if !addresses.contains(addr) {
         tracing::debug!(node_id = *id, "addr override: {}", addr);
