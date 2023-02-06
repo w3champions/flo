@@ -43,7 +43,7 @@ enum Opt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-  dotenv::dotenv()?;
+  dotenv::dotenv().ok();
   // flo_log_subscriber::init_env_override("debug,h2=error,async_dnssd=error");
   flo_log_subscriber::init();
 
