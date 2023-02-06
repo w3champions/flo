@@ -356,9 +356,13 @@ impl Handler<SetNodeAddrOverrides> for NodeRegistry {
       })
       .collect();
     for (id, addr) in overrides.iter() {
-      if !addresses.contains(addr) {
-        tracing::debug!(node_id = *id, "addr override: {}", addr);
-        addresses.push(*addr);
+      if self.map.contains_key(id) {
+        if !addresses.contains(addr) {
+          tracing::debug!(node_id = *id, "addr override: {}", addr);
+          addresses.push(*addr);
+        }
+      } else {
+        tracing::warn!(node_id = *id, "addr override for unknown node");
       }
     }
     self.addr_overrides = overrides;
