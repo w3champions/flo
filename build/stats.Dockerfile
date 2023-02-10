@@ -1,14 +1,16 @@
-FROM debian:stable
+FROM rust:1-bullseye AS builder
 
-WORKDIR /flo
+WORKDIR /usr/local/build
 
-RUN apt-get update && \
-  apt-get install \
-  ca-certificates \
-  libssl-dev \
-  -qqy \
-  --no-install-recommends \
-  && rm -rf /var/lib/apt/lists/*
+RUN rustup component add rustfmt
+
+RUN cargo build -p flo-controller-service --release
+
+FROM debian:bullseye-slim
+
+RUN apt-get update && apt-get install -y ca-certificates libssl-dev libpq-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/local/s2
 
 ARG IMAGE_BUILD_DATE=2016-01-01
 ENV IMAGE_BUILD_DATE $IMAGE_BUILD_DATE
@@ -18,6 +20,6 @@ ENV RUST_BACKTRACE 1
 EXPOSE 3557/tcp
 EXPOSE 3558/tcp
 
-COPY release/flo-stats-service flo-stats-service
+COPY --from=builder /usr/local/build/target/release/flo-stats-service /usr/local/flo/flo-stats-service
 
-CMD ["/flo/flo-stats-service"]
+CMD ["/usr/local/flo/flo-stats-service"]

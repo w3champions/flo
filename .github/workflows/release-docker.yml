@@ -16,26 +16,6 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --profile=release-with-debug -p flo-controller-service -p flo-node-service -p flo-stats-service
-
-      - name: Move binaries
-        run: |
-          mkdir -p ./build/release
-          mv ./target/release-with-debug/flo-controller-service ./build/release
-          mv ./target/release-with-debug/flo-node-service ./build/release
-          mv ./target/release-with-debug/flo-stats-service ./build/release
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       - name: Set up Docker Buildx
