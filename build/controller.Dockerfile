@@ -2,6 +2,8 @@ FROM rust:1-bullseye AS builder
 
 WORKDIR /usr/local/build
 
+COPY . .
+
 RUN rustup component add rustfmt
 
 RUN cargo build -p flo-controller-service --release
