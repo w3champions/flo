@@ -6,7 +6,7 @@ COPY . .
 
 RUN rustup component add rustfmt
 
-RUN cargo build -p flo-controller-service --release
+RUN cargo build -p flo-stats-service --release
 
 FROM debian:bullseye-slim
 
