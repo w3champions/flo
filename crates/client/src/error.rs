@@ -1,4 +1,4 @@
-use crate::ping::PingError;
+use crate::{ping::PingError, platform::PlatformStateError};
 use flo_types::node::NodeGameStatus;
 use thiserror::Error;
 
@@ -42,6 +42,8 @@ pub enum Error {
   ObserverConnectionRequestRejected(flo_net::observer::ObserverConnectRejectReason),
   #[error("Local game info not yet received")]
   LocalGameInfoNotFound,
+  #[error("Unable to get client platform info: {0}")]
+  GetClientPlatformInfo(#[from] PlatformStateError),
   #[error("Timeout: {0:?}")]
   Timeout(anyhow::Error),
   #[error("Task cancelled: {0:?}")]

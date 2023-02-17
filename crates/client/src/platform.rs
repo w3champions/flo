@@ -47,10 +47,13 @@ impl Service<StartConfig> for Platform {
   }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 pub enum PlatformStateError {
+  #[error("Cannot find user data path")]
   UserDataPath,
+  #[error("Cannot find Warcraft III installation path")]
   InstallationPath,
+  #[error("Internal error")]
   Internal,
 }
 

@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::observer::{ObserverClient, WatchGame};
 use crate::platform::Platform;
 use crate::StartConfig;
+pub use flo_platform::ClientPlatformInfo;
 use flo_state::{async_trait, Addr, Registry};
 use tokio::sync::mpsc;
 
@@ -66,6 +67,15 @@ impl FloEmbedClientHandle {
   pub async fn watch(&self, token: String) -> Result<()> {
     self.observer_client.send(WatchGame { token }).await??;
     Ok(())
+  }
+
+  pub async fn get_client_platform_info(&self, force_reload: bool) -> Result<ClientPlatformInfo> {
+    use crate::platform::GetClientPlatformInfo;
+    let info = self
+      .platform
+      .send(GetClientPlatformInfo { force_reload })
+      .await??;
+    Ok(info)
   }
 }
 
