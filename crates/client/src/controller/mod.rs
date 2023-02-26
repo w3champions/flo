@@ -92,6 +92,7 @@ impl ControllerClient {
       return;
     };
 
+    let game_name = event.game_info.name.clone();
     let msg = ReplaceLanGame {
       my_player_id: player_session.player.id,
       node: Arc::new(node_info),
@@ -116,7 +117,7 @@ impl ControllerClient {
       self
         .ws_send(OutgoingMessage::GameStarted(messages::GameStarted {
           game_id,
-          lan_game_name: { crate::lan::get_lan_game_name(game_id, player_session.player.id) },
+          lan_game_name: crate::lan::get_lan_game_name(&game_name, player_session.player.id),
         }))
         .await;
     }

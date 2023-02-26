@@ -1,7 +1,6 @@
 pub mod diag;
 pub mod game;
 
-use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -233,19 +232,8 @@ impl Handler<KillLanGame> for Lan {
   }
 }
 
-pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
-  use hash_ids::HashIds;
-  lazy_static! {
-    static ref HASHER: HashIds = HashIds::builder().with_salt("FLO").finish();
-  }
-  let mut value = [0_u8; 8];
-  value[0..4].copy_from_slice(&game_id.to_le_bytes());
-  value[4..8].copy_from_slice(&player_id.to_le_bytes());
-  format!(
-    "GAME#{}-{}",
-    game_id,
-    HASHER.encode(&[u64::from_le_bytes(value)])
-  )
+pub fn get_lan_game_name(game_name: &str, player_id: i32) -> String {
+  format!("{}-{}", game_name, player_id)
 }
 
 #[derive(Debug)]

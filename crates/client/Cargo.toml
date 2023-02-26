@@ -7,9 +7,8 @@ edition = "2018"
 [features]
 default = []
 ws = ["async-tungstenite"]
-worker = ["ws", "custom-lan-game-name"]
+worker = ["ws"]
 blacklist = ["flo-w3c/blacklist"]
-custom-lan-game-name = []
 
 [dependencies]
 flo-constants = { path = "../constants" }
