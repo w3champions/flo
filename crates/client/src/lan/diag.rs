@@ -24,6 +24,7 @@ pub async fn run_test_lobby(
   map_width: u16,
   map_height: u16,
   map_checksum: MapChecksum,
+  weak_outgoing_tx: WeakSender<OutgoingMessage>,
 ) -> Result<Option<LobbyAction>> {
   let map_sha1 = map_checksum.sha1;
 
@@ -93,7 +94,7 @@ pub async fn run_test_lobby(
   let _p = MdnsPublisher::start(game_version, lan_game_info).await?;
 
   while let Some(mut stream) = listener.incoming().try_next().await? {
-    return LobbyHandler::new(&info, &mut stream, None, &mut rx)
+    return LobbyHandler::new(&info, &mut stream, None, &mut rx, Some(weak_outgoing_tx))
       .run()
       .await
       .map(Some);

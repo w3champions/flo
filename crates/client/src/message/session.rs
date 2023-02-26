@@ -24,7 +24,7 @@ use flo_task::{SpawnScope, SpawnScopeHandle};
 use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoPack;
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender, WeakSender};
 use tracing_futures::Instrument;
 
 #[derive(Debug)]
@@ -75,6 +75,10 @@ pub struct MessageSender(Sender<OutgoingMessage>);
 impl MessageSender {
   pub async fn send_or_discard(&self, msg: OutgoingMessage) {
     self.0.clone().send(msg).await.ok();
+  }
+
+  pub fn downgrade(&self) -> WeakSender<OutgoingMessage> {
+    self.0.downgrade()
   }
 }
 

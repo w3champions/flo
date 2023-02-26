@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::WeakSender;
 use tokio::sync::watch::Receiver;
 use tokio::time::{interval_at, sleep};
 
@@ -17,6 +18,7 @@ use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMe
 use crate::error::*;
 use crate::lan::game::slot::index_to_player_id;
 use crate::lan::game::LanGameInfo;
+use crate::messages::{LanGameJoined, OutgoingMessage};
 use crate::node::stream::NodeStreamSender;
 use flo_types::node::{NodeGameStatus, SlotClientStatus};
 use flo_w3gs::protocol::constants::ProtoBufMessageTypeId;
@@ -36,6 +38,7 @@ pub struct LobbyHandler<'a> {
   node_stream: Option<&'a mut NodeStreamSender>,
   status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
   starting: bool,
+  weak_outgoing_tx: Option<WeakSender<OutgoingMessage>>,
 }
 
 impl<'a> LobbyHandler<'a> {
@@ -44,6 +47,7 @@ impl<'a> LobbyHandler<'a> {
     stream: &'a mut W3GSStream,
     node_stream: Option<&'a mut NodeStreamSender>,
     status_rx: &'a mut Receiver<Option<NodeGameStatus>>,
+    weak_outgoing_tx: Option<WeakSender<OutgoingMessage>>,
   ) -> Self {
     LobbyHandler {
       info,
@@ -51,6 +55,7 @@ impl<'a> LobbyHandler<'a> {
       node_stream,
       status_rx,
       starting: false,
+      weak_outgoing_tx,
     }
   }
 
@@ -94,6 +99,11 @@ impl<'a> LobbyHandler<'a> {
                   node_stream.report_slot_status(SlotClientStatus::Joined).await.ok();
                 }
                 reported = true;
+                if let Some(tx) = self.weak_outgoing_tx.as_ref().and_then(|tx| tx.upgrade()) {
+                  tx.send(OutgoingMessage::LanGameJoined(LanGameJoined {
+                    lobby_name: self.info.game.name.clone(),
+                  })).await.ok();
+                }
               }
               if join_state.should_start() {
                 self.send_start().await?;

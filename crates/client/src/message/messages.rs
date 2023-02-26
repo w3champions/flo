@@ -74,7 +74,7 @@ pub enum OutgoingMessage {
   WatchGame(WatchGameInfo),
   WatchGameError(ErrorMessage),
   WatchGameSetSpeedError(ErrorMessage),
-  LanGameJoin(LanGameJoin),
+  LanGameJoined(LanGameJoined),
 }
 
 impl FromStr for IncomingMessage {
@@ -209,6 +209,6 @@ pub struct StartTestGame {
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct LanGameJoin {
+pub struct LanGameJoined {
   pub lobby_name: String,
 }

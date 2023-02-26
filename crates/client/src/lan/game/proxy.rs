@@ -1,10 +1,11 @@
-use crate::controller::ControllerClient;
+use crate::controller::{ControllerClient, GetWeakOutgoingMessageSender};
 use crate::error::*;
 use crate::lan::game::game::GameHandler;
 use crate::lan::game::lobby::{LobbyAction, LobbyHandler};
 use crate::lan::game::slot::index_to_player_id;
 use crate::lan::game::LanGameInfo;
 use crate::lan::LanEvent;
+use crate::messages::OutgoingMessage;
 use crate::node::stream::{NodeConnectToken, NodeStream, NodeStreamSender};
 use crate::node::NodeInfo;
 use flo_state::Addr;
@@ -22,7 +23,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender, WeakSender};
 use tokio::sync::{oneshot, watch};
 use tokio::time::interval;
 use tokio_stream::StreamExt;
@@ -194,8 +195,14 @@ impl State {
         }
       };
 
+      let weak_outgoing_tx = client.send(GetWeakOutgoingMessageSender).await?;
       let lobby_action = {
-        let lobby = self.handle_lobby_stream(&mut stream, &mut node_stream, &mut status_rx);
+        let lobby = self.handle_lobby_stream(
+          &mut stream,
+          &mut node_stream,
+          &mut status_rx,
+          weak_outgoing_tx,
+        );
         tokio::pin!(lobby);
 
         tokio::select! {
@@ -215,13 +222,6 @@ impl State {
         LobbyAction::Leave => continue,
       }
     };
-
-    client
-      .notify(LanEvent::LanGameJoined {
-        lobby_name: self.info.game.name.clone(),
-      })
-      .await
-      .ok();
 
     stop_collect_player_events_tx
       .send(())
@@ -340,8 +340,15 @@ impl State {
     stream: &mut W3GSStream,
     node_stream: &mut NodeStreamSender,
     status_rx: &mut watch::Receiver<Option<NodeGameStatus>>,
+    weak_outgoing_tx: Option<WeakSender<OutgoingMessage>>,
   ) -> Result<LobbyAction> {
-    let mut lobby_handler = LobbyHandler::new(&self.info, stream, Some(node_stream), status_rx);
+    let mut lobby_handler = LobbyHandler::new(
+      &self.info,
+      stream,
+      Some(node_stream),
+      status_rx,
+      weak_outgoing_tx,
+    );
     let action = lobby_handler.run().await?;
     Ok(action)
   }

@@ -13,7 +13,6 @@ use crate::lan::{
 use crate::message::messages::{self, OutgoingMessage};
 use crate::message::ConnectController;
 use crate::message::{MessageEvent, Session};
-use crate::messages::LanGameJoin;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::{
   self, GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
@@ -27,6 +26,7 @@ use flo_state::{async_trait, Actor, Addr, Context, Handler, Message, Owner, Regi
 use flo_types::game::PlayerSession;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::mpsc::WeakSender;
 
 pub struct ControllerClient {
   config: ClientConfig,
@@ -35,7 +35,7 @@ pub struct ControllerClient {
   lan: Addr<Lan>,
   conn: Option<Owner<ControllerStream>>,
   conn_id: u64,
-  ws_conn: Option<Session>,
+  message_session: Option<Session>,
   current_session: Option<PlayerSession>,
   initial_token: Option<String>,
   mute_list: Vec<i32>,
@@ -60,7 +60,7 @@ impl ControllerClient {
   }
 
   async fn ws_send(&self, message: OutgoingMessage) {
-    if let Some(sender) = self.ws_conn.as_ref().map(|v| v.sender()) {
+    if let Some(sender) = self.message_session.as_ref().map(|v| v.sender()) {
       sender.send_or_discard(message).await;
     }
   }
@@ -155,7 +155,7 @@ impl Service<StartConfig> for ControllerClient {
       lan: registry.resolve().await?,
       conn: None,
       conn_id: 0,
-      ws_conn: None,
+      message_session: None,
       current_session: None,
       initial_token: registry.data().token.clone(),
       mute_list: vec![],
@@ -271,7 +271,7 @@ impl Handler<ControllerEvent> for ControllerClient {
                 stream.shutdown().await.ok();
               });
             }
-            self.ws_conn.take();
+            self.message_session.take();
           }
         }
       }
@@ -339,7 +339,7 @@ impl Handler<SendFrame> for ControllerClient {
       stream.send(message).await??;
     } else {
       tracing::error!("frame dropped: {:?}", message.0.type_id);
-      self.ws_conn.take();
+      self.message_session.take();
     }
     Ok(())
   }
@@ -358,7 +358,7 @@ impl Handler<ReplaceSession> for ControllerClient {
     _: &mut Context<Self>,
     ReplaceSession(sess): ReplaceSession,
   ) -> <ReplaceSession as Message>::Result {
-    if let Some(replaced) = self.ws_conn.replace(sess) {
+    if let Some(replaced) = self.message_session.replace(sess) {
       replaced
         .sender()
         .send_or_discard(OutgoingMessage::Disconnect(messages::Disconnect {
@@ -378,11 +378,6 @@ impl Handler<LanEvent> for ControllerClient {
     message: LanEvent,
   ) -> <LanEvent as Message>::Result {
     match message {
-      LanEvent::LanGameJoined { lobby_name } => {
-        self
-          .ws_send(OutgoingMessage::LanGameJoin(LanGameJoin { lobby_name }))
-          .await;
-      }
       LanEvent::LanGameDisconnected { game_id } => {
         self.lan.notify(StopLanGame { game_id }).await.ok();
       }
@@ -605,5 +600,25 @@ impl Handler<ClearNodeAddrOverrides> for ControllerClient {
   async fn handle(&mut self, _: &mut Context<Self>, _: ClearNodeAddrOverrides) -> Result<()> {
     self.nodes.send(node::ClearNodeAddrOverrides).await??;
     Ok(())
+  }
+}
+
+pub struct GetWeakOutgoingMessageSender;
+
+impl Message for GetWeakOutgoingMessageSender {
+  type Result = Option<WeakSender<OutgoingMessage>>;
+}
+
+#[async_trait]
+impl Handler<GetWeakOutgoingMessageSender> for ControllerClient {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: GetWeakOutgoingMessageSender,
+  ) -> Option<WeakSender<OutgoingMessage>> {
+    self
+      .message_session
+      .as_ref()
+      .map(|s| s.sender().downgrade())
   }
 }

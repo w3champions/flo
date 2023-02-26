@@ -1,6 +1,5 @@
 use crate::error::{Error, Result};
-use crate::lan::game::LobbyAction;
-use crate::messages::{LanGameJoin, OutgoingMessage};
+use crate::messages::OutgoingMessage;
 use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
@@ -13,7 +12,7 @@ use futures::future::{abortable, AbortHandle};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::mpsc::{Sender, WeakSender};
+use tokio::sync::mpsc::WeakSender;
 
 #[derive(Debug)]
 pub struct Platform {
@@ -364,6 +363,7 @@ impl Platform {
               width as u16,
               height as u16,
               checksum,
+              weak_outgoing_tx,
             )
             .await
           }
@@ -372,15 +372,6 @@ impl Platform {
       };
       match res {
         Ok(res) => {
-          if let Some(LobbyAction::Start) = res {
-            if let Some(tx) = weak_outgoing_tx.upgrade() {
-              tx.send(OutgoingMessage::LanGameJoin(LanGameJoin {
-                lobby_name: name,
-              }))
-              .await
-              .ok();
-            }
-          }
           tracing::debug!("test game ended: {:?}", res)
         }
         Err(err) => {
