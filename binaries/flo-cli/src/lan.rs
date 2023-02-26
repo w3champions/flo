@@ -20,7 +20,6 @@ pub enum Command {
     name: String,
     player_ids: Vec<i32>,
   },
-  StartTestGame,
 }
 
 impl Command {
@@ -102,11 +101,6 @@ impl Command {
         for res in res {
           res.unwrap()
         }
-      }
-      Command::StartTestGame => {
-        let client = flo_client::start_ws(Default::default()).await.unwrap();
-        client.start_test_game().await.unwrap();
-        client.serve().await;
       }
     }
 

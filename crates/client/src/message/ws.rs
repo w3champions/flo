@@ -31,19 +31,6 @@ impl FloWsClient {
     self.port
   }
 
-  pub async fn start_test_game(&self) -> Result<()> {
-    use crate::platform::StartTestGame;
-    let platform = self._registry.resolve::<Platform>().await?;
-
-    platform
-      .send(StartTestGame {
-        name: "TEST".to_string(),
-      })
-      .await??;
-
-    Ok(())
-  }
-
   pub async fn watch(&self, token: String) -> Result<()> {
     let obs = self._registry.resolve::<ObserverClient>().await?;
 

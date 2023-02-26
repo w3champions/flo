@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::game::LocalGameInfo;
 use crate::lan::game::{LanGameInfo, LobbyAction, LobbyHandler};
+use crate::messages::OutgoingMessage;
 use flo_lan::MdnsPublisher;
 use flo_types::game::{
   GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus,
@@ -13,6 +14,7 @@ use flo_w3gs::net::W3GSListener;
 use flo_w3map::MapChecksum;
 use futures::TryStreamExt;
 use std::sync::Arc;
+use tokio::sync::mpsc::WeakSender;
 use tokio::sync::watch::channel;
 
 pub async fn run_test_lobby(

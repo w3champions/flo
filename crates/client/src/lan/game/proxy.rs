@@ -216,6 +216,13 @@ impl State {
       }
     };
 
+    client
+      .notify(LanEvent::LanGameJoined {
+        lobby_name: self.info.game.name.clone(),
+      })
+      .await
+      .ok();
+
     stop_collect_player_events_tx
       .send(())
       .expect("rx hold on stack");

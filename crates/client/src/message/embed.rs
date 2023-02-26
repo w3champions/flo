@@ -52,18 +52,6 @@ impl FloEmbedClientHandle {
     Ok(())
   }
 
-  pub async fn start_test_game(&self) -> Result<()> {
-    use crate::platform::StartTestGame;
-    self
-      .platform
-      .send(StartTestGame {
-        name: "TEST".to_string(),
-      })
-      .await??;
-
-    Ok(())
-  }
-
   pub async fn watch(&self, token: String) -> Result<()> {
     self.observer_client.send(WatchGame { token }).await??;
     Ok(())

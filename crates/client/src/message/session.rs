@@ -179,7 +179,13 @@ impl Worker {
         self.send_frame::<PacketGameStartRequest>(req).await?;
       }
       IncomingMessage::StartTestGame(msg) => {
-        self.platform.send(msg).await??;
+        self
+          .platform
+          .send(crate::platform::StartTestGame {
+            name: msg.name,
+            outgoing_sender: reply_sender.downgrade(),
+          })
+          .await??;
       }
       IncomingMessage::KillTestGame => {
         self.platform.notify(KillTestGame).await?;

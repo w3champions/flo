@@ -250,6 +250,9 @@ pub fn get_lan_game_name(game_id: i32, player_id: i32) -> String {
 
 #[derive(Debug)]
 pub enum LanEvent {
+  LanGameJoined {
+    lobby_name: String,
+  },
   LanGameDisconnected {
     game_id: i32,
   },

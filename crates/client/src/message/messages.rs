@@ -13,7 +13,7 @@ use flo_net::proto::flo_connect::{
 use crate::error::{Error, Result};
 use crate::observer::WatchGame;
 use crate::ping::PingUpdate;
-use crate::platform::{PlatformStateError, StartTestGame};
+use crate::platform::PlatformStateError;
 pub use flo_types::game::{
   DisconnectReason, MapDetail, MapForceOwned, MapPlayerOwned, PlayerSession, PlayerSessionUpdate,
   RejectReason,
@@ -74,6 +74,7 @@ pub enum OutgoingMessage {
   WatchGame(WatchGameInfo),
   WatchGameError(ErrorMessage),
   WatchGameSetSpeedError(ErrorMessage),
+  LanGameJoin(LanGameJoin),
 }
 
 impl FromStr for IncomingMessage {
@@ -200,4 +201,14 @@ pub struct WatchGameInfo {
 #[derive(Debug, Deserialize, Clone)]
 pub struct WatchGameSetSpeed {
   pub speed: f64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct StartTestGame {
+  pub name: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct LanGameJoin {
+  pub lobby_name: String,
 }

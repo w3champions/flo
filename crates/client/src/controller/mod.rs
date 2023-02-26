@@ -13,6 +13,7 @@ use crate::lan::{
 use crate::message::messages::{self, OutgoingMessage};
 use crate::message::ConnectController;
 use crate::message::{MessageEvent, Session};
+use crate::messages::LanGameJoin;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::{
   self, GetNode, NodeRegistry, SetActiveNode, UpdateAddressesAndGetNodePingMap, UpdateNodes,
@@ -377,6 +378,11 @@ impl Handler<LanEvent> for ControllerClient {
     message: LanEvent,
   ) -> <LanEvent as Message>::Result {
     match message {
+      LanEvent::LanGameJoined { lobby_name } => {
+        self
+          .ws_send(OutgoingMessage::LanGameJoin(LanGameJoin { lobby_name }))
+          .await;
+      }
       LanEvent::LanGameDisconnected { game_id } => {
         self.lan.notify(StopLanGame { game_id }).await.ok();
       }

@@ -1,4 +1,6 @@
 use crate::error::{Error, Result};
+use crate::lan::game::LobbyAction;
+use crate::messages::{LanGameJoin, OutgoingMessage};
 use crate::StartConfig;
 use flo_config::ClientConfig;
 use flo_platform::error::Error as PlatformError;
@@ -11,6 +13,7 @@ use futures::future::{abortable, AbortHandle};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::mpsc::{Sender, WeakSender};
 
 #[derive(Debug)]
 pub struct Platform {
@@ -258,9 +261,10 @@ impl Handler<GetMapDetail> for Platform {
   }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct StartTestGame {
   pub name: String,
+  pub outgoing_sender: WeakSender<OutgoingMessage>,
 }
 
 impl Message for StartTestGame {
@@ -272,9 +276,12 @@ impl Handler<StartTestGame> for Platform {
   async fn handle(
     &mut self,
     ctx: &mut Context<Self>,
-    StartTestGame { name }: StartTestGame,
+    StartTestGame {
+      name,
+      outgoing_sender,
+    }: StartTestGame,
   ) -> <StartTestGame as Message>::Result {
-    let next = self.start_test_game(ctx, name).await?;
+    let next = self.start_test_game(ctx, name, outgoing_sender).await?;
     if let Some(handle) = self.test_game_abort_handle.replace(next) {
       handle.abort()
     }
@@ -333,6 +340,7 @@ impl Platform {
     &mut self,
     ctx: &mut Context<Self>,
     name: String,
+    weak_outgoing_tx: WeakSender<OutgoingMessage>,
   ) -> Result<AbortHandle> {
     tracing::debug!("starting test game: {}", name);
 
@@ -363,7 +371,18 @@ impl Platform {
         }
       };
       match res {
-        Ok(res) => tracing::debug!("test game ended: {:?}", res),
+        Ok(res) => {
+          if let Some(LobbyAction::Start) = res {
+            if let Some(tx) = weak_outgoing_tx.upgrade() {
+              tx.send(OutgoingMessage::LanGameJoin(LanGameJoin {
+                lobby_name: name,
+              }))
+              .await
+              .ok();
+            }
+          }
+          tracing::debug!("test game ended: {:?}", res)
+        }
         Err(err) => {
           tracing::error!("start test game: {}", err);
         }
