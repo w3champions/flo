@@ -18,6 +18,7 @@ use flo_w3gs::protocol::player::{PlayerInfo, PlayerProfileMessage, PlayerSkinsMe
 use crate::error::*;
 use crate::lan::game::slot::index_to_player_id;
 use crate::lan::game::LanGameInfo;
+use crate::lan::get_lan_game_name;
 use crate::messages::{LanGameJoined, OutgoingMessage};
 use crate::node::stream::NodeStreamSender;
 use flo_types::node::{NodeGameStatus, SlotClientStatus};
@@ -101,7 +102,7 @@ impl<'a> LobbyHandler<'a> {
                 reported = true;
                 if let Some(tx) = self.weak_outgoing_tx.as_ref().and_then(|tx| tx.upgrade()) {
                   tx.send(OutgoingMessage::LanGameJoined(LanGameJoined {
-                    lobby_name: self.info.game.name.clone(),
+                    lobby_name: get_lan_game_name(&self.info.game.name, self.info.game.player_id),
                   })).await.ok();
                 }
               }
