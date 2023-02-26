@@ -10,7 +10,7 @@ use crate::error::*;
 use crate::game::LocalGameInfo;
 use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::slot::LanSlotInfo;
-#[cfg(not(feature = "worker"))]
+#[cfg(not(feature = "custom-lan-game-name"))]
 use crate::lan::get_lan_game_name;
 use crate::node::stream::NodeConnectToken;
 use crate::node::NodeInfo;
@@ -55,9 +55,9 @@ impl LanGame {
     let mdns_shutdown_notify = Arc::new(Notify::new());
 
     let game_id = game.game_id;
-    #[cfg(not(feature = "worker"))]
+    #[cfg(not(feature = "custom-lan-game-name"))]
     let game_name = get_lan_game_name(game.game_id, my_player_id);
-    #[cfg(feature = "worker")]
+    #[cfg(feature = "custom-lan-game-name")]
     let game_name = format!("{}-{}", game.name, my_player_id);
     let mut game_info = GameInfo::new(
       game.game_id,
