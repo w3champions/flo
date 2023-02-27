@@ -102,7 +102,7 @@ impl<'a> LobbyHandler<'a> {
                 reported = true;
                 if let Some(tx) = self.weak_outgoing_tx.as_ref().and_then(|tx| tx.upgrade()) {
                   tx.send(OutgoingMessage::LanGameJoined(LanGameJoined {
-                    lobby_name: get_lan_game_name(&self.info.game.name, self.info.game.player_id),
+                    lobby_name: self.info.lan_game_name_override.clone().unwrap_or_else(|| get_lan_game_name(&self.info.game.name, self.info.game.player_id)),
                   })).await.ok();
                 }
               }

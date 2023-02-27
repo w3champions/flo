@@ -39,6 +39,7 @@ pub struct LanGameInfo {
   pub(crate) slot_info: LanSlotInfo,
   pub(crate) map_checksum: MapChecksum,
   pub(crate) game_settings: GameSettings,
+  pub(crate) lan_game_name_override: Option<String>,
 }
 
 impl LanGame {
@@ -74,6 +75,7 @@ impl LanGame {
         game,
         map_checksum,
         game_settings: game_info.data.settings.clone(),
+        lan_game_name_override: None,
       },
       node,
       token,

@@ -77,6 +77,7 @@ pub async fn run_test_lobby(
       host_name: CString::new("FLO").unwrap(),
       map_sha1,
     },
+    lan_game_name_override: Some(name.to_string()),
   };
 
   let (_tx, mut rx) = channel(None);
