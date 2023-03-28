@@ -168,7 +168,7 @@ pub fn list_ban(
   query: Option<&str>,
   next_id: Option<i32>,
 ) -> Result<ListPlayerBan> {
-  const PAGE_SIZE: i64 = 100;
+  const PAGE_SIZE: i64 = 200;
   let mut q = player_ban::table
     .inner_join(player::table)
     .select(PlayerBan::COLUMNS)
