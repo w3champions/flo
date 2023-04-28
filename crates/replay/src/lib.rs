@@ -39,7 +39,7 @@ where
     .slots
     .iter()
     .enumerate()
-    .filter(|(_, slot)| slot.player.is_some())
+    .filter(|(_, slot)| slot.settings.status == SlotStatus::Occupied)
     .collect();
 
   let (first_player_info, first_player_name) = occupied_slots
