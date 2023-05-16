@@ -21,6 +21,10 @@ FLO is a Warcraft III toolkit written in Rust:
 git submodule update --init --recursive
 ```
 
+### Environment Variable Setup Before Cargo Build
+BONJOUR_SDK_HOME = <path_to_flo>/deps/bonjour-sdk-windows
+PQ_LIB_DIR = <path_to_PostgreSQL>/lib
+
 ### Create a .env file:
 ```
 RUST_LOG=debug
