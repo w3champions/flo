@@ -3,10 +3,12 @@ use bytes::Bytes;
 use error::{Error, Result};
 
 use flo_net::w3gs::W3GSPacketTypeId;
+use flo_types::observer::Slot;
 use flo_observer::record::GameRecordData;
 use flo_observer_fs::GameDataArchiveReader;
 use flo_types::game::SlotStatus;
 use flo_w3gs::leave::LeaveReason;
+use flo_w3gs::packet::Packet;
 use flo_w3gs::player::{PlayerProfileMessage, PlayerSkinsMessage, PlayerUnknown5Message};
 use flo_w3replay::Record;
 use flo_w3replay::{
@@ -24,16 +26,19 @@ pub struct GenerateReplayOptions {
   pub include_chats: bool,
 }
 
-pub async fn generate_replay<W>(
-  GenerateReplayOptions {
-    game,
-    archive,
-    include_chats,
-  }: GenerateReplayOptions,
-  w: W,
+pub async fn generate_replay_from_packets<W>(
+  game: GameInfo,
+  packets: Vec<Packet>,
+  include_chats: bool,
+  w: W
 ) -> Result<()>
-where
-  W: Write + Seek,
+where 
+  W: Write + Seek
+{
+  Ok(())
+}
+
+fn regenerate_game_info(game: &flo_types::observer::GameInfo) -> Result<(GameInfo, Vec<(usize, &Slot)>, u8, String)>
 {
   let occupied_slots: Vec<(usize, _)> = game
     .slots
@@ -70,6 +75,12 @@ where
     ),
   );
 
+  Ok((game_info, occupied_slots, first_player_id, first_player_name))
+
+}
+
+fn check_flo_ob_slot_not_occupied(occupied_slots: &Vec<(usize, &Slot)>) -> Result<bool>
+{
   let flo_ob_slot_occupied = occupied_slots
     .iter()
     .find(|(idx, _)| *idx == FLO_OB_SLOT)
@@ -79,6 +90,11 @@ where
     return Err(Error::FloObserverSlotOccupied);
   }
 
+  Ok(flo_ob_slot_occupied)
+}
+
+fn fill_out_player_details(game: &flo_types::observer::GameInfo) -> Result<(Vec<PlayerInfo>, Vec<ProtoBufPayload>, Vec<ProtoBufPayload>, Vec<u8>)>
+{
   let mut player_infos = vec![];
   let mut player_skins = vec![];
   let mut player_profiles = vec![];
@@ -113,6 +129,21 @@ where
     "FLO",
   )));
 
+  Ok((player_infos, player_skins, player_profiles, active_player_ids))
+
+}
+
+fn build_initial_records(game_info: GameInfo, 
+                        player_infos: Vec<PlayerInfo>,
+                        player_skins: Vec<ProtoBufPayload>,
+                        player_profiles: Vec<ProtoBufPayload>,
+                        flo_ob_slot_occupied: bool,
+                        first_player_id: u8,
+                        first_player_name: String,
+                        game: &flo_types::observer::GameInfo,
+                        occupied_slots: &Vec<(usize, &Slot)>,
+                        ) -> Result<Vec<Record>>
+{
   let mut records = vec![];
 
   // 0 GameInfo
@@ -181,7 +212,7 @@ where
       )
       .build();
 
-    for (i, player_slot) in &occupied_slots {
+    for (i, player_slot) in occupied_slots {
       use flo_w3gs::slot::SlotStatus;
       let slot = slot_info.slot_mut(*i).expect("always has 24 slots");
 
@@ -229,6 +260,35 @@ where
 
   // 7 GameStart
   records.push(Record::GameStart(Default::default()));
+
+  Ok(records)
+}
+
+fn initialize_replay(game: &flo_types::observer::GameInfo) -> Result<(Vec<Record>, Vec<u8>)>
+{
+  let (game_info, occupied_slots, first_player_id, first_player_name) = regenerate_game_info(game)?;
+
+  let flo_ob_occupied = check_flo_ob_slot_not_occupied(&occupied_slots)?;
+
+  let (player_infos, player_skins, player_profiles, active_player_ids) = fill_out_player_details(game)?;
+
+  let records = build_initial_records(game_info, player_infos, player_skins, player_profiles, flo_ob_occupied, first_player_id, first_player_name, game, &occupied_slots)?;
+
+  Ok((records, active_player_ids))
+}
+
+pub async fn generate_replay<W>(
+  GenerateReplayOptions {
+    game,
+    archive,
+    include_chats,
+  }: GenerateReplayOptions,
+  w: W,
+) -> Result<()>
+where
+  W: Write + Seek,
+{
+  let (mut records, mut active_player_ids) = initialize_replay(&game)?;
 
   let rdr = GameDataArchiveReader::open_bytes(&archive).await?;
   let archive_records = rdr.records().collect_vec().await?;
