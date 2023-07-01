@@ -26,17 +26,6 @@ pub struct GenerateReplayOptions {
   pub include_chats: bool,
 }
 
-pub async fn generate_replay_from_packets<W>(
-  game: GameInfo,
-  packets: Vec<Packet>,
-  include_chats: bool,
-  w: W
-) -> Result<()>
-where 
-  W: Write + Seek
-{
-  Ok(())
-}
 
 fn regenerate_game_info(game: &flo_types::observer::GameInfo) -> Result<(GameInfo, Vec<(usize, &Slot)>, u8, String)>
 {
@@ -277,6 +266,81 @@ fn initialize_replay(game: &flo_types::observer::GameInfo) -> Result<(Vec<Record
   Ok((records, active_player_ids))
 }
 
+fn convert_packet_to_record(p: Packet, include_chats: bool) -> Result<(Option<Record>, Option<u8>)>
+{
+  let (record, dropped_player) = match p.type_id() {
+        W3GSPacketTypeId::PlayerLeft => {
+          let payload: flo_w3gs::protocol::leave::PlayerLeft = p.decode_simple()?;
+          let record = Record::PlayerLeft(PlayerLeft {
+            reason: payload.reason,
+            player_id: payload.player_id,
+            // All guesses, referenced w3g_format.txt
+            result: match payload.reason {
+              LeaveReason::LeaveDisconnect => 0x01,
+              LeaveReason::LeaveLost => 0x07,
+              LeaveReason::LeaveLostBuildings => 0x08,
+              LeaveReason::LeaveWon => 0x09,
+              _ => 0x0D,
+            },
+            unknown: 2,
+          });
+          let dropped_player = payload.player_id;
+          (Some(record), Some(dropped_player))
+          //active_player_ids.retain(|id| *id != payload.player_id);
+        }
+        W3GSPacketTypeId::ChatFromHost => {
+          let mut record = None;
+          if include_chats {
+            let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
+            if payload.0.to_players.contains(&FLO_PLAYER_ID) {
+              record = Some(Record::ChatMessage(PlayerChatMessage {
+                player_id: payload.from_player(),
+                message: payload.0.message,
+              }));
+            }
+          }
+          (record, None)
+        }
+        W3GSPacketTypeId::IncomingAction => {
+          let payload: flo_w3gs::protocol::action::IncomingAction = p.decode_payload()?;
+          let record = Record::TimeSlot(TimeSlot {
+            time_increment_ms: payload.0.time_increment_ms,
+            actions: payload.0.actions,
+          });
+          (Some(record), None)
+        }
+        _ => { (None, None) }
+      };
+
+  Ok((record, dropped_player))
+}
+
+pub async fn generate_replay_from_packets<W>(
+  game: flo_types::observer::GameInfo,
+  packets: Vec<Packet>,
+  include_chats: bool,
+  w: W
+) -> Result<()>
+where 
+  W: Write + Seek
+{
+  let (mut records, mut active_player_ids) = initialize_replay(&game)?;
+  for packet in packets.into_iter() {
+    let (record, dropped_player_id) = convert_packet_to_record(packet, include_chats)?;
+    if let Some(rec) = record {
+      records.push(rec);
+    }
+    if let Some(dropped_player_id) = dropped_player_id {
+      active_player_ids.retain(|id| *id != dropped_player_id);
+    }
+  }
+  let mut encoder = ReplayEncoder::new(&game.game_version, 0x8000, w)?;
+  encoder.encode_records(records.iter())?;
+  encoder.finish()?;
+
+  Ok(())
+}
+
 pub async fn generate_replay<W>(
   GenerateReplayOptions {
     game,
@@ -302,43 +366,14 @@ where
   // archive records
   for r in archive_records {
     match r {
-      GameRecordData::W3GS(p) => match p.type_id() {
-        W3GSPacketTypeId::PlayerLeft => {
-          let payload: flo_w3gs::protocol::leave::PlayerLeft = p.decode_simple()?;
-          records.push(Record::PlayerLeft(PlayerLeft {
-            reason: payload.reason,
-            player_id: payload.player_id,
-            // All guesses, referenced w3g_format.txt
-            result: match payload.reason {
-              LeaveReason::LeaveDisconnect => 0x01,
-              LeaveReason::LeaveLost => 0x07,
-              LeaveReason::LeaveLostBuildings => 0x08,
-              LeaveReason::LeaveWon => 0x09,
-              _ => 0x0D,
-            },
-            unknown: 2,
-          }));
-          active_player_ids.retain(|id| *id != payload.player_id);
+      GameRecordData::W3GS(p) => {
+        let (record, dropped_player_id) = convert_packet_to_record(p, include_chats)?;
+        if let Some(rec) = record {
+          records.push(rec);
         }
-        W3GSPacketTypeId::ChatFromHost => {
-          if include_chats {
-            let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
-            if payload.0.to_players.contains(&FLO_PLAYER_ID) {
-              records.push(Record::ChatMessage(PlayerChatMessage {
-                player_id: payload.from_player(),
-                message: payload.0.message,
-              }));
-            }
-          }
+        if let Some(dropped_player_id) = dropped_player_id {
+          active_player_ids.retain(|id| *id != dropped_player_id);
         }
-        W3GSPacketTypeId::IncomingAction => {
-          let payload: flo_w3gs::protocol::action::IncomingAction = p.decode_payload()?;
-          records.push(Record::TimeSlot(TimeSlot {
-            time_increment_ms: payload.0.time_increment_ms,
-            actions: payload.0.actions,
-          }))
-        }
-        _ => {}
       },
       GameRecordData::StartLag(_) => {}
       GameRecordData::StopLag(_) => {}

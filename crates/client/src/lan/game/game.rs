@@ -43,6 +43,8 @@ pub struct GameHandler<'a> {
   client: &'a mut Addr<ControllerClient>,
   muted_players: BTreeSet<u8>,
   end_reason: &'a Mutex<Option<GameEndReason>>,
+  saved_packets: Vec<Packet>,
+  save_replay: bool
 }
 
 impl<'a> GameHandler<'a> {
@@ -68,6 +70,8 @@ impl<'a> GameHandler<'a> {
       client,
       muted_players: BTreeSet::new(),
       end_reason,
+      saved_packets: vec!(),
+      save_replay: true,
     }
   }
 
@@ -196,6 +200,9 @@ impl<'a> GameHandler<'a> {
     }
 
     // tracing::debug!("send: {:?}", pkt.type_id());
+    if self.save_replay {
+      self.saved_packets.push(pkt.clone())
+    }
 
     self.w3gs_stream.send(pkt).await?;
     Ok(())

@@ -72,6 +72,22 @@ pub struct GameInfo {
   pub created_by: Option<PlayerInfo>,
 }
 
+#[derive(Debug, Clone)]
+pub struct LocalGameInfo {
+  pub name: String,
+  pub game_id: i32,
+  pub random_seed: i32,
+  pub node_id: Option<i32>,
+  pub player_id: i32,
+  pub map_path: String,
+  pub map_sha1: [u8; 20],
+  pub map_checksum: u32,
+  pub players: HashMap<i32, PlayerInfo>,
+  pub slots: Vec<Slot>,
+  pub host_player: Option<PlayerInfo>,
+}
+
+
 #[derive(Debug, S2ProtoEnum, PartialEq, Copy, Clone, Serialize)]
 #[s2_grpc(proto_enum_type = "flo_net::proto::flo_connect::GameStatus")]
 pub enum GameStatus {

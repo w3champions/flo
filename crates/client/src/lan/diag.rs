@@ -1,10 +1,11 @@
 use crate::error::Result;
-use crate::game::LocalGameInfo;
+use crate::game::local_game_from_game_info;
+//use crate::game::LocalGameInfo;
 use crate::lan::game::{LanGameInfo, LobbyAction, LobbyHandler};
 use crate::messages::OutgoingMessage;
 use flo_lan::MdnsPublisher;
 use flo_types::game::{
-  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus,
+  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus, LocalGameInfo,
 };
 use flo_types::node::SlotClientStatus;
 use flo_util::binary::CString;
@@ -59,7 +60,7 @@ pub async fn run_test_lobby(
   };
 
   let info = LanGameInfo {
-    game: Arc::new(LocalGameInfo::from_game_info(1, &game)?),
+    game: Arc::new(local_game_from_game_info(1, &game)?),
     slot_info: crate::lan::game::slot::build_player_slot_info(1, game.random_seed, &game.slots)?,
     map_checksum,
     game_settings: GameSettings {
