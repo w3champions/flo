@@ -44,7 +44,7 @@ diesel migration run
 Insert a row into `api_client` table with secret = `1111` (Corresponds to the values in above .env file)
 
 ### Add Players
-Insert 2 rows into `player` table with `source_id` = `0` and `api_client_id` equals to the API client id you created in the previous step.
+Insert 2 rows into `player` table with `source` = `0`, `source_id` = unique values (e.g 1, 2), and `api_client_id` equals to the API client id you created in the previous step.
 Assuming added player ids are `1` and `2`
 
 ### Add Node
