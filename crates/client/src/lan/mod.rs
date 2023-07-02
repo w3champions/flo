@@ -10,7 +10,7 @@ use crate::controller::ControllerClient;
 use crate::error::*;
 use crate::node::stream::NodeStreamEvent;
 use crate::node::NodeInfo;
-use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
+use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform, GetSaveReplayStartConfig};
 use crate::StartConfig;
 use flo_state::{
   async_trait, Actor, Addr, Context, Deferred, Handler, Message, RegistryRef, Service,
@@ -86,12 +86,20 @@ impl Handler<ReplaceLanGame> for Lan {
         last_game.shutdown();
       }
 
-      let game_version = self
+      let client_info = self
         .platform
         .send(GetClientPlatformInfo::default())
         .await?
-        .map_err(|_| Error::War3NotLocated)?
-        .version;
+        .map_err(|_| Error::War3NotLocated)?;
+        
+      let game_version  = client_info.version;
+      let data_path = client_info.user_data_path;
+
+      let save_replay = self
+          .platform
+          .send(GetSaveReplayStartConfig::default())
+          .await?
+          .map_err(|err| { tracing::error!("Could not get replay save config: {}", err); Error::LocalGameInfoNotFound })?;
 
       let lan_game = LanGame::create(
         game_version,
@@ -101,6 +109,7 @@ impl Handler<ReplaceLanGame> for Lan {
         game,
         checksum,
         self.client.resolve().await?,
+        save_replay
       )
       .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");

@@ -61,6 +61,7 @@ impl<'a> GameHandler<'a> {
     client: &'a mut Addr<ControllerClient>,
     end_reason: &'a Mutex<Option<GameEndReason>>,
     game_version_string: String,
+    save_replay: bool,
   ) -> Self {
     GameHandler {
       info,
@@ -74,7 +75,7 @@ impl<'a> GameHandler<'a> {
       muted_players: BTreeSet::new(),
       end_reason,
       saved_packets: vec!(),
-      save_replay: true,
+      save_replay,
       game_version_string,
     }
   }

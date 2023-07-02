@@ -51,6 +51,7 @@ impl LanGame {
     game: Arc<LocalGameInfo>,
     map_checksum: MapChecksum,
     client: Addr<ControllerClient>,
+    save_replay: bool
   ) -> Result<Self> {
     let mdns_shutdown_notify = Arc::new(Notify::new());
 
@@ -81,6 +82,7 @@ impl LanGame {
       token,
       client.clone(),
       game_version.clone(),
+      save_replay,
     )
     .await?;
     game_info.set_port(proxy.port());

@@ -21,6 +21,7 @@ pub struct StartConfig {
   pub stats_host: Option<String>,
   pub version: Option<String>,
   pub ptr: Option<bool>,
+  pub save_replay: bool, //Default value is false
 }
 
 pub use crate::message::embed::{start_embed, FloEmbedClient, FloEmbedClientHandle};
