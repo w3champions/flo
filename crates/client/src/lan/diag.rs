@@ -5,7 +5,7 @@ use crate::lan::game::{LanGameInfo, LobbyAction, LobbyHandler};
 use crate::messages::OutgoingMessage;
 use flo_lan::MdnsPublisher;
 use flo_types::game::{
-  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus, LocalGameInfo,
+  GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus,
 };
 use flo_types::node::SlotClientStatus;
 use flo_util::binary::CString;

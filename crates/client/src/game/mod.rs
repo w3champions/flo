@@ -1,6 +1,5 @@
 use crate::error::{Error, Result};
-use flo_types::game::{GameInfo, PlayerInfo, Slot, LocalGameInfo};
-use std::collections::HashMap;
+use flo_types::game::{GameInfo, LocalGameInfo};
 
 pub fn local_game_from_game_info(player_id: i32, game: &GameInfo) -> Result<LocalGameInfo> {
   Ok(LocalGameInfo { 
