@@ -27,6 +27,7 @@ flo-w3c = { path = "../w3c" }
 flo-state = "1"
 flo-observer = { path = "../observer" }
 flo-observer-fs = { path = "../observer-fs" }
+flo-replay = { path = "../replay" }
 
 s2-grpc-utils = "0.2"
 tokio = { version = "1.21.2", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }

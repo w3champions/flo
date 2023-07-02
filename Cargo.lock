@@ -1572,6 +1572,7 @@ dependencies = [
  "flo-observer",
  "flo-observer-fs",
  "flo-platform",
+ "flo-replay",
  "flo-state",
  "flo-task",
  "flo-types",

@@ -25,6 +25,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
 use tokio::time::interval;
+use flo_replay::generate_replay_from_packets;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -143,6 +144,24 @@ impl<'a> GameHandler<'a> {
               tracing::info!("game leave ack received");
               self.w3gs_stream.send(Packet::simple(LeaveAck)?).await?;
               self.w3gs_stream.flush().await?;
+              if self.save_replay {
+                tracing::info!("Saving replay after game is over, leave ack received!");
+                let game_info = flo_types::observer::GameInfo::from((&*self.info.game, "version".to_string()));
+                let packet_copy = self.saved_packets.clone();
+                tokio::task::spawn_blocking(|| async move {
+                  let the_file = match std::fs::File::create("flo_test.w3g") {
+                    Ok(file) => file,
+                    Err(err) => {
+                      tracing::error!("Could not open file: {}", err);
+                      return;
+                    }
+                  };
+                  match generate_replay_from_packets(game_info, packet_copy, true, the_file).await {
+                    Ok(_) => {},
+                    Err(err) => { tracing::error!("Could not generate replay because: {}", err); }
+                  };
+                });
+              }
               return Ok(GameResult::Leave)
             }
 
