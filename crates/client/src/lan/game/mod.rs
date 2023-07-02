@@ -80,6 +80,7 @@ impl LanGame {
       node,
       token,
       client.clone(),
+      game_version.clone(),
     )
     .await?;
     game_info.set_port(proxy.port());

@@ -45,7 +45,8 @@ pub struct GameHandler<'a> {
   muted_players: BTreeSet<u8>,
   end_reason: &'a Mutex<Option<GameEndReason>>,
   saved_packets: Vec<Packet>,
-  save_replay: bool
+  save_replay: bool,
+  game_version_string: String
 }
 
 impl<'a> GameHandler<'a> {
@@ -59,6 +60,7 @@ impl<'a> GameHandler<'a> {
     w3gs_rx: &'a mut Receiver<Packet>,
     client: &'a mut Addr<ControllerClient>,
     end_reason: &'a Mutex<Option<GameEndReason>>,
+    game_version_string: String,
   ) -> Self {
     GameHandler {
       info,
@@ -73,6 +75,7 @@ impl<'a> GameHandler<'a> {
       end_reason,
       saved_packets: vec!(),
       save_replay: true,
+      game_version_string,
     }
   }
 
@@ -151,7 +154,7 @@ impl<'a> GameHandler<'a> {
           } else {
             tracing::info!("game stream closed");
             if self.save_replay {
-              let game_info = flo_types::observer::GameInfo::from((&*self.info.game, "1.36.0.20257".to_string()));
+              let game_info = flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
               let packet_copy = self.saved_packets.clone();
               tokio::spawn(async move {
                 let the_file = match std::fs::File::create("flo_test.w3g") {
