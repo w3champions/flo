@@ -109,7 +109,8 @@ impl Handler<ReplaceLanGame> for Lan {
         game,
         checksum,
         self.client.resolve().await?,
-        save_replay
+        save_replay,
+        data_path.into_os_string().into_string().unwrap_or("".to_string()),
       )
       .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");

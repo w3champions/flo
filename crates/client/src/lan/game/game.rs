@@ -20,12 +20,14 @@ use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
 use parking_lot::Mutex;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet};
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
 use tokio::time::interval;
 use flo_replay::generate_replay_from_packets;
+use walkdir::{WalkDir, DirEntry};
+use rand::Rng;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -46,8 +48,53 @@ pub struct GameHandler<'a> {
   end_reason: &'a Mutex<Option<GameEndReason>>,
   saved_packets: Vec<Packet>,
   save_replay: bool,
-  game_version_string: String
+  game_version_string: String,
+  user_data_path: String
 }
+
+pub fn get_replay_directory(mut user_data_path: String) -> Result<String>
+{
+  user_data_path.push_str("\\BattleNet\\");
+  let mut replay_dirs : Vec<DirEntry> = vec!();
+  for entry in WalkDir::new(&user_data_path).into_iter().filter_map(|e| e.ok()) {
+    if entry.file_type().is_dir() {
+      if let Some(file_path) = entry.path().to_str() {
+        if file_path.ends_with("Replays") {
+          replay_dirs.push(entry.clone());
+        }
+      }
+    }
+  }
+  let latest_replay_dir = replay_dirs.iter().fold(None, |acc : Option<&DirEntry>, entry_dir| {
+    match acc {
+      Some(val) => {  let meta = entry_dir.metadata();
+                      if let Ok(meta) = meta {
+                        if let Ok(time) = meta.modified() {
+                          if time > val.metadata().unwrap().modified().unwrap() {
+                            return Some(entry_dir);
+                          }
+                        }
+                      }
+                      Some(val)
+                    },
+      None => { let meta = entry_dir.metadata();
+                if let Ok(meta) = meta {
+                  if meta.modified().is_ok() {
+                    return Some(entry_dir);
+                  }
+                }
+                None },
+    }
+  });
+  if let Some(replay_dir) = latest_replay_dir {
+    tracing::info!("Found the path: {}", replay_dir.path().to_str().unwrap());
+    return Ok(replay_dir.path().to_str().unwrap().to_string());
+  }
+
+  tracing::error!("Could not find the replay directory!");
+  Err(Error::ReplayFolderNotFound)
+}
+
 
 impl<'a> GameHandler<'a> {
   pub fn new(
@@ -62,6 +109,7 @@ impl<'a> GameHandler<'a> {
     end_reason: &'a Mutex<Option<GameEndReason>>,
     game_version_string: String,
     save_replay: bool,
+    user_data_path: String,
   ) -> Self {
     GameHandler {
       info,
@@ -77,6 +125,7 @@ impl<'a> GameHandler<'a> {
       saved_packets: vec!(),
       save_replay,
       game_version_string,
+      user_data_path,
     }
   }
 
@@ -154,11 +203,20 @@ impl<'a> GameHandler<'a> {
             self.handle_game_packet(pkt).await?;
           } else {
             tracing::info!("game stream closed");
-            if self.save_replay {
+            if true { //self.save_replay {
               let game_info = flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
               let packet_copy = self.saved_packets.clone();
+              let user_data_path = self.user_data_path.clone();
+              let mut rng = rand::thread_rng();
+              let rand_sleep_secs = rng.gen_range(0..10);
               tokio::spawn(async move {
-                let the_file = match std::fs::File::create("flo_test.w3g") {
+                tracing::info!("rand sleep seconds is: {}", rand_sleep_secs);
+                tokio::time::sleep(tokio::time::Duration::from_secs(rand_sleep_secs)).await;
+                let mut replay_dir = get_replay_directory(user_data_path)?;
+                let now = chrono::Utc::now();
+                let now_timestamp_str = format!("\\w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
+                replay_dir.push_str(&now_timestamp_str);
+                let the_file = match std::fs::File::create(&replay_dir) {
                   Ok(file) => Some(file),
                   Err(err) => {
                     tracing::error!("Could not open file: {}", err);
@@ -172,6 +230,7 @@ impl<'a> GameHandler<'a> {
                     Err(err) => { tracing::error!("Could not generate replay because: {}", err); }
                   };
                 }
+                Ok::<(), Error>(())
               });
             }
             return Ok(GameResult::Disconnected)

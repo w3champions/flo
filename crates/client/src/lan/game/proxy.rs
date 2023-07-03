@@ -52,7 +52,8 @@ impl LanProxy {
     token: NodeConnectToken,
     client: Addr<ControllerClient>,
     game_version_string: String,
-    save_replay: bool
+    save_replay: bool,
+    user_data_path: String,
   ) -> Result<Self> {
     let scope = SpawnScope::new();
     let listener = W3GSListener::bind().await?;
@@ -102,6 +103,7 @@ impl LanProxy {
             client.clone(),
             game_version_string,
             save_replay,
+            user_data_path,
           )
           .await;
 
@@ -164,6 +166,7 @@ impl State {
     mut client: Addr<ControllerClient>,
     game_version_string: String,
     save_replay: bool,
+    user_data_path: String,
   ) -> Result<()> {
     let mut node_stream = self.stream.clone();
     let mut status_rx = self.game_status_rx.clone();
@@ -280,6 +283,7 @@ impl State {
       &end_reason,
       game_version_string,
       save_replay,
+      user_data_path,
     );
     tokio::select! {
       _ = &mut dropped => {}
