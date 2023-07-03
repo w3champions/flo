@@ -27,7 +27,6 @@ use tokio::sync::watch::Receiver as WatchReceiver;
 use tokio::time::interval;
 use flo_replay::generate_replay_from_packets;
 use walkdir::{WalkDir, DirEntry};
-use rand::Rng;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -203,15 +202,11 @@ impl<'a> GameHandler<'a> {
             self.handle_game_packet(pkt).await?;
           } else {
             tracing::info!("game stream closed");
-            if true { //self.save_replay {
+            if self.save_replay {
               let game_info = flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
               let packet_copy = self.saved_packets.clone();
               let user_data_path = self.user_data_path.clone();
-              let mut rng = rand::thread_rng();
-              let rand_sleep_secs = rng.gen_range(0..10);
               tokio::spawn(async move {
-                tracing::info!("rand sleep seconds is: {}", rand_sleep_secs);
-                tokio::time::sleep(tokio::time::Duration::from_secs(rand_sleep_secs)).await;
                 let mut replay_dir = get_replay_directory(user_data_path)?;
                 let now = chrono::Utc::now();
                 let now_timestamp_str = format!("\\w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
