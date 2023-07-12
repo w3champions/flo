@@ -7,7 +7,6 @@ pub use self::lobby::{LobbyAction, LobbyHandler};
 pub use self::proxy::GameEndReason;
 use crate::controller::ControllerClient;
 use crate::error::*;
-use crate::game::LocalGameInfo;
 use crate::lan::game::proxy::PlayerEvent;
 use crate::lan::game::slot::LanSlotInfo;
 use crate::lan::get_lan_game_name;
@@ -17,6 +16,7 @@ use flo_lan::{GameInfo, MdnsPublisher};
 use flo_state::Addr;
 use flo_task::SpawnScope;
 use flo_types::node::{NodeGameStatus, SlotClientStatus};
+use flo_types::game::LocalGameInfo;
 use flo_w3gs::protocol::game::GameSettings;
 use flo_w3map::MapChecksum;
 use proxy::LanProxy;
@@ -51,6 +51,8 @@ impl LanGame {
     game: Arc<LocalGameInfo>,
     map_checksum: MapChecksum,
     client: Addr<ControllerClient>,
+    save_replay: bool,
+    user_data_path: String,
   ) -> Result<Self> {
     let mdns_shutdown_notify = Arc::new(Notify::new());
 
@@ -80,6 +82,9 @@ impl LanGame {
       node,
       token,
       client.clone(),
+      game_version.clone(),
+      save_replay,
+      user_data_path,
     )
     .await?;
     game_info.set_port(proxy.port());

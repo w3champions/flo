@@ -1,6 +1,7 @@
 use crate::controller::{ControllerClient, SendWs, UpdateMuteList};
 use crate::error::*;
-use crate::game::LocalGameInfo;
+use crate::game::local_game_from_game_info;
+//use crate::game::LocalGameInfo;
 use crate::message::messages;
 use crate::message::messages::OutgoingMessage;
 use crate::node::{AddNode, GetNodePingMap, NodeRegistry, RemoveNode, UpdateNodes};
@@ -243,7 +244,7 @@ impl ControllerStream {
 
           let game = GameInfo::unpack(p.game)?;
 
-          let local_game_info = Arc::new(LocalGameInfo::from_game_info(player_id, &game)?);
+          let local_game_info = Arc::new(local_game_from_game_info(player_id, &game)?);
           owner.send(SetLocalGameInfo(local_game_info.clone().into())).await??;
 
           SendWs::new(id, OutgoingMessage::CurrentGameInfo(game)).notify(parent).await?;

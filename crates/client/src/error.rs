@@ -79,6 +79,8 @@ pub enum Error {
   Json(#[from] serde_json::Error),
   #[error("Io: {0}")]
   Io(#[from] std::io::Error),
+  #[error("Replay: folder not located")]
+  ReplayFolderNotFound,
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

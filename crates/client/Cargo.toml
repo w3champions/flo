@@ -27,6 +27,7 @@ flo-w3c = { path = "../w3c" }
 flo-state = "1"
 flo-observer = { path = "../observer" }
 flo-observer-fs = { path = "../observer-fs" }
+flo-replay = { path = "../replay" }
 
 s2-grpc-utils = "0.2"
 tokio = { version = "1.21.2", features = ["time", "net", "macros", "sync", "rt", "rt-multi-thread"] }
@@ -48,6 +49,8 @@ hash-ids = "0.2"
 rand = "0.8"
 backoff = "0.3"
 bytes = "1.2.1"
+walkdir = "^2.3.3"
+chrono = "^0.4.26"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["timeapi"] }

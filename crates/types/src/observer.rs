@@ -1,5 +1,8 @@
 pub use crate::game::{Computer, Race, SlotSettings, SlotStatus};
 use crate::game::{LanGamePlayerInfo, LanGameSlot};
+use crate::game::LocalGameInfo;
+//use flo_client::game::LocalGameInfo;
+//use crate::game::LocalGameInfo;
 use flo_grpc::game::Game;
 use s2_grpc_utils::S2ProtoUnpack;
 use serde::{Deserialize, Serialize};
@@ -13,6 +16,20 @@ pub struct GameInfo {
   pub random_seed: i32,
   pub game_version: String,
   pub start_time_millis: i64,
+}
+
+impl From<(&LocalGameInfo, String)> for GameInfo {
+  fn from(lan_game: (&LocalGameInfo, String)) -> Self {
+    Self {
+      id: lan_game.0.game_id,
+      name: lan_game.0.name.clone(),
+      map: Map { sha1: lan_game.0.map_sha1.to_vec(), checksum: lan_game.0.map_checksum, path: lan_game.0.map_path.clone() },
+      slots: lan_game.0.slots.iter().map(|lan_slot| { crate::observer::Slot::from(lan_slot.clone()) }).collect::<Vec<_>>(),
+      random_seed: lan_game.0.random_seed,
+      game_version: lan_game.1,
+      start_time_millis: 0 //Trying this out, let's see if it works
+    }
+  }
 }
 
 impl S2ProtoUnpack<Game> for GameInfo {
@@ -83,6 +100,15 @@ impl<'a> From<&'a Slot> for LanGameSlot<'a> {
         name: p.name.as_str(),
       }),
       settings: slot.settings.clone(),
+    }
+  }
+}
+
+impl From<crate::game::Slot> for Slot {
+  fn from(slot: crate::game::Slot) -> Self {
+    Self {
+      player: slot.player.as_ref().map(|p | PlayerInfo { id: p.id, name: p.name.clone() }),
+      settings: slot.settings
     }
   }
 }

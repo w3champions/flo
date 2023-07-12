@@ -76,6 +76,21 @@ impl Handler<Reload> for Platform {
   }
 }
 
+#[derive(Default)]
+pub struct GetSaveReplayStartConfig;
+
+impl Message for GetSaveReplayStartConfig {
+  type Result = Result<bool>;
+}
+
+#[async_trait]
+impl Handler<GetSaveReplayStartConfig> for Platform {
+  async fn handle(&mut self, _: &mut Context<Self>, _: GetSaveReplayStartConfig) -> <GetSaveReplayStartConfig as Message>::Result {
+    Ok(self.start_config.save_replay)
+  }
+}
+
+
 pub struct GetMapList;
 
 impl Message for GetMapList {
