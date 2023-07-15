@@ -16,7 +16,8 @@ pub struct ClientPlatformInfo {
   pub installation_path: PathBuf,
   pub version: String,
   pub executable_path: PathBuf,
-  pub ptr: bool
+  pub ptr: bool,
+  pub user_battlenet_id: String,
 }
 
 impl ClientPlatformInfo {
@@ -50,7 +51,8 @@ impl ClientPlatformInfo {
               .to_owned(),
             version,
             executable_path,
-            ptr
+            ptr,
+            user_battlenet_id: config.user_battlenet_client_id.as_ref().map(|inner_str| { inner_str.to_string() }).unwrap_or("0".to_string()),
           });
         }
       }
@@ -80,7 +82,8 @@ impl ClientPlatformInfo {
       installation_path,
       version,
       executable_path,
-      ptr
+      ptr,
+      user_battlenet_id: config.user_battlenet_client_id.clone().unwrap_or("0".to_string()),
     })
   }
 

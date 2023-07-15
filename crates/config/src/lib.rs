@@ -15,6 +15,7 @@ pub struct ClientConfig {
   pub stats_host: String,
   pub version: Option<String>,
   pub ptr: Option<bool>,
+  pub user_battlenet_client_id: Option<String>,
 }
 
 impl Default for ClientConfig {
@@ -27,6 +28,7 @@ impl Default for ClientConfig {
       stats_host: flo_constants::STATS_HOST.to_string(),
       version: None,
       ptr: None,
+      user_battlenet_client_id: None,
     }
   }
 }
@@ -64,7 +66,8 @@ impl ClientConfig {
         .stats_host
         .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
       version: config.version,
-      ptr: config.ptr
+      ptr: config.ptr,
+      user_battlenet_client_id: None,
     };
 
     config.apply_env();

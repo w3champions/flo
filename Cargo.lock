@@ -1604,7 +1604,6 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-futures",
- "walkdir",
  "winapi 0.3.9",
 ]
 

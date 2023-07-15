@@ -94,6 +94,11 @@ impl Handler<ReplaceLanGame> for Lan {
         
       let game_version  = client_info.version;
       let data_path = client_info.user_data_path;
+      let mut user_replay_path = data_path.into_os_string().into_string().unwrap_or("".to_string());
+      user_replay_path.push_str("\\BattleNet\\");
+      user_replay_path.push_str(&client_info.user_battlenet_id);
+      user_replay_path.push_str("\\Replays\\");
+
 
       let save_replay = self
           .platform
@@ -110,7 +115,7 @@ impl Handler<ReplaceLanGame> for Lan {
         checksum,
         self.client.resolve().await?,
         save_replay,
-        data_path.into_os_string().into_string().unwrap_or("".to_string()),
+        user_replay_path,
       )
       .await?;
       tracing::info!(player_id = my_player_id, game_id, "lan game created.");
