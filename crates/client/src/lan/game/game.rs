@@ -163,7 +163,6 @@ impl<'a> GameHandler<'a> {
               let game_info = flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
               let packet_copy = self.saved_packets.clone();
               let mut user_replay_path = self.user_replay_path.clone();
-              tracing::info!("User replay path is: {}", user_replay_path);
               tokio::spawn(async move {
                 let now = chrono::Utc::now();
                 let now_timestamp_str = format!("w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
