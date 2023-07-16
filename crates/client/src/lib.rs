@@ -22,6 +22,7 @@ pub struct StartConfig {
   pub version: Option<String>,
   pub ptr: Option<bool>,
   pub save_replay: bool, //Default value is false
+  pub user_battlenet_client_id: Option<String>,
 }
 
 pub use crate::message::embed::{start_embed, FloEmbedClient, FloEmbedClientHandle};

@@ -52,7 +52,7 @@ impl LanGame {
     map_checksum: MapChecksum,
     client: Addr<ControllerClient>,
     save_replay: bool,
-    user_data_path: String,
+    user_replay_path: String,
   ) -> Result<Self> {
     let mdns_shutdown_notify = Arc::new(Notify::new());
 
@@ -84,7 +84,7 @@ impl LanGame {
       client.clone(),
       game_version.clone(),
       save_replay,
-      user_data_path,
+      user_replay_path,
     )
     .await?;
     game_info.set_port(proxy.port());

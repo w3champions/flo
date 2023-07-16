@@ -416,6 +416,7 @@ async fn load(
         .clone()
         .unwrap_or_else(|| flo_constants::STATS_HOST.to_string()),
       ptr: start_config.ptr,
+      user_battlenet_client_id: start_config.user_battlenet_client_id.clone(),
       ..Default::default()
     };
 
