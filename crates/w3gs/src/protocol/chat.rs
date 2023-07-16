@@ -4,7 +4,7 @@ use flo_util::{BinDecode, BinEncode};
 use crate::protocol::constants::{MessageType, PacketTypeId};
 use crate::protocol::packet::PacketPayload;
 
-#[derive(Debug, BinDecode, BinEncode, PartialEq)]
+#[derive(Debug, BinDecode, BinEncode, PartialEq, Clone)]
 pub struct ChatToHost {
   pub to_players_len: u8,
   #[bin(repeat = "to_players_len")]

@@ -4,6 +4,7 @@ use crate::lan::game::{GameEndReason, LanGameInfo};
 use crate::node::stream::NodeStreamSender;
 use crate::node::NodeInfo;
 use flo_net::w3gs::W3GSPacket;
+use flo_replay::generate_replay_from_packets;
 use flo_state::Addr;
 use flo_types::node::NodeGameStatus;
 use flo_util::chat::{parse_chat_command, ChatCommand};
@@ -20,12 +21,11 @@ use flo_w3gs::protocol::constants::PacketTypeId;
 use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
 use parking_lot::Mutex;
-use std::collections::{BTreeSet};
+use std::collections::BTreeSet;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
 use tokio::time::interval;
-use flo_replay::generate_replay_from_packets;
 
 #[derive(Debug)]
 pub enum GameResult {
@@ -47,10 +47,8 @@ pub struct GameHandler<'a> {
   saved_packets: Vec<Packet>,
   save_replay: bool,
   game_version_string: String,
-  user_replay_path: String
+  user_replay_path: String,
 }
-
-
 
 impl<'a> GameHandler<'a> {
   pub fn new(
@@ -78,7 +76,7 @@ impl<'a> GameHandler<'a> {
       client,
       muted_players: BTreeSet::new(),
       end_reason,
-      saved_packets: vec!(),
+      saved_packets: vec![],
       save_replay,
       game_version_string,
       user_replay_path,
@@ -252,7 +250,16 @@ impl<'a> GameHandler<'a> {
     match pkt.type_id() {
       PacketTypeId::PongToHost => return Ok(()),
       ChatToHost::PACKET_TYPE_ID => {
+        if self.save_replay {
+          // The server will not echo our own chat messages back to us
+          // so we need to manually save them here.
+          let mut pkt = pkt.clone();
+          pkt.header.type_id = ChatFromHost::PACKET_TYPE_ID;
+          self.saved_packets.push(pkt);
+        }
+
         let pkt: ChatToHost = pkt.decode_simple()?;
+
         match pkt.message {
           ChatMessage::Scoped { message, .. } => {
             if let Some(cmd) = parse_chat_command(message.as_bytes()) {
