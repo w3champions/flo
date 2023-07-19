@@ -3,10 +3,10 @@ use bytes::Bytes;
 use error::{Error, Result};
 
 use flo_net::w3gs::W3GSPacketTypeId;
-use flo_types::observer::Slot;
 use flo_observer::record::GameRecordData;
 use flo_observer_fs::GameDataArchiveReader;
 use flo_types::game::SlotStatus;
+use flo_types::observer::Slot;
 use flo_w3gs::leave::LeaveReason;
 use flo_w3gs::packet::Packet;
 use flo_w3gs::player::{PlayerProfileMessage, PlayerSkinsMessage, PlayerUnknown5Message};
@@ -26,9 +26,9 @@ pub struct GenerateReplayOptions {
   pub include_chats: bool,
 }
 
-
-fn regenerate_game_info(game: &flo_types::observer::GameInfo) -> Result<(GameInfo, Vec<(usize, &Slot)>, u8, String)>
-{
+fn regenerate_game_info(
+  game: &flo_types::observer::GameInfo,
+) -> Result<(GameInfo, Vec<(usize, &Slot)>, u8, String)> {
   let occupied_slots: Vec<(usize, _)> = game
     .slots
     .iter()
@@ -37,7 +37,8 @@ fn regenerate_game_info(game: &flo_types::observer::GameInfo) -> Result<(GameInf
     .collect();
 
   let (first_player_info, first_player_name) = occupied_slots
-    .get(0)
+    .iter()
+    .find(|(_, s)| s.player.is_some())
     .and_then(|(i, slot)| {
       let name = slot.player.as_ref().map(|p| p.name.clone())?;
       Some((PlayerInfo::new(index_to_player_id(*i), &name), name))
@@ -64,12 +65,15 @@ fn regenerate_game_info(game: &flo_types::observer::GameInfo) -> Result<(GameInf
     ),
   );
 
-  Ok((game_info, occupied_slots, first_player_id, first_player_name))
-
+  Ok((
+    game_info,
+    occupied_slots,
+    first_player_id,
+    first_player_name,
+  ))
 }
 
-fn check_flo_ob_slot_not_occupied(occupied_slots: &Vec<(usize, &Slot)>) -> Result<bool>
-{
+fn check_flo_ob_slot_not_occupied(occupied_slots: &Vec<(usize, &Slot)>) -> Result<bool> {
   let flo_ob_slot_occupied = occupied_slots
     .iter()
     .find(|(idx, _)| *idx == FLO_OB_SLOT)
@@ -82,8 +86,14 @@ fn check_flo_ob_slot_not_occupied(occupied_slots: &Vec<(usize, &Slot)>) -> Resul
   Ok(flo_ob_slot_occupied)
 }
 
-fn fill_out_player_details(game: &flo_types::observer::GameInfo) -> Result<(Vec<PlayerInfo>, Vec<ProtoBufPayload>, Vec<ProtoBufPayload>, Vec<u8>)>
-{
+fn fill_out_player_details(
+  game: &flo_types::observer::GameInfo,
+) -> Result<(
+  Vec<PlayerInfo>,
+  Vec<ProtoBufPayload>,
+  Vec<ProtoBufPayload>,
+  Vec<u8>,
+)> {
   let mut player_infos = vec![];
   let mut player_skins = vec![];
   let mut player_profiles = vec![];
@@ -118,21 +128,25 @@ fn fill_out_player_details(game: &flo_types::observer::GameInfo) -> Result<(Vec<
     "FLO",
   )));
 
-  Ok((player_infos, player_skins, player_profiles, active_player_ids))
-
+  Ok((
+    player_infos,
+    player_skins,
+    player_profiles,
+    active_player_ids,
+  ))
 }
 
-fn build_initial_records(game_info: GameInfo, 
-                        player_infos: Vec<PlayerInfo>,
-                        player_skins: Vec<ProtoBufPayload>,
-                        player_profiles: Vec<ProtoBufPayload>,
-                        flo_ob_slot_occupied: bool,
-                        first_player_id: u8,
-                        first_player_name: String,
-                        game: &flo_types::observer::GameInfo,
-                        occupied_slots: &Vec<(usize, &Slot)>,
-                        ) -> Result<Vec<Record>>
-{
+fn build_initial_records(
+  game_info: GameInfo,
+  player_infos: Vec<PlayerInfo>,
+  player_skins: Vec<ProtoBufPayload>,
+  player_profiles: Vec<ProtoBufPayload>,
+  flo_ob_slot_occupied: bool,
+  first_player_id: u8,
+  first_player_name: String,
+  game: &flo_types::observer::GameInfo,
+  occupied_slots: &Vec<(usize, &Slot)>,
+) -> Result<Vec<Record>> {
   let mut records = vec![];
 
   // 0 GameInfo
@@ -253,64 +267,76 @@ fn build_initial_records(game_info: GameInfo,
   Ok(records)
 }
 
-fn initialize_replay(game: &flo_types::observer::GameInfo) -> Result<(Vec<Record>, Vec<u8>)>
-{
+fn initialize_replay(game: &flo_types::observer::GameInfo) -> Result<(Vec<Record>, Vec<u8>)> {
   let (game_info, occupied_slots, first_player_id, first_player_name) = regenerate_game_info(game)?;
 
   let flo_ob_occupied = check_flo_ob_slot_not_occupied(&occupied_slots)?;
 
-  let (player_infos, player_skins, player_profiles, active_player_ids) = fill_out_player_details(game)?;
+  let (player_infos, player_skins, player_profiles, active_player_ids) =
+    fill_out_player_details(game)?;
 
-  let records = build_initial_records(game_info, player_infos, player_skins, player_profiles, flo_ob_occupied, first_player_id, first_player_name, game, &occupied_slots)?;
+  let records = build_initial_records(
+    game_info,
+    player_infos,
+    player_skins,
+    player_profiles,
+    flo_ob_occupied,
+    first_player_id,
+    first_player_name,
+    game,
+    &occupied_slots,
+  )?;
 
   Ok((records, active_player_ids))
 }
 
-fn convert_packet_to_record(p: Packet, include_chats: bool) -> Result<(Option<Record>, Option<u8>)>
-{
+fn convert_packet_to_record(
+  p: Packet,
+  include_chats: bool,
+) -> Result<(Option<Record>, Option<u8>)> {
   let (record, dropped_player) = match p.type_id() {
-        W3GSPacketTypeId::PlayerLeft => {
-          let payload: flo_w3gs::protocol::leave::PlayerLeft = p.decode_simple()?;
-          let record = Record::PlayerLeft(PlayerLeft {
-            reason: payload.reason,
-            player_id: payload.player_id,
-            // All guesses, referenced w3g_format.txt
-            result: match payload.reason {
-              LeaveReason::LeaveDisconnect => 0x01,
-              LeaveReason::LeaveLost => 0x07,
-              LeaveReason::LeaveLostBuildings => 0x08,
-              LeaveReason::LeaveWon => 0x09,
-              _ => 0x0D,
-            },
-            unknown: 2,
-          });
-          let dropped_player = payload.player_id;
-          (Some(record), Some(dropped_player))
-          //active_player_ids.retain(|id| *id != payload.player_id);
+    W3GSPacketTypeId::PlayerLeft => {
+      let payload: flo_w3gs::protocol::leave::PlayerLeft = p.decode_simple()?;
+      let record = Record::PlayerLeft(PlayerLeft {
+        reason: payload.reason,
+        player_id: payload.player_id,
+        // All guesses, referenced w3g_format.txt
+        result: match payload.reason {
+          LeaveReason::LeaveDisconnect => 0x01,
+          LeaveReason::LeaveLost => 0x07,
+          LeaveReason::LeaveLostBuildings => 0x08,
+          LeaveReason::LeaveWon => 0x09,
+          _ => 0x0D,
+        },
+        unknown: 2,
+      });
+      let dropped_player = payload.player_id;
+      (Some(record), Some(dropped_player))
+      //active_player_ids.retain(|id| *id != payload.player_id);
+    }
+    W3GSPacketTypeId::ChatFromHost => {
+      let mut record = None;
+      if include_chats {
+        let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
+        if payload.0.to_players.contains(&FLO_PLAYER_ID) {
+          record = Some(Record::ChatMessage(PlayerChatMessage {
+            player_id: payload.from_player(),
+            message: payload.0.message,
+          }));
         }
-        W3GSPacketTypeId::ChatFromHost => {
-          let mut record = None;
-          if include_chats {
-            let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
-            if payload.0.to_players.contains(&FLO_PLAYER_ID) {
-              record = Some(Record::ChatMessage(PlayerChatMessage {
-                player_id: payload.from_player(),
-                message: payload.0.message,
-              }));
-            }
-          }
-          (record, None)
-        }
-        W3GSPacketTypeId::IncomingAction => {
-          let payload: flo_w3gs::protocol::action::IncomingAction = p.decode_payload()?;
-          let record = Record::TimeSlot(TimeSlot {
-            time_increment_ms: payload.0.time_increment_ms,
-            actions: payload.0.actions,
-          });
-          (Some(record), None)
-        }
-        _ => { (None, None) }
-      };
+      }
+      (record, None)
+    }
+    W3GSPacketTypeId::IncomingAction => {
+      let payload: flo_w3gs::protocol::action::IncomingAction = p.decode_payload()?;
+      let record = Record::TimeSlot(TimeSlot {
+        time_increment_ms: payload.0.time_increment_ms,
+        actions: payload.0.actions,
+      });
+      (Some(record), None)
+    }
+    _ => (None, None),
+  };
 
   Ok((record, dropped_player))
 }
@@ -319,10 +345,10 @@ pub async fn generate_replay_from_packets<W>(
   game: flo_types::observer::GameInfo,
   packets: Vec<Packet>,
   include_chats: bool,
-  w: W
+  w: W,
 ) -> Result<()>
-where 
-  W: Write + Seek
+where
+  W: Write + Seek,
 {
   let (mut records, mut active_player_ids) = initialize_replay(&game)?;
   for packet in packets.into_iter() {
@@ -374,7 +400,7 @@ where
         if let Some(dropped_player_id) = dropped_player_id {
           active_player_ids.retain(|id| *id != dropped_player_id);
         }
-      },
+      }
       GameRecordData::StartLag(_) => {}
       GameRecordData::StopLag(_) => {}
       GameRecordData::GameEnd => {}
