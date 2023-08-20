@@ -10,8 +10,8 @@ use axum::response::{self, IntoResponse};
 use axum::routing::get;
 use axum::{extract, Extension, Router, Server};
 use flo_observer_edge::FloObserverEdge;
-use http::header::{HeaderMap, HeaderValue};
-use tower_http::cors::{CorsLayer, Origin};
+use http::header::HeaderMap;
+use tower_http::cors::CorsLayer;
 
 pub struct RequestData {
   pub is_admin: bool,
@@ -67,14 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .route("/ws", GraphQLSubscription::new(schema.clone()))
     .layer(Extension(schema))
     .layer({
-      let allowed_list: [HeaderValue; 4] = [
-        "http://localhost:3000".parse().unwrap(),
-        "http://localhost:3558".parse().unwrap(),
-        "https://w3flo.com".parse().unwrap(),
-        "https://stats.w3flo.com".parse().unwrap(),
-      ];
       CorsLayer::new()
-        .allow_origin(Origin::list(allowed_list))
+        .allow_origin(tower_http::cors::Any)
         .allow_methods(vec![Method::POST])
         .allow_headers(tower_http::cors::Any)
     });
