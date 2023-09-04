@@ -3,7 +3,7 @@ use super::stream::MessageStream;
 use super::Session;
 use crate::controller::{ControllerClient, ReplaceSession};
 use crate::error::{Error, Result};
-use crate::observer::{ObserverClient, WatchGame};
+use crate::observer::{ObserverClient, ObserverHostShared, WatchGame};
 use crate::platform::Platform;
 use crate::StartConfig;
 pub use flo_platform::ClientPlatformInfo;
