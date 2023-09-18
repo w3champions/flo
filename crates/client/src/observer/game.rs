@@ -539,6 +539,7 @@ where
     }
 
     self.shared.joined.store(true, Ordering::Relaxed);
+    self.shared.joined_notify.notify_one();
     tracing::debug!("starting game");
     stream.send(Packet::simple(CountDownStart)?).await?;
     sleep(Duration::from_secs(6)).await;
@@ -658,6 +659,7 @@ pub struct ObserverHostShared {
   delay_secs: Arc<AtomicU64>,
   finished_notify: Arc<Notify>,
   joined: Arc<AtomicBool>,
+  joined_notify: Arc<Notify>,
   stream_finished: Arc<AtomicBool>,
   stream_total_millis: Arc<AtomicU64>,
   finished: Arc<AtomicBool>,
@@ -684,6 +686,10 @@ impl ObserverHostShared {
 
   pub fn joined(&self) -> bool {
     self.joined.load(Ordering::Relaxed)
+  }
+
+  pub fn joined_notify(&self) -> &Notify {
+    self.joined_notify.as_ref()
   }
 
   pub fn stream_finished(&self) -> bool {
@@ -713,6 +719,7 @@ impl ObserverHostShared {
       delay_secs: Arc::new(AtomicU64::new(0)),
       finished_notify: Arc::new(Notify::new()),
       joined: Arc::new(AtomicBool::new(false)),
+      joined_notify: Arc::new(Notify::new()),
       stream_finished: Arc::new(AtomicBool::new(false)),
       stream_total_millis: Arc::new(AtomicU64::new(0)),
       finished: Arc::new(AtomicBool::new(false)),
