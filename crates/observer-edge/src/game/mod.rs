@@ -494,6 +494,7 @@ pub struct Game {
   pub mask_player_names: bool,
   pub is_private: bool,
   pub is_live: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]
