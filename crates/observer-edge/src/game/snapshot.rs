@@ -159,6 +159,7 @@ pub struct GameSnapshot {
   pub mask_player_names: bool,
   pub is_private: bool,
   pub is_live: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 impl GameSnapshot {
@@ -204,6 +205,7 @@ impl GameSnapshot {
       mask_player_names: game.mask_player_names,
       is_private: game.is_private,
       is_live: game.is_live,
+      flo_tv_delay_override_secs: game.flo_tv_delay_override_secs,
     }
   }
 }
