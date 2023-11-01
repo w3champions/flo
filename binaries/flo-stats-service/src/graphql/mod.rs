@@ -40,7 +40,7 @@ impl MutationRoot {
       return Err(Error::new("Can not stream a private game."));
     }
 
-    let delay_secs = if let Some(value) = delay_secs {
+    let mut delay_secs = if let Some(value) = delay_secs {
       if data.is_admin {
         value as i64
       } else {
@@ -53,6 +53,11 @@ impl MutationRoot {
         180
       }
     };
+
+    if let Some(secs) = game.flo_tv_delay_override_secs.clone() {
+      delay_secs = secs as i64
+    }
+
     let delay_secs = if delay_secs == 0 {
       None
     } else {

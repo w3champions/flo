@@ -207,6 +207,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     node_id: None,
     mask_player_names: false,
     enable_ping_equalizer: false,
+    flo_tv_delay_override_secs: None,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -232,6 +233,7 @@ pub struct CreateGameAsBotParams {
   pub slots: Vec<CreateGameSlot>,
   pub mask_player_names: bool,
   pub enable_ping_equalizer: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 /// Creates a full game and lock it
@@ -349,6 +351,7 @@ pub fn create_as_bot(
     node_id: Some(params.node_id),
     mask_player_names: params.mask_player_names,
     enable_ping_equalizer: params.enable_ping_equalizer,
+    flo_tv_delay_override_secs: None,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -1014,6 +1017,7 @@ pub struct GameRowWithRelated {
   pub mask_player_names: bool,
   pub game_version: Option<String>,
   pub enable_ping_equalizer: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -1036,6 +1040,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::mask_player_names,
   game::dsl::game_version,
   game::dsl::enable_ping_equalizer,
+  game::dsl::flo_tv_delay_override_secs,
 );
 
 impl GameRowWithRelated {
@@ -1060,6 +1065,7 @@ impl GameRowWithRelated {
       game::dsl::mask_player_names,
       game::dsl::game_version,
       game::dsl::enable_ping_equalizer,
+      game::dsl::flo_tv_delay_override_secs,
     )
   }
 
@@ -1086,6 +1092,7 @@ impl GameRowWithRelated {
       mask_player_names: self.mask_player_names,
       game_version: self.game_version,
       enable_ping_equalizer: self.enable_ping_equalizer,
+      flo_tv_delay_override_secs: self.flo_tv_delay_override_secs,
     })
   }
 }
@@ -1105,6 +1112,7 @@ pub struct GameInsert<'a> {
   pub node_id: Option<i32>,
   pub mask_player_names: bool,
   pub enable_ping_equalizer: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]

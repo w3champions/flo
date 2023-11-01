@@ -32,6 +32,7 @@ pub struct Game {
   pub mask_player_names: bool,
   pub game_version: Option<String>,
   pub enable_ping_equalizer: bool,
+  pub flo_tv_delay_override_secs: Option<i32>,
 }
 
 impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
