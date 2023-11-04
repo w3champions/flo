@@ -351,7 +351,7 @@ pub fn create_as_bot(
     node_id: Some(params.node_id),
     mask_player_names: params.mask_player_names,
     enable_ping_equalizer: params.enable_ping_equalizer,
-    flo_tv_delay_override_secs: None,
+    flo_tv_delay_override_secs: params.flo_tv_delay_override_secs,
   };
 
   let row = conn.transaction(|| -> Result<_> {
