@@ -304,7 +304,9 @@ impl State {
         guard.replace(GameEndReason::Unknown);
       }
     }
+    game_handler.start_save_replay();
     stream.flush().await.ok();
+
     Ok(())
   }
 

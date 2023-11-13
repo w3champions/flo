@@ -157,31 +157,6 @@ impl<'a> GameHandler<'a> {
             self.handle_game_packet(pkt).await?;
           } else {
             tracing::info!("game stream closed");
-            if self.save_replay {
-              let game_info = flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
-              let packet_copy = self.saved_packets.clone();
-              let mut user_replay_path = self.user_replay_path.clone();
-              tokio::spawn(async move {
-                let now = chrono::Utc::now();
-                let now_timestamp_str = format!("w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
-                user_replay_path.push_str(&now_timestamp_str);
-                let the_file = match std::fs::File::create(&user_replay_path) {
-                  Ok(file) => Some(file),
-                  Err(err) => {
-                    tracing::error!("Could not open file: {}", err);
-                    None
-                    //return;
-                  }
-                };
-                if let Some(the_file) = the_file {
-                  match generate_replay_from_packets(game_info, packet_copy, true, the_file).await {
-                    Ok(_) => {},
-                    Err(err) => { tracing::error!("Could not generate replay because: {}", err); }
-                  };
-                }
-                Ok::<(), Error>(())
-              });
-            }
             return Ok(GameResult::Disconnected)
           }
         }
@@ -207,6 +182,37 @@ impl<'a> GameHandler<'a> {
           }
         }
       }
+    }
+  }
+
+  pub fn start_save_replay(&self) {
+    if self.save_replay {
+      let game_info =
+        flo_types::observer::GameInfo::from((&*self.info.game, self.game_version_string.clone()));
+      let packet_copy = self.saved_packets.clone();
+      let mut user_replay_path = self.user_replay_path.clone();
+      tokio::task::spawn(async move {
+        let now = chrono::Utc::now();
+        let now_timestamp_str = format!("w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
+        user_replay_path.push_str(&now_timestamp_str);
+        let the_file = match std::fs::File::create(&user_replay_path) {
+          Ok(file) => Some(file),
+          Err(err) => {
+            tracing::error!("Could not open file: {}", err);
+            None
+            //return;
+          }
+        };
+        if let Some(the_file) = the_file {
+          match generate_replay_from_packets(game_info, packet_copy, true, the_file).await {
+            Ok(_) => {}
+            Err(err) => {
+              tracing::error!("Could not generate replay because: {}", err);
+            }
+          };
+        }
+        Ok::<(), Error>(())
+      });
     }
   }
 
