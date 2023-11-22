@@ -124,7 +124,7 @@ fn get_header_game_version(version: &str) -> Result<GameVersion> {
       build_number: 6115,
       ..Default::default()
     }),
-    version if version.starts_with("1.36.0.") => Ok(GameVersion {
+    version if version.starts_with("1.36.") => Ok(GameVersion {
       version: 10036,
       build_number: 6115,
       ..Default::default()
