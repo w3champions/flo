@@ -22,15 +22,17 @@ pub static PLAYER_TOKENS: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 pub async fn serve_metrics() -> Result<()> {
-  use hyper::service::{make_service_fn, service_fn};
-  use hyper::{Body, Request, Response, Server};
+  use bytes::Bytes;
+  use http_body_util::Full;
+  use hyper::{body, service::service_fn, Request, Response};
+  use hyper_util::rt::TokioExecutor;
   use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-  async fn serve_req(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+  async fn serve_req(req: Request<body::Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
     if req.uri().path() == "/version" {
       let response = Response::builder()
         .status(200)
-        .body(Body::from(crate::version::FLO_NODE_VERSION_STRING))
+        .body(Full::new(crate::version::FLO_NODE_VERSION_STRING.into()))
         .unwrap();
 
       return Ok(response);
@@ -45,7 +47,7 @@ pub async fn serve_metrics() -> Result<()> {
     let response = Response::builder()
       .status(200)
       .header(CONTENT_TYPE, encoder.format_type())
-      .body(Body::from(buffer))
+      .body(Full::new(buffer.into()))
       .unwrap();
 
     Ok(response)
@@ -56,10 +58,21 @@ pub async fn serve_metrics() -> Result<()> {
     flo_constants::NODE_HTTP_PORT,
   ));
 
-  let server = Server::bind(&addr).serve(make_service_fn(|_| async {
-    Ok::<_, hyper::Error>(service_fn(serve_req))
-  }));
-  server.await?;
+  let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-  Ok(())
+  loop {
+    let (stream, _) = listener.accept().await?;
+
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    tokio::spawn(async move {
+      // use `auto::Builder` is for supporting both HTTP/1 and HTTP/2 at the same time.
+      if let Err(err) = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+        .serve_connection(io, service_fn(serve_req))
+        .await
+      {
+        tracing::error!("Error serving connection: {}", err);
+      }
+    });
+  }
 }
