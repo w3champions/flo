@@ -22,8 +22,11 @@ git submodule update --init --recursive
 ```
 
 ### Environment Variable Setup Before Cargo Build
+
+```
 BONJOUR_SDK_HOME = <path_to_flo>/deps/bonjour-sdk-windows
 PQ_LIB_DIR = <path_to_PostgreSQL>/lib
+```
 
 ### Create a .env file:
 ```
@@ -65,7 +68,7 @@ cargo run -p flo-cli -- client 1 connect
 cargo run -p flo-cli -- client 2 connect
 ```
 
-### Create a test game and invite player 1 & 2 to join 
+### Create a test game and invite player 1 & 2 to join
 
 ```
 cargo run -p flo-cli -- server run-game 1 2
