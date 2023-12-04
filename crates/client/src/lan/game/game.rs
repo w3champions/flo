@@ -22,6 +22,8 @@ use flo_w3gs::protocol::leave::LeaveAck;
 use flo_w3gs::protocol::ping::PingFromHost;
 use parking_lot::Mutex;
 use std::collections::BTreeSet;
+use std::fs;
+use std::path::Path;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::watch::Receiver as WatchReceiver;
@@ -195,12 +197,23 @@ impl<'a> GameHandler<'a> {
         let now = chrono::Utc::now();
         let now_timestamp_str = format!("w3c-{}.w3g", now.format("%Y%m%d%H%M%S"));
         user_replay_path.push_str(&now_timestamp_str);
-        let the_file = match std::fs::File::create(&user_replay_path) {
-          Ok(file) => Some(file),
-          Err(err) => {
-            tracing::error!("Could not open file: {}", err);
+        let the_file = {
+          let path = Path::new(&user_replay_path);
+          if let Some(parent) = path.parent() {
+            if let Err(err) = fs::create_dir_all(parent) {
+              tracing::error!("Could not create directory: {}", err);
+              None
+            } else {
+              match std::fs::File::create(path) {
+                Ok(file) => Some(file),
+                Err(err) => {
+                  tracing::error!("Could not open file: {}", err);
+                  None
+                }
+              }
+            }
+          } else {
             None
-            //return;
           }
         };
         if let Some(the_file) = the_file {
