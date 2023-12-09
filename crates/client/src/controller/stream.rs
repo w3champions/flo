@@ -152,6 +152,8 @@ impl ControllerStream {
       ))
       .await?;
 
+    let mut disconnect_handled = false;
+
     loop {
       tokio::select! {
         next_send = frame_receiver.recv() => {
@@ -190,6 +192,10 @@ impl ControllerStream {
                   tracing::error!("handle frame: {}", e);
                 }
               }
+
+              if frame.type_id == PacketTypeId::LobbyDisconnect {
+                disconnect_handled = true;
+              }
             },
             Err(e) => {
               tracing::debug!("exiting: recv: {}", e);
@@ -200,15 +206,17 @@ impl ControllerStream {
       }
     }
 
-    parent
-      .notify(SendWs::new(
-        id,
-        OutgoingMessage::Disconnect(messages::Disconnect {
-          reason: messages::DisconnectReason::Unknown,
-          message: "Server connection closed".to_string(),
-        }),
-      ))
-      .await?;
+    if !disconnect_handled {
+      parent
+        .notify(SendWs::new(
+          id,
+          OutgoingMessage::Disconnect(messages::Disconnect {
+            reason: messages::DisconnectReason::Unknown,
+            message: "Server connection closed".to_string(),
+          }),
+        ))
+        .await?;
+    }
 
     parent
       .notify(ControllerEventData::Disconnected.wrap(id))
