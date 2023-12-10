@@ -186,6 +186,7 @@ impl ControllerStream {
                 }
               }
 
+              let type_id = frame.type_id;
               match Self::handle_frame(id, player_id, frame, &mut stream, &owner, &parent, &nodes_reg).await {
                 Ok(_) => {},
                 Err(e) => {
@@ -193,7 +194,7 @@ impl ControllerStream {
                 }
               }
 
-              if frame.type_id == PacketTypeId::LobbyDisconnect {
+              if type_id == PacketTypeId::LobbyDisconnect {
                 disconnect_handled = true;
               }
             },

@@ -31,9 +31,7 @@ impl ClientPlatformInfo {
       if let Some(executable_path) = running_executable_path {
         let version = crate::war3::get_war3_version(&executable_path).ok();
         if let Some(version) = version {
-          let ptr = config
-          .ptr
-          .unwrap_or(false);
+          let ptr = config.ptr.unwrap_or(false);
           return Ok(ClientPlatformInfo {
             user_data_path: config
               .user_data_path
@@ -52,7 +50,11 @@ impl ClientPlatformInfo {
             version,
             executable_path,
             ptr,
-            user_battlenet_id: config.user_battlenet_client_id.as_ref().map(|inner_str| { inner_str.to_string() }).unwrap_or("0".to_string()),
+            user_battlenet_id: config
+              .user_battlenet_client_id
+              .as_ref()
+              .map(|inner_str| inner_str.to_string())
+              .unwrap_or("0".to_string()),
           });
         }
       }
@@ -64,13 +66,13 @@ impl ClientPlatformInfo {
       .or_else(|| path::detect_installation_path())
       .ok_or_else(|| Error::NoInstallationFolder)?;
 
-    let ptr = config
-            .ptr
-            .unwrap_or(false);
+    let ptr = config.ptr.unwrap_or(false);
 
-    let executable_path = installation_path
-    .join(if ptr {"_ptr_/x86_64/Warcraft III.exe"}
-                  else {"_retail_/x86_64/Warcraft III.exe"});
+    let executable_path = installation_path.join(if ptr {
+      "_ptr_/x86_64/Warcraft III.exe"
+    } else {
+      "_retail_/x86_64/Warcraft III.exe"
+    });
     let version = crate::war3::get_war3_version(&executable_path)?;
 
     Ok(ClientPlatformInfo {
@@ -83,7 +85,10 @@ impl ClientPlatformInfo {
       version,
       executable_path,
       ptr,
-      user_battlenet_id: config.user_battlenet_client_id.clone().unwrap_or("0".to_string()),
+      user_battlenet_id: config
+        .user_battlenet_client_id
+        .clone()
+        .unwrap_or("0".to_string()),
     })
   }
 
@@ -95,13 +100,13 @@ impl ClientPlatformInfo {
       .or_else(|| path::detect_installation_path())
       .ok_or_else(|| Error::NoInstallationFolder)?;
 
-    let ptr = config
-    .ptr
-    .unwrap_or(false);
+    let ptr = config.ptr.unwrap_or(false);
 
-    let executable_path = installation_path
-    .join(if ptr {"_ptr_/x86_64/Warcraft III.app"}
-            else {"_retail_/x86_64/Warcraft III.app"});
+    let executable_path = installation_path.join(if ptr {
+      "_ptr_/x86_64/Warcraft III.app"
+    } else {
+      "_retail_/x86_64/Warcraft III.app"
+    });
 
     tracing::debug!("executable_path: {:?}", executable_path);
 
@@ -122,7 +127,11 @@ impl ClientPlatformInfo {
       installation_path,
       version,
       executable_path,
-      ptr
+      ptr,
+      user_battlenet_id: config
+        .user_battlenet_client_id
+        .clone()
+        .unwrap_or("0".to_string()),
     })
   }
 
@@ -136,17 +145,16 @@ impl ClientPlatformInfo {
     let version = config
       .version
       .clone()
-      .ok_or_else(||Error::NoVersionNumber)?;
+      .ok_or_else(|| Error::NoVersionNumber)?;
 
-      
-    let ptr = config
-      .ptr
-      .unwrap_or(false);
+    let ptr = config.ptr.unwrap_or(false);
     tracing::debug!("warcraft_3_version: {:?}", config.version.clone());
 
-    let executable_path = installation_path
-    .join(if ptr {"_ptr_/x86_64/Warcraft III.exe"}
-            else {"_retail_/x86_64/Warcraft III.exe"});
+    let executable_path = installation_path.join(if ptr {
+      "_ptr_/x86_64/Warcraft III.exe"
+    } else {
+      "_retail_/x86_64/Warcraft III.exe"
+    });
     tracing::debug!("executable_path: {:?}", executable_path);
 
     let user_data_path = config
@@ -161,7 +169,8 @@ impl ClientPlatformInfo {
       installation_path,
       version,
       executable_path,
-      ptr
+      ptr,
+      user_battlenet_id: "0".to_string(),
     })
   }
 
