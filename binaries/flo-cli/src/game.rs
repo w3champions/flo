@@ -3,7 +3,7 @@ use crate::Result;
 use flo_grpc::controller::*;
 use flo_grpc::game::*;
 
-const MAP: &str = r#"maps\frozenthrone\(12)emeraldgardens.w3x"#;
+const MAP: &str = r#"maps\Northern_Isles-WH_EternalStrife_Jan2024.w3x"#;
 
 pub async fn create_game(players: Vec<i32>, ob: Option<i32>, node_id: Option<i32>) -> Result<i32> {
   if players.is_empty() && ob.is_none() {
