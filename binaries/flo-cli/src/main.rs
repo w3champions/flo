@@ -6,6 +6,7 @@ mod game;
 mod grpc;
 mod kinesis;
 mod lan;
+mod map;
 mod observer;
 mod replay;
 mod server;
@@ -39,6 +40,10 @@ enum Opt {
     #[structopt(subcommand)]
     cmd: replay::Command,
   },
+  Map {
+    #[structopt(subcommand)]
+    cmd: map::Command,
+  },
 }
 
 #[tokio::main]
@@ -66,6 +71,9 @@ async fn main() -> Result<()> {
       cmd.run().await?;
     }
     Opt::Replay { cmd } => {
+      cmd.run().await?;
+    }
+    Opt::Map { cmd } => {
       cmd.run().await?;
     }
   }
