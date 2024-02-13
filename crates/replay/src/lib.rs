@@ -23,7 +23,7 @@ const FLO_PLAYER_ID: u8 = index_to_player_id(FLO_OB_SLOT);
 pub struct GenerateReplayOptions {
   pub game: flo_types::observer::GameInfo,
   pub archive: Bytes,
-  pub include_chats: bool,
+  pub chat_policy: ReplayChatPolicy,
 }
 
 fn regenerate_game_info(
@@ -292,7 +292,7 @@ fn initialize_replay(game: &flo_types::observer::GameInfo) -> Result<(Vec<Record
 
 fn convert_packet_to_record(
   p: Packet,
-  include_chats: bool,
+  chat_policy: ReplayChatPolicy,
 ) -> Result<(Option<Record>, Option<u8>)> {
   let (record, dropped_player) = match p.type_id() {
     W3GSPacketTypeId::PlayerLeft => {
@@ -316,9 +316,19 @@ fn convert_packet_to_record(
     }
     W3GSPacketTypeId::ChatFromHost => {
       let mut record = None;
-      if include_chats {
-        let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
-        if payload.0.to_players.contains(&FLO_PLAYER_ID) {
+      match chat_policy {
+        ReplayChatPolicy::NoChats => {}
+        ReplayChatPolicy::IncludeChatVisibleToObservers => {
+          let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
+          if payload.0.to_players.contains(&FLO_PLAYER_ID) {
+            record = Some(Record::ChatMessage(PlayerChatMessage {
+              player_id: payload.from_player(),
+              message: payload.0.message,
+            }));
+          }
+        }
+        ReplayChatPolicy::IncludeAllChats => {
+          let payload: flo_w3gs::protocol::chat::ChatFromHost = p.decode_simple()?;
           record = Some(Record::ChatMessage(PlayerChatMessage {
             player_id: payload.from_player(),
             message: payload.0.message,
@@ -341,10 +351,17 @@ fn convert_packet_to_record(
   Ok((record, dropped_player))
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ReplayChatPolicy {
+  NoChats,
+  IncludeChatVisibleToObservers,
+  IncludeAllChats,
+}
+
 pub async fn generate_replay_from_packets<W>(
   game: flo_types::observer::GameInfo,
   packets: Vec<Packet>,
-  include_chats: bool,
+  chat_policy: ReplayChatPolicy,
   w: W,
 ) -> Result<()>
 where
@@ -352,7 +369,7 @@ where
 {
   let (mut records, mut active_player_ids) = initialize_replay(&game)?;
   for packet in packets.into_iter() {
-    let (record, dropped_player_id) = convert_packet_to_record(packet, include_chats)?;
+    let (record, dropped_player_id) = convert_packet_to_record(packet, chat_policy)?;
     if let Some(rec) = record {
       records.push(rec);
     }
@@ -371,7 +388,7 @@ pub async fn generate_replay<W>(
   GenerateReplayOptions {
     game,
     archive,
-    include_chats,
+    chat_policy,
   }: GenerateReplayOptions,
   w: W,
 ) -> Result<()>
@@ -393,7 +410,7 @@ where
   for r in archive_records {
     match r {
       GameRecordData::W3GS(p) => {
-        let (record, dropped_player_id) = convert_packet_to_record(p, include_chats)?;
+        let (record, dropped_player_id) = convert_packet_to_record(p, chat_policy)?;
         if let Some(rec) = record {
           records.push(rec);
         }

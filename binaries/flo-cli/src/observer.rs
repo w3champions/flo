@@ -1,5 +1,5 @@
 use flo_observer_archiver::{ArchiverOptions, Fetcher};
-use flo_replay::{generate_replay, GenerateReplayOptions};
+use flo_replay::{generate_replay, GenerateReplayOptions, ReplayChatPolicy};
 use s2_grpc_utils::S2ProtoUnpack;
 use structopt::StructOpt;
 
@@ -77,7 +77,7 @@ impl Command {
           GenerateReplayOptions {
             game,
             archive,
-            include_chats: true,
+            chat_policy: ReplayChatPolicy::IncludeAllChats,
           },
           w,
         )

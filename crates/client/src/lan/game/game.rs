@@ -217,7 +217,14 @@ impl<'a> GameHandler<'a> {
           }
         };
         if let Some(the_file) = the_file {
-          match generate_replay_from_packets(game_info, packet_copy, true, the_file).await {
+          match generate_replay_from_packets(
+            game_info,
+            packet_copy,
+            flo_replay::ReplayChatPolicy::IncludeAllChats,
+            the_file,
+          )
+          .await
+          {
             Ok(_) => {}
             Err(err) => {
               tracing::error!("Could not generate replay because: {}", err);
