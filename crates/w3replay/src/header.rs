@@ -46,7 +46,7 @@ use flo_util::binary::*;
 use flo_util::dword_string::DwordString;
 use flo_util::{BinDecode, BinEncode};
 
-#[derive(Debug, BinEncode, BinDecode)]
+#[derive(Debug, BinEncode, BinDecode, Clone)]
 pub struct Header {
   #[bin(eq = SIGNATURE)]
   _sig: [u8; 28],
@@ -80,7 +80,7 @@ impl Header {
   }
 }
 
-#[derive(Debug, BinEncode, BinDecode)]
+#[derive(Debug, BinEncode, BinDecode, Clone)]
 pub struct GameVersion {
   #[bin(eq = b"W3XP")]
   pub product: DwordString,

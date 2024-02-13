@@ -21,7 +21,7 @@ pub use replay::*;
 
 #[derive(Debug)]
 pub struct W3Replay<R> {
-  _header: Header,
+  header: Header,
   blocks: Blocks<R>,
 }
 
@@ -38,12 +38,17 @@ impl W3Replay<BufReader<File>> {
     let header = Header::decode(&mut buf_slice).map_err(|e| e.context("header"))?;
     Ok(W3Replay {
       blocks: Blocks::new(r, header.num_blocks as usize, len - Header::MIN_SIZE),
-      _header: header,
+      header,
     })
+  }
+
+  pub fn header(&self) -> &Header {
+    &self.header
   }
 
   pub fn inspect<P: AsRef<Path>>(path: P) -> Result<(ReplayInfo, RecordIter<BufReader<File>>)> {
     let replay = Self::open(path)?;
+    let header = replay.header().clone();
     let mut game = None;
     let mut players = vec![];
     let mut slots = None;
@@ -59,6 +64,7 @@ impl W3Replay<BufReader<File>> {
     }
     Ok((
       ReplayInfo {
+        header,
         game: game.ok_or_else(|| Error::NoGameInfoRecord)?,
         players,
         slots: slots.ok_or_else(|| Error::NoSlotInfoRecord)?,
@@ -77,7 +83,7 @@ where
     let header = Header::decode(&mut buf).map_err(|e| e.context("header"))?;
     Ok(W3Replay {
       blocks: Blocks::from_buf(buf, header.num_blocks as usize),
-      _header: header,
+      header,
     })
   }
 }
@@ -90,6 +96,7 @@ impl<R> W3Replay<R> {
 
 #[derive(Debug)]
 pub struct ReplayInfo {
+  pub header: Header,
   pub game: GameInfo,
   pub players: Vec<PlayerInfo>,
   pub slots: SlotInfo,
